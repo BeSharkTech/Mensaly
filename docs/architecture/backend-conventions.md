@@ -1,7 +1,9 @@
 # Convenções oficiais do back-end Mensaly
 
-**Código:** MEN-BE-001  
-**Status:** obrigatório  
+**Código:** MEN-BE-001
+
+**Status:** obrigatório
+
 **Escopo:** `apps/api`, `apps/worker` e pacotes de back-end
 
 Este documento define o padrão que todos os módulos do back-end devem seguir.
@@ -211,4 +213,3 @@ Cada módulo exige:
 6. `pnpm lint`, `pnpm typecheck`, `pnpm test` e `pnpm build` aprovados;
 7. `pnpm audit --audit-level high` sem vulnerabilidades conhecidas;
 8. CI aprovado e branch removida após merge.
-
