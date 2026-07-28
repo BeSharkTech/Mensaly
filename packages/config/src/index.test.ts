@@ -23,6 +23,33 @@ describe("environment configuration", () => {
     assert.equal(environment.API_PORT, 3001);
     assert.equal(environment.DATABASE_URL, validConnections.DATABASE_URL);
     assert.equal(environment.REDIS_URL, validConnections.REDIS_URL);
+    assert.deepEqual(environment.CORS_ORIGINS, ["http://localhost:3000"]);
+  });
+
+  it("parses an explicit CORS allowlist", () => {
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      CORS_ORIGINS: "https://app.mensaly.com, https://admin.mensaly.com",
+    });
+
+    assert.deepEqual(environment.CORS_ORIGINS, [
+      "https://app.mensaly.com",
+      "https://admin.mensaly.com",
+    ]);
+  });
+
+  it("refuses wildcard or empty CORS origins in production", () => {
+    for (const CORS_ORIGINS of ["*", "", undefined]) {
+      assert.throws(
+        () =>
+          parseEnvironment(apiEnvironmentSchema, {
+            ...validConnections,
+            NODE_ENV: "production",
+            CORS_ORIGINS,
+          }),
+        /production requires at least one explicit origin/,
+      );
+    }
   });
 
   it("coerces a valid API port", () => {

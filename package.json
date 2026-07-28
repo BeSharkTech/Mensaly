@@ -19,7 +19,8 @@
     "lint": "turbo run lint",
     "postinstall": "pnpm db:generate",
     "test": "turbo run test",
-    "test:integration": "turbo run test:integration"
+    "test:integration": "turbo run test:integration",
+    "test:runtime": "pnpm --filter @mensaly/api test:runtime"
   },
   "devDependencies": {
     "@mensaly/eslint-config": "workspace:*",
