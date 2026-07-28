@@ -48,7 +48,9 @@ A tela informa para qual endereço a verificação foi enviada e permite:
 - corrigir o endereço de e-mail;
 - voltar para o login.
 
-**Ação principal:** `Reenviar e-mail`, quando necessário.
+**Ação principal da etapa:** concluir a verificação pelo link recebido.
+
+Quando o dispositivo permitir abrir o provedor de e-mail, a interface poderá oferecer `Abrir e-mail` como atalho. `Reenviar e-mail` será uma ação secundária de recuperação, disponível somente após o intervalo permitido.
 
 **Saída esperada:** e-mail verificado e continuação segura do onboarding.
 
@@ -150,6 +152,27 @@ Os caminhos abaixo são nomes de produto para orientar a implementação futura.
 - oferecer uma tentativa novamente;
 - não afirmar que a conta ou empresa foi criada sem confirmação.
 
+### Link de verificação expirado ou inválido
+
+- explicar que o link não pode mais ser utilizado;
+- oferecer o envio de um novo link para o endereço cadastrado;
+- confirmar quando a nova mensagem for enviada;
+- manter disponíveis as opções de corrigir o e-mail e voltar para o login;
+- não exigir que a pessoa refaça o cadastro.
+
+### Link de verificação já utilizado
+
+- consultar novamente o estado visível da conta;
+- continuar para o login ou para a próxima etapa quando o e-mail já estiver verificado;
+- evitar apresentar uma falha genérica ou solicitar um novo cadastro.
+
+### Reenvio de verificação
+
+- apresentar o tempo restante até um novo envio;
+- impedir solicitações repetidas durante o intervalo;
+- informar falhas sem perder o estado da conta;
+- permitir uma nova tentativa quando o intervalo terminar.
+
 ### E-mail já cadastrado
 
 - orientar a pessoa a entrar na conta;
@@ -167,6 +190,15 @@ Os caminhos abaixo são nomes de produto para orientar a implementação futura.
 - confirmar a conclusão da etapa;
 - mostrar apenas uma ação principal de continuidade;
 - evitar que um recarregamento repita a criação da conta ou da empresa.
+
+### Resultado incerto ao criar a empresa
+
+Se a conexão for interrompida ou a solicitação expirar durante a criação, a interface deverá reconciliar o estado atual da conta antes de permitir outro envio:
+
+- se a empresa já existir, ativá-la e continuar o onboarding;
+- se nenhuma empresa tiver sido criada, restaurar os dados preenchidos e permitir nova tentativa;
+- não criar ou escolher um `organization_id` no front-end;
+- não apresentar sucesso ou falha definitiva enquanto o estado permanecer desconhecido.
 
 ### Dashboard vazio
 
@@ -238,6 +270,8 @@ Antes da implementação, a equipe deve confirmar:
 - o caminho entre cadastro e dashboard está documentado;
 - cada etapa possui objetivo, ação principal e saída esperada;
 - os principais estados de carregamento, erro, validação e sucesso estão previstos;
+- links de verificação expirados, inválidos ou já utilizados possuem recuperação;
+- um resultado incerto na criação da empresa é reconciliado antes de uma nova tentativa;
 - o fluxo contempla conta sem empresa, conta com uma empresa e conta com várias empresas;
 - a organização ativa é tratada como contexto da sessão, e não como escolha livre do front-end;
 - as decisões ainda não confirmadas estão registradas como pendências;
