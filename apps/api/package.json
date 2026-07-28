@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
@@ -11,6 +11,7 @@
     "test": "echo No API tests configured yet"
   },
   "dependencies": {
+    "@mensaly/config": "workspace:*",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-fastify": "^11.1.6",

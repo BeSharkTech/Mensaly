@@ -35,3 +35,8 @@ local.
 
 Consulte [infra/docker/README.md](infra/docker/README.md) para validação,
 verificação dos serviços, logs e encerramento seguro.
+
+O arquivo `.env.example` da raiz é a referência oficial das variáveis de
+ambiente. Nunca adicione senhas, tokens ou credenciais reais a esse arquivo.
+Consulte [docs/architecture/environment-variables.md](docs/architecture/environment-variables.md)
+para conhecer as variáveis, os ambientes suportados e as regras de segurança.
