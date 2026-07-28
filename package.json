@@ -20,7 +20,7 @@
     "postinstall": "pnpm db:generate",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
-    "test:runtime": "pnpm --filter @mensaly/api test:runtime"
+    "test:runtime": "pnpm --filter @mensaly/api test:runtime && pnpm --filter @mensaly/worker test:runtime"
   },
   "devDependencies": {
     "@mensaly/eslint-config": "workspace:*",

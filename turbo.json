@@ -9,7 +9,17 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true,
-      "env": ["NODE_ENV", "API_PORT", "DATABASE_URL", "REDIS_URL"]
+      "env": [
+        "NODE_ENV",
+        "API_PORT",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "BULLMQ_PREFIX",
+        "BULLMQ_WORKER_CONCURRENCY",
+        "BULLMQ_JOB_ATTEMPTS",
+        "BULLMQ_BACKOFF_MS",
+        "BULLMQ_METRICS_INTERVAL_MS"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
@@ -22,7 +32,15 @@
     "test": {
       "dependsOn": ["^test"],
       "outputs": [],
-      "env": ["DATABASE_URL", "REDIS_URL"]
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "BULLMQ_PREFIX",
+        "BULLMQ_WORKER_CONCURRENCY",
+        "BULLMQ_JOB_ATTEMPTS",
+        "BULLMQ_BACKOFF_MS",
+        "BULLMQ_METRICS_INTERVAL_MS"
+      ]
     },
     "test:integration": {
       "dependsOn": ["^build"],

@@ -13,6 +13,24 @@ const sessionTtlHoursSchema = z
   .min(1)
   .max(24 * 30)
   .default(24 * 7);
+const workerConcurrencySchema = z.coerce.number().int().min(1).max(100).default(5);
+const jobAttemptsSchema = z.coerce.number().int().min(1).max(20).default(4);
+const jobBackoffMsSchema = z.coerce
+  .number()
+  .int()
+  .min(10)
+  .max(15 * 60 * 1000)
+  .default(1000);
+const metricsIntervalMsSchema = z.coerce
+  .number()
+  .int()
+  .min(1000)
+  .max(60 * 60 * 1000)
+  .default(30_000);
+const bullmqPrefixSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+  .default("mensaly");
 
 function usesProtocol(value: string, protocols: string[]): boolean {
   try {
@@ -103,6 +121,11 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
 export const workerEnvironmentSchema = baseEnvironmentSchema.extend({
   DATABASE_URL: databaseUrlSchema,
   REDIS_URL: redisUrlSchema,
+  BULLMQ_PREFIX: bullmqPrefixSchema,
+  BULLMQ_WORKER_CONCURRENCY: workerConcurrencySchema,
+  BULLMQ_JOB_ATTEMPTS: jobAttemptsSchema,
+  BULLMQ_BACKOFF_MS: jobBackoffMsSchema,
+  BULLMQ_METRICS_INTERVAL_MS: metricsIntervalMsSchema,
 });
 
 export type ApiEnvironment = z.infer<typeof apiEnvironmentSchema>;

@@ -8,11 +8,14 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "test:runtime": "node --test integration/runtime.test.cjs"
   },
   "dependencies": {
     "@mensaly/config": "workspace:*",
-    "@mensaly/database": "workspace:*"
+    "@mensaly/database": "workspace:*",
+    "@mensaly/logger": "workspace:*",
+    "@mensaly/queue": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
