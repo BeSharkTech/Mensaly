@@ -3,12 +3,15 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "echo No worker tests configured yet"
+  },
+  "dependencies": {
+    "@mensaly/config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
