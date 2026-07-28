@@ -56,6 +56,9 @@ local.
 3. Execute `pnpm install`.
 4. Execute `pnpm dev`.
 
+O comando `pnpm dev` inicia web, API e worker juntos, sem opções obsoletas do
+Turbo.
+
 O `pnpm install` gera automaticamente o Prisma Client usado pelo pacote de
 banco. Depois de alterar `packages/database/prisma/schema.prisma`, execute
 `pnpm db:generate` para atualizar o cliente durante o desenvolvimento.
