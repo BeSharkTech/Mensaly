@@ -59,6 +59,28 @@ enum EnrollmentStatus {
   CANCELLED
 }
 
+enum ChargeStatus {
+  PENDING
+  PAID
+  CANCELLED
+  WAIVED
+}
+
+enum PaymentStatus {
+  PENDING_RECONCILIATION
+  CONFIRMED
+  REVERSED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -152,6 +174,8 @@ model Organization {
   students Student[]
   guardians Guardian[]
   enrollments Enrollment[]
+  charges Charge[]
+  payments Payment[]
 
   @@index([status])
   @@map("organization")
@@ -172,6 +196,52 @@ model Plan {
   enrollments Enrollment[]
   @@index([organizationId, status])
   @@map("plan")
+}
+
+model Charge {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  enrollmentId String @db.Uuid
+  referenceMonth DateTime @db.Date
+  dueDate DateTime @db.Date
+  amountCents Int
+  discountCents Int @default(0)
+  finalAmountCents Int
+  status ChargeStatus @default(PENDING)
+  cancelledAt DateTime? @db.Timestamptz(3)
+  waivedAt DateTime? @db.Timestamptz(3)
+  paidAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  enrollment Enrollment @relation(fields:[organizationId,enrollmentId],references:[organizationId,id],onDelete:Restrict)
+  payments Payment[]
+  @@unique([organizationId,enrollmentId,referenceMonth])
+  @@unique([organizationId,id])
+  @@index([organizationId,status,dueDate])
+  @@map("charge")
+}
+
+model Payment {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  chargeId String @db.Uuid
+  idempotencyKey String @db.VarChar(128)
+  amountCents Int
+  method PaymentMethod
+  status PaymentStatus @default(PENDING_RECONCILIATION)
+  paidAt DateTime @db.Timestamptz(3)
+  externalReference String? @db.VarChar(255)
+  notes String? @db.VarChar(1000)
+  reversedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  charge Charge @relation(fields:[organizationId,chargeId],references:[organizationId,id],onDelete:Restrict)
+  @@unique([organizationId,idempotencyKey])
+  @@index([organizationId,status,paidAt])
+  @@index([chargeId])
+  @@map("payment")
 }
 
 model Student {
@@ -244,6 +314,8 @@ model Enrollment {
   student Student @relation(fields:[studentId], references:[id], onDelete: Restrict)
   guardian Guardian @relation(fields:[guardianId], references:[id], onDelete: Restrict)
   plan Plan @relation(fields:[planId], references:[id], onDelete: Restrict)
+  charges Charge[]
+  @@unique([organizationId,id])
   @@index([organizationId, status])
   @@index([organizationId, studentId])
   @@map("enrollment")
