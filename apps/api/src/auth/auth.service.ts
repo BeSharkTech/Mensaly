@@ -1,11 +1,19 @@
 import {
   createSessionToken,
+  createVerificationToken,
   hashPassword,
   hashSessionToken,
+  hashVerificationToken,
   normalizeEmail,
   verifyPassword,
 } from "@mensaly/auth";
-import { AuditActorType, Prisma, UserRole, UserStatus } from "@mensaly/database";
+import {
+  AuditActorType,
+  Prisma,
+  UserRole,
+  UserStatus,
+  VerificationType,
+} from "@mensaly/database";
 import {
   BadRequestException,
   ConflictException,
@@ -19,10 +27,19 @@ import {
 
 import { PrismaService } from "../infrastructure/database/prisma.service";
 import { loginSchema } from "./login.dto";
+import { LocalEmailDeliveryService } from "./local-email-delivery.service";
 import { registerSchema } from "./register.dto";
+import {
+  emailRequestSchema,
+  passwordResetSchema,
+  tokenSchema,
+} from "./verification.dto";
 
 const LOGIN_FAILURE_LIMIT = 5;
 const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const VERIFICATION_COOLDOWN_MS = 60 * 1000;
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 type AccessMetadata = {
   ipAddress?: string;
@@ -68,6 +85,8 @@ function accessMetadata(metadata: AccessMetadata): AccessMetadata {
 export class AuthService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(LocalEmailDeliveryService)
+    private readonly emailDelivery: LocalEmailDeliveryService,
   ) {}
 
   async register(rawInput: unknown): Promise<RegisteredUser> {
@@ -82,7 +101,7 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
 
     try {
-      return await this.prisma.client.$transaction(async (transaction) => {
+      const user = await this.prisma.client.$transaction(async (transaction) => {
         const user = await transaction.user.create({
           data: {
             name: input.name,
@@ -120,6 +139,9 @@ export class AuthService {
 
         return user;
       });
+
+      await this.requestEmailVerificationFor(email, user.id);
+      return user;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -132,6 +154,272 @@ export class AuthService {
       }
 
       throw error;
+    }
+  }
+
+  private async issueVerification(
+    email: string,
+    type: VerificationType,
+    expiresInMs: number,
+  ): Promise<string | undefined> {
+    const token = createVerificationToken();
+    const tokenHash = hashVerificationToken(token);
+    const now = new Date();
+
+    const created = await this.prisma.client.$transaction(async (transaction) => {
+      await transaction.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${`${type}:${email}`}))
+      `;
+      const latest = await transaction.verification.findFirst({
+        where: { identifier: email, type },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+
+      if (latest && now.getTime() - latest.createdAt.getTime() < VERIFICATION_COOLDOWN_MS) {
+        return false;
+      }
+
+      await transaction.verification.deleteMany({
+        where: { identifier: email, type },
+      });
+      await transaction.verification.create({
+        data: {
+          identifier: email,
+          tokenHash,
+          type,
+          expiresAt: new Date(now.getTime() + expiresInMs),
+        },
+      });
+      return true;
+    });
+
+    return created ? token : undefined;
+  }
+
+  private async requestEmailVerificationFor(
+    email: string,
+    userId?: string,
+  ): Promise<void> {
+    const token = await this.issueVerification(
+      email,
+      VerificationType.EMAIL_VERIFICATION,
+      EMAIL_VERIFICATION_TTL_MS,
+    );
+
+    if (!token) {
+      return;
+    }
+
+    this.emailDelivery.deliver({
+      email,
+      type: VerificationType.EMAIL_VERIFICATION,
+      token,
+      createdAt: new Date(),
+    });
+
+    if (userId) {
+      await this.prisma.client.auditLog.create({
+        data: {
+          actor: { connect: { id: userId } },
+          actorType: AuditActorType.USER,
+          action: "auth.email_verification.sent",
+          entityType: "Verification",
+          entityId: hashVerificationToken(token),
+        },
+      });
+    }
+  }
+
+  async requestEmailVerification(rawInput: unknown): Promise<void> {
+    const result = emailRequestSchema.safeParse(rawInput);
+    if (!result.success) {
+      throw validationError(result.error.issues);
+    }
+
+    const email = normalizeEmail(result.data.email);
+    const user = await this.prisma.client.user.findUnique({
+      where: { email },
+      select: { id: true, emailVerified: true },
+    });
+
+    if (user && !user.emailVerified) {
+      await this.requestEmailVerificationFor(email, user.id);
+    }
+  }
+
+  async verifyEmail(rawInput: unknown): Promise<void> {
+    const result = tokenSchema.safeParse(rawInput);
+    if (!result.success) {
+      throw validationError(result.error.issues);
+    }
+
+    const tokenHash = hashVerificationToken(result.data.token);
+    const now = new Date();
+    const verified = await this.prisma.client.$transaction(async (transaction) => {
+      const verification = await transaction.verification.findUnique({
+        where: { tokenHash },
+      });
+      if (
+        !verification ||
+        verification.type !== VerificationType.EMAIL_VERIFICATION ||
+        verification.expiresAt <= now
+      ) {
+        return false;
+      }
+
+      const consumed = await transaction.verification.deleteMany({
+        where: {
+          id: verification.id,
+          tokenHash,
+          expiresAt: { gt: now },
+        },
+      });
+      if (consumed.count !== 1) {
+        return false;
+      }
+
+      const user = await transaction.user.update({
+        where: { email: verification.identifier },
+        data: { emailVerified: true, status: UserStatus.ACTIVE },
+        select: { id: true },
+      });
+      await transaction.verification.deleteMany({
+        where: {
+          identifier: verification.identifier,
+          type: VerificationType.EMAIL_VERIFICATION,
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          actor: { connect: { id: user.id } },
+          actorType: AuditActorType.USER,
+          action: "auth.email_verified",
+          entityType: "User",
+          entityId: user.id,
+        },
+      });
+      return true;
+    });
+
+    if (!verified) {
+      throw new BadRequestException({
+        code: "VERIFICATION_TOKEN_INVALID",
+        message: "The verification token is invalid, expired, or already used",
+      });
+    }
+  }
+
+  async requestPasswordReset(rawInput: unknown): Promise<void> {
+    const result = emailRequestSchema.safeParse(rawInput);
+    if (!result.success) {
+      throw validationError(result.error.issues);
+    }
+
+    const email = normalizeEmail(result.data.email);
+    const user = await this.prisma.client.user.findUnique({
+      where: { email },
+      select: { id: true, emailVerified: true, status: true },
+    });
+    if (!user || !user.emailVerified || user.status !== UserStatus.ACTIVE) {
+      return;
+    }
+
+    const token = await this.issueVerification(
+      email,
+      VerificationType.PASSWORD_RESET,
+      PASSWORD_RESET_TTL_MS,
+    );
+    if (!token) {
+      return;
+    }
+
+    this.emailDelivery.deliver({
+      email,
+      type: VerificationType.PASSWORD_RESET,
+      token,
+      createdAt: new Date(),
+    });
+    await this.prisma.client.auditLog.create({
+      data: {
+        actor: { connect: { id: user.id } },
+        actorType: AuditActorType.USER,
+        action: "auth.password_reset.requested",
+        entityType: "Verification",
+        entityId: hashVerificationToken(token),
+      },
+    });
+  }
+
+  async resetPassword(rawInput: unknown): Promise<void> {
+    const result = passwordResetSchema.safeParse(rawInput);
+    if (!result.success) {
+      throw validationError(result.error.issues);
+    }
+
+    const tokenHash = hashVerificationToken(result.data.token);
+    const passwordHash = await hashPassword(result.data.password);
+    const now = new Date();
+    const reset = await this.prisma.client.$transaction(async (transaction) => {
+      const verification = await transaction.verification.findUnique({
+        where: { tokenHash },
+      });
+      if (
+        !verification ||
+        verification.type !== VerificationType.PASSWORD_RESET ||
+        verification.expiresAt <= now
+      ) {
+        return false;
+      }
+
+      const consumed = await transaction.verification.deleteMany({
+        where: { id: verification.id, tokenHash, expiresAt: { gt: now } },
+      });
+      if (consumed.count !== 1) {
+        return false;
+      }
+
+      const account = await transaction.account.findUnique({
+        where: {
+          providerId_accountId: {
+            providerId: "credential",
+            accountId: verification.identifier,
+          },
+        },
+        select: { id: true, userId: true },
+      });
+      if (!account) {
+        return false;
+      }
+
+      await transaction.account.update({
+        where: { id: account.id },
+        data: { password: passwordHash },
+      });
+      await transaction.session.deleteMany({ where: { userId: account.userId } });
+      await transaction.verification.deleteMany({
+        where: {
+          identifier: verification.identifier,
+          type: VerificationType.PASSWORD_RESET,
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          actor: { connect: { id: account.userId } },
+          actorType: AuditActorType.USER,
+          action: "auth.password_reset.completed",
+          entityType: "User",
+          entityId: account.userId,
+        },
+      });
+      return true;
+    });
+
+    if (!reset) {
+      throw new BadRequestException({
+        code: "PASSWORD_RESET_TOKEN_INVALID",
+        message: "The reset token is invalid, expired, or already used",
+      });
     }
   }
 

@@ -29,6 +29,11 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum VerificationType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -89,14 +94,15 @@ model Account {
 }
 
 model Verification {
-  id         String   @id @default(uuid()) @db.Uuid
-  identifier String   @db.VarChar(255)
-  value      String   @db.Text
-  expiresAt  DateTime @db.Timestamptz(3)
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  id        String           @id @default(uuid()) @db.Uuid
+  identifier String          @db.VarChar(255)
+  tokenHash String           @unique @db.VarChar(64)
+  type      VerificationType
+  expiresAt DateTime         @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
 
-  @@index([identifier])
+  @@index([identifier, type, createdAt])
   @@index([expiresAt])
   @@map("verification")
 }

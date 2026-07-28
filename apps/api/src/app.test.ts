@@ -9,9 +9,11 @@ import {
 } from "@mensaly/config";
 import { errorEnvelopeSchema } from "@mensaly/contracts";
 import { getPrismaClient } from "@mensaly/database";
+import { VerificationType } from "@mensaly/database";
 import { verifyPassword } from "@mensaly/auth";
 
 import { createApiApplication } from "./app";
+import { LocalEmailDeliveryService } from "./auth/local-email-delivery.service";
 
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
@@ -366,6 +368,42 @@ describe("HTTP API foundation", () => {
       });
       assert.equal(limited.statusCode, 429);
       assert.equal(limited.json().error.code, "LOGIN_RATE_LIMITED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("verifies email once and resets a password while revoking sessions", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `recovery-${randomUUID()}@api.example.test`;
+    const initialPassword = "correct-horse-battery-staple";
+    const replacementPassword = "new-correct-horse-password";
+    registrationTestEmails.add(email);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      const outbox = app.get(LocalEmailDeliveryService);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/register", payload: { name: "Recovery Owner", email, password: initialPassword } })).statusCode, 201);
+
+      const verification = outbox.latest(email, VerificationType.EMAIL_VERIFICATION);
+      assert.ok(verification);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/verify-email/confirm", payload: { token: verification.token } })).statusCode, 204);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/verify-email/confirm", payload: { token: verification.token } })).statusCode, 400);
+
+      const login = await fastify.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password: initialPassword } });
+      const cookie = firstHeader(login.headers["set-cookie"])?.split(";")[0];
+      assert.equal(login.statusCode, 200);
+      assert.ok(cookie);
+
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/password-reset/request", payload: { email } })).statusCode, 202);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/password-reset/request", payload: { email: `missing-${randomUUID()}@api.example.test` } })).statusCode, 202);
+      const reset = outbox.latest(email, VerificationType.PASSWORD_RESET);
+      assert.ok(reset);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/password-reset/confirm", payload: { token: reset.token, password: replacementPassword } })).statusCode, 204);
+      assert.equal((await fastify.inject({ headers: { cookie }, method: "GET", url: "/api/v1/auth/session" })).statusCode, 401);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password: initialPassword } })).statusCode, 401);
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password: replacementPassword } })).statusCode, 200);
     } finally {
       await app.close();
     }

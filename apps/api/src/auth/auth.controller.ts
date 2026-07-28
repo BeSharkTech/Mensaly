@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common";
 import {
   ApiBody,
+  ApiAcceptedResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiOkResponse,
@@ -27,6 +28,11 @@ import {
   readSessionToken,
   sessionCookie,
 } from "./session-cookie";
+import {
+  EmailRequestDto,
+  PasswordResetDto,
+  TokenDto,
+} from "./verification.dto";
 
 function requestMetadata(request: FastifyRequest): {
   ipAddress?: string;
@@ -81,6 +87,47 @@ export class AuthController {
   @ApiConflictResponse({ description: "An account already uses this email" })
   async register(@Body() input: RegisterDto): Promise<{ data: unknown }> {
     return { data: await this.authService.register(input) };
+  }
+
+  @Post("verify-email/request")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiBody({ schema: { type: "object", required: ["email"], properties: { email: { type: "string", format: "email" } } } })
+  @ApiAcceptedResponse({ description: "Verification request accepted without revealing account existence" })
+  async requestEmailVerification(@Body() input: EmailRequestDto): Promise<{ data: { accepted: true } }> {
+    await this.authService.requestEmailVerification(input);
+    return { data: { accepted: true } };
+  }
+
+  @Post("verify-email/confirm")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBody({ schema: { type: "object", required: ["token"], properties: { token: { type: "string" } } } })
+  async verifyEmail(@Body() input: TokenDto): Promise<void> {
+    await this.authService.verifyEmail(input);
+  }
+
+  @Post("password-reset/request")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiBody({ schema: { type: "object", required: ["email"], properties: { email: { type: "string", format: "email" } } } })
+  @ApiAcceptedResponse({ description: "Reset request accepted without revealing account existence" })
+  async requestPasswordReset(@Body() input: EmailRequestDto): Promise<{ data: { accepted: true } }> {
+    await this.authService.requestPasswordReset(input);
+    return { data: { accepted: true } };
+  }
+
+  @Post("password-reset/confirm")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["token", "password"],
+      properties: {
+        token: { type: "string" },
+        password: { type: "string", format: "password", minLength: 12, maxLength: 128 },
+      },
+    },
+  })
+  async resetPassword(@Body() input: PasswordResetDto): Promise<void> {
+    await this.authService.resetPassword(input);
   }
 
   @Post("login")
