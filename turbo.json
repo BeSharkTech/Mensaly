@@ -21,6 +21,12 @@
     "test": {
       "dependsOn": ["^test"],
       "outputs": []
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "outputs": [],
+      "env": ["DATABASE_URL", "REDIS_URL"]
     }
   }
 }

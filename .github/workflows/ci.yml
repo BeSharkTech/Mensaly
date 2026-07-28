@@ -20,6 +20,9 @@ jobs:
     name: Validate monorepo
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://mensaly_test:mensaly_test_local@localhost:55432/mensaly_test?schema=public
+      REDIS_URL: redis://localhost:56379
 
     steps:
       - name: Check out repository
@@ -43,6 +46,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Start isolated test services
+        run: pnpm env:test:up
+
+      - name: Apply database migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Test database integration
+        run: pnpm test:integration
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -54,3 +66,7 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Stop isolated test services
+        if: always()
+        run: pnpm env:test:down
