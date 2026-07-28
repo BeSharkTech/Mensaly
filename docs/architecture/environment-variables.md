@@ -23,17 +23,21 @@ aplicação web ainda não possui variáveis públicas próprias.
 
 ## Variáveis atuais
 
-| Variável            | Consumidor           | Obrigatória           | Finalidade                                                                 |
-| ------------------- | -------------------- | --------------------- | -------------------------------------------------------------------------- |
-| `NODE_ENV`          | API e worker         | Não                   | Seleciona `development`, `test` ou `production`; o padrão é `development`. |
-| `API_PORT`          | API                  | Não                   | Porta HTTP da API; o padrão é `3001`.                                      |
-| `POSTGRES_DB`       | Docker Compose       | Sim no ambiente local | Nome do banco PostgreSQL local.                                            |
-| `POSTGRES_USER`     | Docker Compose       | Sim no ambiente local | Usuário do PostgreSQL local.                                               |
-| `POSTGRES_PASSWORD` | Docker Compose       | Sim no ambiente local | Senha exclusiva do desenvolvimento local.                                  |
-| `POSTGRES_PORT`     | Docker Compose       | Sim no ambiente local | Porta exposta pelo PostgreSQL local.                                       |
-| `REDIS_PORT`        | Docker Compose       | Sim no ambiente local | Porta exposta pelo Redis local.                                            |
-| `DATABASE_URL`      | API, Prisma e worker | Sim                   | Endereço PostgreSQL completo.                                              |
-| `REDIS_URL`         | API e worker         | Sim                   | Endereço Redis completo.                                                   |
+| Variável             | Consumidor              | Obrigatória           | Finalidade                                                                 |
+| -------------------- | ----------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `NODE_ENV`           | API e worker            | Não                   | Seleciona `development`, `test` ou `production`; o padrão é `development`. |
+| `API_PORT`           | API                     | Não                   | Porta HTTP da API; o padrão é `3001`.                                      |
+| `POSTGRES_DB`        | Docker Compose          | Sim no ambiente local | Nome do banco PostgreSQL local.                                            |
+| `POSTGRES_USER`      | Docker Compose          | Sim no ambiente local | Usuário do PostgreSQL local.                                               |
+| `POSTGRES_PASSWORD`  | Docker Compose          | Sim no ambiente local | Senha exclusiva do desenvolvimento local.                                  |
+| `POSTGRES_PORT`      | Docker Compose          | Sim no ambiente local | Porta exposta pelo PostgreSQL local.                                       |
+| `REDIS_PORT`         | Docker Compose          | Sim no ambiente local | Porta exposta pelo Redis local.                                            |
+| `DATABASE_URL`       | API, Prisma e worker    | Sim                   | Endereço PostgreSQL completo.                                              |
+| `REDIS_URL`          | API e worker            | Sim                   | Endereço Redis completo.                                                   |
+| `TEST_POSTGRES_PORT` | Docker Compose de teste | Não                   | Porta do PostgreSQL de teste; o padrão é `55432`.                          |
+| `TEST_REDIS_PORT`    | Docker Compose de teste | Não                   | Porta do Redis de teste; o padrão é `56379`.                               |
+| `TEST_DATABASE_URL`  | Testes                  | Não                   | Endereço do PostgreSQL local isolado para testes.                          |
+| `TEST_REDIS_URL`     | Testes                  | Não                   | Endereço do Redis local isolado para testes.                               |
 
 Ao iniciar, a API e o worker validam os valores que consomem. Uma variável
 ausente, uma porta inválida ou um endereço com protocolo incorreto encerra o
@@ -41,9 +45,11 @@ processo com uma mensagem de configuração clara.
 
 ## Teste
 
-Use `NODE_ENV=test` e serviços isolados dos dados de desenvolvimento. As URLs
-de banco e Redis de teste devem ser fornecidas pelo processo que executa os
-testes ou pelo CI. Não reutilize bancos que contenham dados reais.
+Use `NODE_ENV=test` e os serviços iniciados por `pnpm env:test:up`. Eles usam
+portas próprias e armazenamento temporário, sem compartilhar dados com o
+desenvolvimento. Antes dos testes, forneça `TEST_DATABASE_URL` como
+`DATABASE_URL` e `TEST_REDIS_URL` como `REDIS_URL`. Não reutilize bancos que
+contenham dados reais.
 
 ## Produção
 

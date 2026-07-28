@@ -25,6 +25,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Validate Docker Compose
+        run: |
+          docker compose --env-file .env.example -f infra/docker/compose.yaml config --quiet
+          docker compose -f infra/docker/compose.test.yaml config --quiet
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
 

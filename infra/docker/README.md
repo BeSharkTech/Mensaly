@@ -87,3 +87,51 @@ Esse comando preserva os volumes `postgres_data` e `redis_data`.
 > **Atenção:** `docker compose down --volumes` remove permanentemente os dados
 > locais do PostgreSQL e do Redis. Use essa opção somente quando quiser
 > reinicializar todo o ambiente.
+
+## Ambiente de teste isolado
+
+O ambiente de teste usa outro projeto Docker Compose, outras portas e
+armazenamento temporário. Ele não lê nem altera os dados do desenvolvimento.
+
+Validar a configuração:
+
+```powershell
+pnpm env:test:validate
+```
+
+Iniciar PostgreSQL e Redis de teste:
+
+```powershell
+pnpm env:test:up
+```
+
+Consultar o estado:
+
+```powershell
+pnpm env:test:status
+```
+
+Os endereços padrão são:
+
+- PostgreSQL: `localhost:55432`;
+- Redis: `localhost:56379`.
+
+Ao executar testes que precisam desses serviços, use `NODE_ENV=test` e forneça
+os endereços de teste como `DATABASE_URL` e `REDIS_URL`. Por exemplo, no
+PowerShell:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:DATABASE_URL = "postgresql://mensaly_test:mensaly_test_local@localhost:55432/mensaly_test?schema=public"
+$env:REDIS_URL = "redis://localhost:56379"
+pnpm test
+```
+
+Encerrar e descartar todos os dados do ambiente de teste:
+
+```powershell
+pnpm env:test:down
+```
+
+Esse comando atua somente no projeto Docker `mensaly-test`. Os dados são
+intencionalmente efêmeros e não devem ser usados para desenvolvimento.
