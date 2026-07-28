@@ -28,11 +28,70 @@ const redisUrlSchema = z
     message: "must use the redis:// or rediss:// protocol",
   });
 
-export const apiEnvironmentSchema = baseEnvironmentSchema.extend({
-  API_PORT: portSchema,
-  DATABASE_URL: databaseUrlSchema,
-  REDIS_URL: redisUrlSchema,
-});
+const corsOriginsSchema = z
+  .string()
+  .optional()
+  .transform((value, context) => {
+    const origins = (value ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
+    for (const origin of origins) {
+      if (origin === "*") {
+        continue;
+      }
+
+      try {
+        const url = new URL(origin);
+        if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin) {
+          throw new Error("invalid origin");
+        }
+      } catch {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `"${origin}" must be an exact HTTP(S) origin`,
+        });
+      }
+    }
+
+    return origins;
+  });
+
+export const apiEnvironmentSchema = baseEnvironmentSchema
+  .extend({
+    API_PORT: portSchema,
+    DATABASE_URL: databaseUrlSchema,
+    REDIS_URL: redisUrlSchema,
+    CORS_ORIGINS: corsOriginsSchema,
+  })
+  .superRefine((environment, context) => {
+    if (
+      environment.NODE_ENV === "production" &&
+      (environment.CORS_ORIGINS.length === 0 ||
+        environment.CORS_ORIGINS.includes("*"))
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["CORS_ORIGINS"],
+        message:
+          "production requires at least one explicit origin and does not allow *",
+      });
+    }
+  })
+  .transform((environment) => {
+    if (
+      environment.NODE_ENV !== "production" &&
+      environment.CORS_ORIGINS.length === 0
+    ) {
+      return {
+        ...environment,
+        CORS_ORIGINS: ["http://localhost:3000"],
+      };
+    }
+
+    return environment;
+  });
 
 export const workerEnvironmentSchema = baseEnvironmentSchema.extend({
   DATABASE_URL: databaseUrlSchema,

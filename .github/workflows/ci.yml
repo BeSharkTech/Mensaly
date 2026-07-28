@@ -52,6 +52,9 @@ jobs:
       - name: Apply database migrations
         run: pnpm db:migrate:deploy
 
+      - name: Build
+        run: pnpm build
+
       - name: Test database integration
         run: pnpm test:integration
 
@@ -64,8 +67,8 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Build
-        run: pnpm build
+      - name: Test compiled API runtime
+        run: pnpm test:runtime
 
       - name: Stop isolated test services
         if: always()
