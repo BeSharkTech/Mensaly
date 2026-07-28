@@ -4,15 +4,15 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
-**Estado atual verificado:** Gate F4, MEN-BE-018, MEN-BE-019 e MEN-BE-020
-integrados na `main` pelos PRs `#41`, `#42`, `#44` e `#46`
+**Estado atual verificado:** Gate F4 e MEN-BE-018 a MEN-BE-021 integrados na
+`main` pelos PRs `#41`, `#42`, `#44`, `#46` e `#48`
 **Modelo de trabalho:** sequencial, em um único computador
 
 ## Atualização de execução — Fase 5
 
-**Situação em 28 de julho de 2026:** Fases 0 a 4 e as três primeiras tarefas da
-Fase 5, MEN-BE-018, MEN-BE-019 e MEN-BE-020, estão integradas na `main`. Os PRs
-`#42`, `#44` e `#46` passaram pelo CI e foram mesclados por squash.
+**Situação em 28 de julho de 2026:** Fases 0 a 4 e as quatro primeiras tarefas
+da Fase 5, MEN-BE-018 a MEN-BE-021, estão integradas na `main`. Os PRs `#42`,
+`#44`, `#46` e `#48` passaram pelo CI e foram mesclados por squash.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
@@ -26,6 +26,7 @@ As entregas abaixo foram concluídas na ordem backend-first:
 | F5.1 | Configuração de lembretes com regras, janela de envio, timezone da empresa, limite, ativação e validação de conflitos integrada na `main`. |
 | F5.2 | Templates internos, agendamentos persistidos, histórico, idempotência e cancelamento após pagamento integrados na `main`. |
 | F5.3 | BullMQ com filas nomeadas, jobs idempotentes, retry, DLQ, métricas e shutdown seguro integrado na `main`. |
+| F5.4 | Worker com adaptador falso, revalidação antes do envio, tentativas persistidas e estados `SENT`, `DELIVERED` e `READ` integrado na `main`. |
 
 O Gate F4 foi integrado pelo PR `#41`. MEN-BE-018 foi integrado pelo PR `#42`
 com migration aplicada do zero em PostgreSQL isolado, rotas autenticadas,
@@ -40,9 +41,15 @@ MEN-BE-020 foi integrado pelo PR `#46`, com o pacote compartilhado de filas,
 runtime BullMQ no worker, retry exponencial, falhas permanentes sem repetição,
 dead-letter determinística, métricas locais e encerramento seguro.
 
-O próximo trabalho funcional é MEN-BE-021: worker de mensagens com adaptador
-falso. Nenhuma tela funcional nem integração externa deve iniciar antes do gate
-de conclusão do back-end.
+MEN-BE-021 foi integrado pelo PR `#48`, com adaptador falso configurável,
+revalidação transacional de todas as pré-condições, idempotência, tentativas e
+histórico persistidos, limite diário concorrente e consulta de tentativas pela
+API. O CI validou migration limpa, PostgreSQL, Redis, BullMQ, build, testes e
+runtimes compilados, sem token ou chamada Meta.
+
+O próximo trabalho funcional é MEN-BE-022: geração e tarefas agendadas. Nenhuma
+tela funcional nem integração externa deve iniciar antes do gate de conclusão
+do back-end.
 
 ## 1. Objetivo deste documento
 
@@ -1026,14 +1033,14 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. iniciar MEN-BE-021 em uma nova branch;
+1. iniciar MEN-BE-022 em uma nova branch;
 2. implementar, revisar, validar, publicar e integrar uma tarefa por vez;
 3. seguir o fluxo até MEN-BE-028;
 4. congelar e aprovar a API;
 5. iniciar e concluir o front-end;
 6. conectar as integrações externas na ordem definida.
 
-MEN-BE-021 está desbloqueado após a integração de MEN-BE-020.
+MEN-BE-022 está desbloqueado após a integração de MEN-BE-021.
 Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
 back-end. Nenhum provedor externo deverá ser conectado antes do gate de
 conclusão do front-end.
