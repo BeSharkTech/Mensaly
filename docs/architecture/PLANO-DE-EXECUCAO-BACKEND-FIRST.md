@@ -4,15 +4,15 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
-**Estado atual verificado:** Gate F4 e MEN-BE-018 integrados na `main` pelos PRs
-`#41` e `#42`
+**Estado atual verificado:** Gate F4, MEN-BE-018 e MEN-BE-019 integrados na
+`main` pelos PRs `#41`, `#42` e `#44`
 **Modelo de trabalho:** sequencial, em um único computador
 
 ## Atualização de execução — Fase 5
 
-**Situação em 28 de julho de 2026:** Fases 0 a 4 e a primeira tarefa da Fase 5,
-MEN-BE-018, estão integradas na `main`. O PR `#42` passou pelo CI e foi mesclado
-por squash.
+**Situação em 28 de julho de 2026:** Fases 0 a 4 e as duas primeiras tarefas da
+Fase 5, MEN-BE-018 e MEN-BE-019, estão integradas na `main`. Os PRs `#42` e
+`#44` passaram pelo CI e foram mesclados por squash.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
@@ -24,13 +24,18 @@ As entregas abaixo foram concluídas na ordem backend-first:
 | F3 | CRUDs de planos, alunos, responsáveis, vínculos e matrículas concluídos na `main`. |
 | F4 | Mensalidades idempotentes, pagamentos internos, transições, auditoria, concorrência e integridade multiempresa integrados na `main`. |
 | F5.1 | Configuração de lembretes com regras, janela de envio, timezone da empresa, limite, ativação e validação de conflitos integrada na `main`. |
+| F5.2 | Templates internos, agendamentos persistidos, histórico, idempotência e cancelamento após pagamento integrados na `main`. |
 
 O Gate F4 foi integrado pelo PR `#41`. MEN-BE-018 foi integrado pelo PR `#42`
 com migration aplicada do zero em PostgreSQL isolado, rotas autenticadas,
 contrato OpenAPI, auditoria, integridade multiempresa e testes de conflitos e
 isolamento.
 
-O próximo trabalho funcional é MEN-BE-019: templates e agendamentos. Nenhuma
+MEN-BE-019 foi integrado pelo PR `#44`, com templates e agendamentos isolados
+por empresa, snapshots imutáveis, histórico de estados, prevenção de
+duplicidade e cancelamento transacional após pagamento.
+
+O próximo trabalho funcional é MEN-BE-020: BullMQ. Nenhuma
 tela funcional nem integração externa deve iniciar antes do gate de conclusão
 do back-end.
 
@@ -185,12 +190,19 @@ Ela não deve ser usada como base para novas tarefas.
   - timezone derivado da empresa autenticada;
   - validação de conflitos, auditoria e integridade multiempresa;
   - migration do zero e testes reais de conflitos e isolamento aprovados;
+- MEN-BE-019: templates e agendamentos, integrado pelo PR `#44`, com:
+  - templates internos ativáveis e nomes únicos por empresa;
+  - agendamentos persistidos com snapshots do conteúdo e do destinatário;
+  - estados e histórico cronológico de transições;
+  - deduplicação idempotente e integridade multiempresa no banco;
+  - cancelamento manual e cancelamento automático após pagamento;
+  - locks transacionais para a corrida entre agendamento e pagamento;
+  - migration do zero e testes reais de concorrência e isolamento aprovados;
 - todos os dados operacionais são derivados da empresa da sessão autenticada;
 - `PLATFORM_ADMIN` permanece separado das rotas de empresa.
 
 ### 4.2 Não iniciado
 
-- templates, agendamento e histórico de mensagens;
 - BullMQ e workers reais;
 - dashboard e painel administrativo;
 - frontend funcional;
@@ -222,6 +234,13 @@ Para MEN-BE-018, as 10 migrations foram reaplicadas do zero no PostgreSQL
 isolado. Os 7 testes de integração do banco e os 14 testes da API passaram,
 incluindo conflitos de configuração, autenticação, auditoria e isolamento entre
 empresas. O CI foi aprovado e a tarefa foi integrada na `main` pelo PR `#42`.
+
+Para MEN-BE-019, as 11 migrations foram reaplicadas do zero no PostgreSQL
+isolado. Os 7 testes de integração do banco e os 15 testes da API passaram,
+incluindo idempotência concorrente, snapshots, histórico, isolamento entre
+empresas e a corrida entre agendamento e confirmação de pagamento. O gate
+completo (`typecheck`, `lint`, testes, build, runtime e auditoria) e o CI foram
+aprovados; a tarefa foi integrada na `main` pelo PR `#44`.
 
 ## 6. Decisões definitivas de domínio
 
@@ -676,6 +695,8 @@ sem chamar provedores externos.
 
 ### MEN-BE-019 — Templates e agendamentos
 
+**Estado:** integrado na `main` pelo PR `#44`.
+
 - templates internos;
 - agendamentos persistidos no PostgreSQL;
 - status de mensagem;
@@ -982,14 +1003,14 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. iniciar MEN-BE-019 em uma nova branch;
+1. iniciar MEN-BE-020 em uma nova branch;
 2. implementar, revisar, validar, publicar e integrar uma tarefa por vez;
 3. seguir o fluxo até MEN-BE-028;
 4. congelar e aprovar a API;
 5. iniciar e concluir o front-end;
 6. conectar as integrações externas na ordem definida.
 
-MEN-BE-019 está desbloqueado após a integração de MEN-BE-018.
+MEN-BE-020 está desbloqueado após a integração de MEN-BE-019.
 Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
 back-end. Nenhum provedor externo deverá ser conectado antes do gate de
 conclusão do front-end.
