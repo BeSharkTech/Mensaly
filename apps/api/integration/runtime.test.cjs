@@ -40,6 +40,32 @@ test("compiled API starts and serves its operational endpoints", async () => {
     assert.equal((await openApi.json()).info.title, "Mensaly API");
     assert.equal(registration.status, 201);
     assert.equal((await registration.json()).data.email, email);
+
+    await getPrismaClient().user.update({
+      where: { email },
+      data: { emailVerified: true, status: "ACTIVE" },
+    });
+
+    const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password: "runtime-registration-password" }),
+    });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie");
+    assert.ok(cookie);
+
+    const session = await fetch(`${baseUrl}/api/v1/auth/session`, {
+      headers: { cookie: cookie.split(";")[0] },
+    });
+    assert.equal(session.status, 200);
+    assert.equal((await session.json()).data.email, email);
+
+    const logout = await fetch(`${baseUrl}/api/v1/auth/logout`, {
+      method: "POST",
+      headers: { cookie: cookie.split(";")[0] },
+    });
+    assert.equal(logout.status, 204);
   } finally {
     await app.close();
     const prisma = getPrismaClient();

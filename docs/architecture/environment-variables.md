@@ -34,6 +34,7 @@ aplicação web ainda não possui variáveis públicas próprias.
 | `REDIS_PORT`         | Docker Compose          | Sim no ambiente local | Porta exposta pelo Redis local.                                            |
 | `DATABASE_URL`       | API, Prisma e worker    | Sim                   | Endereço PostgreSQL completo.                                              |
 | `REDIS_URL`          | API e worker            | Sim                   | Endereço Redis completo.                                                   |
+| `AUTH_SESSION_TTL_HOURS` | API                  | Não                   | Duração da sessão em horas; padrão de 7 dias.                              |
 | `TEST_POSTGRES_PORT` | Docker Compose de teste | Não                   | Porta do PostgreSQL de teste; o padrão é `55432`.                          |
 | `TEST_REDIS_PORT`    | Docker Compose de teste | Não                   | Porta do Redis de teste; o padrão é `56379`.                               |
 | `TEST_DATABASE_URL`  | Testes                  | Não                   | Endereço do PostgreSQL local isolado para testes.                          |

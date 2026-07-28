@@ -52,7 +52,7 @@ model User {
 model Session {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid
-  token     String   @unique @db.VarChar(255)
+  tokenHash String   @unique @db.VarChar(64)
   expiresAt DateTime @db.Timestamptz(3)
   ipAddress String?  @db.VarChar(64)
   userAgent String?  @db.VarChar(1024)
@@ -133,6 +133,7 @@ model AuditLog {
   after          Json?
   correlationId  String?        @db.Uuid
   ipAddress      String?        @db.VarChar(64)
+  userAgent      String?        @db.VarChar(1024)
   createdAt      DateTime       @default(now()) @db.Timestamptz(3)
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)

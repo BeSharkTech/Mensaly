@@ -21,6 +21,7 @@ describe("environment configuration", () => {
 
     assert.equal(environment.NODE_ENV, "development");
     assert.equal(environment.API_PORT, 3001);
+    assert.equal(environment.AUTH_SESSION_TTL_HOURS, 168);
     assert.equal(environment.DATABASE_URL, validConnections.DATABASE_URL);
     assert.equal(environment.REDIS_URL, validConnections.REDIS_URL);
     assert.deepEqual(environment.CORS_ORIGINS, ["http://localhost:3000"]);

@@ -16,6 +16,11 @@ import { createApiApplication } from "./app";
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
 const registrationTestEmails = new Set<string>();
+const loginAttemptEntities = new Set<string>();
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 if (
   !databaseUrl ||
@@ -233,6 +238,138 @@ describe("HTTP API foundation", () => {
       await app.close();
     }
   });
+
+  it("creates, validates, expires, and revokes a secure login session", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `login-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(email);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      const registration = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: { name: "Login Owner", email, password },
+      });
+      assert.equal(registration.statusCode, 201);
+
+      const unverified = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email, password },
+      });
+      assert.equal(unverified.statusCode, 403);
+      assert.equal(unverified.json().error.code, "EMAIL_NOT_VERIFIED");
+
+      await getPrismaClient().user.update({
+        where: { email },
+        data: { emailVerified: true, status: "ACTIVE" },
+      });
+
+      const login = await fastify.inject({
+        headers: { "user-agent": "Mensaly test client" },
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email: email.toUpperCase(), password },
+      });
+      assert.equal(login.statusCode, 200);
+      assert.equal(login.json().data.email, email);
+      assert.equal(login.json().data.password, undefined);
+
+      const loginCookie = firstHeader(login.headers["set-cookie"]);
+      assert.ok(loginCookie);
+      assert.match(loginCookie, /mensaly_session=/);
+      assert.match(loginCookie, /HttpOnly/);
+      assert.match(loginCookie, /SameSite=Lax/);
+      const cookie = loginCookie.split(";")[0];
+
+      const storedSession = await getPrismaClient().session.findFirstOrThrow({
+        where: { user: { email } },
+      });
+      assert.match(storedSession.tokenHash, /^[a-f0-9]{64}$/);
+      assert.equal(storedSession.tokenHash.includes(cookie.split("=")[1]), false);
+
+      const current = await fastify.inject({
+        headers: { cookie },
+        method: "GET",
+        url: "/api/v1/auth/session",
+      });
+      assert.equal(current.statusCode, 200);
+      assert.equal(current.json().data.email, email);
+
+      const logout = await fastify.inject({
+        headers: { cookie },
+        method: "POST",
+        url: "/api/v1/auth/logout",
+      });
+      assert.equal(logout.statusCode, 204);
+      assert.match(firstHeader(logout.headers["set-cookie"]) ?? "", /Max-Age=0/);
+
+      const revoked = await fastify.inject({
+        headers: { cookie },
+        method: "GET",
+        url: "/api/v1/auth/session",
+      });
+      assert.equal(revoked.statusCode, 401);
+      assert.equal(revoked.json().error.code, "SESSION_INVALID");
+
+      const secondLogin = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email, password },
+      });
+      const secondCookie = firstHeader(secondLogin.headers["set-cookie"])
+        ?.split(";")[0];
+      assert.equal(secondLogin.statusCode, 200);
+      assert.ok(secondCookie);
+      await getPrismaClient().session.updateMany({
+        where: { user: { email } },
+        data: { expiresAt: new Date(Date.now() - 1_000) },
+      });
+
+      const expired = await fastify.inject({
+        headers: { cookie: secondCookie },
+        method: "GET",
+        url: "/api/v1/auth/session",
+      });
+      assert.equal(expired.statusCode, 401);
+      assert.equal(expired.json().error.code, "SESSION_INVALID");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("limits repeated failed login attempts", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `unknown-${randomUUID()}@api.example.test`;
+    loginAttemptEntities.add(email);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await fastify.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: { email, password: "wrong-password" },
+        });
+        assert.equal(response.statusCode, 401);
+      }
+
+      const limited = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: { email, password: "wrong-password" },
+      });
+      assert.equal(limited.statusCode, 429);
+      assert.equal(limited.json().error.code, "LOGIN_RATE_LIMITED");
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 after(async () => {
@@ -243,7 +380,12 @@ after(async () => {
   });
 
   await prisma.auditLog.deleteMany({
-    where: { actorUserId: { in: users.map((user) => user.id) } },
+    where: {
+      OR: [
+        { actorUserId: { in: users.map((user) => user.id) } },
+        { entityId: { in: [...loginAttemptEntities] } },
+      ],
+    },
   });
   await prisma.user.deleteMany({
     where: { id: { in: users.map((user) => user.id) } },
