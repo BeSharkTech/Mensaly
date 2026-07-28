@@ -408,6 +408,92 @@ describe("HTTP API foundation", () => {
       await app.close();
     }
   });
+
+  it("creates and updates exactly one organization for the authenticated account", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `organization-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(email);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/register", payload: { name: "Organization Owner", email, password } })).statusCode, 201);
+      await getPrismaClient().user.update({
+        where: { email },
+        data: { emailVerified: true, status: "ACTIVE" },
+      });
+      const login = await fastify.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
+      const cookie = firstHeader(login.headers["set-cookie"])?.split(";")[0];
+      assert.ok(cookie);
+
+      const unauthenticated = await fastify.inject({ method: "POST", url: "/api/v1/organization", payload: { name: "Blocked", taxId: "12345678901", phone: "11999999999" } });
+      assert.equal(unauthenticated.statusCode, 401);
+
+      const created = await fastify.inject({
+        headers: { cookie },
+        method: "POST",
+        url: "/api/v1/organization",
+        payload: {
+          name: "Mensaly School",
+          legalName: "Mensaly School LTDA",
+          taxId: "12.345.678/0001-90",
+          phone: "+55 (11) 99999-9999",
+          timezone: "America/Sao_Paulo",
+          address: { street: "Rua das Flores", number: "100", city: "Sao Paulo", state: "SP", postalCode: "01001-000", country: "BR" },
+          brand: { primaryColor: "#112233", logoUrl: "https://example.test/logo.png" },
+        },
+      });
+      assert.equal(created.statusCode, 201);
+      assert.equal(created.json().data.taxId, "12345678000190");
+      assert.equal(created.json().data.phone, "5511999999999");
+      assert.equal(created.json().data.status, "ACTIVE");
+
+      const duplicate = await fastify.inject({
+        headers: { cookie }, method: "POST", url: "/api/v1/organization",
+        payload: { name: "Another Organization", taxId: "98765432100", phone: "11999999999" },
+      });
+      assert.equal(duplicate.statusCode, 409);
+      assert.equal(duplicate.json().error.code, "ORGANIZATION_ALREADY_EXISTS");
+
+      const own = await fastify.inject({ headers: { cookie }, method: "GET", url: "/api/v1/organization" });
+      assert.equal(own.statusCode, 200);
+      assert.equal(own.json().data.name, "Mensaly School");
+      assert.equal(own.json().data.address.street, "Rua das Flores");
+
+      const updated = await fastify.inject({
+        headers: { cookie }, method: "PATCH", url: "/api/v1/organization",
+        payload: { name: "Mensaly Academy", timezone: "America/Recife", brand: { secondaryColor: "#445566" } },
+      });
+      assert.equal(updated.statusCode, 200);
+      assert.equal(updated.json().data.name, "Mensaly Academy");
+      assert.equal(updated.json().data.timezone, "America/Recife");
+      assert.equal(updated.json().data.status, "ACTIVE");
+
+      const statusInjection = await fastify.inject({
+        headers: { cookie }, method: "PATCH", url: "/api/v1/organization",
+        payload: { status: "BLOCKED" },
+      });
+      assert.equal(statusInjection.statusCode, 400);
+      assert.equal(statusInjection.json().error.code, "VALIDATION_ERROR");
+
+      await getPrismaClient().user.update({
+        where: { email },
+        data: { role: "PLATFORM_ADMIN" },
+      });
+      const adminRoute = await fastify.inject({ headers: { cookie }, method: "GET", url: "/api/v1/organization" });
+      assert.equal(adminRoute.statusCode, 403);
+      assert.equal(adminRoute.json().error.code, "COMPANY_ACCOUNT_REQUIRED");
+
+      const audit = await getPrismaClient().auditLog.findMany({
+        where: { actor: { email }, action: { in: ["organization.created", "organization.updated"] } },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.deepEqual(audit.map((entry) => entry.action), ["organization.created", "organization.updated"]);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 after(async () => {
@@ -417,13 +503,21 @@ after(async () => {
     select: { id: true },
   });
 
+  const organizations = await prisma.organization.findMany({
+    where: { ownerUserId: { in: users.map((user) => user.id) } },
+    select: { id: true },
+  });
   await prisma.auditLog.deleteMany({
     where: {
       OR: [
         { actorUserId: { in: users.map((user) => user.id) } },
+        { organizationId: { in: organizations.map((organization) => organization.id) } },
         { entityId: { in: [...loginAttemptEntities] } },
       ],
     },
+  });
+  await prisma.organization.deleteMany({
+    where: { id: { in: organizations.map((organization) => organization.id) } },
   });
   await prisma.user.deleteMany({
     where: { id: { in: users.map((user) => user.id) } },

@@ -7,5 +7,6 @@ import { LocalEmailDeliveryService } from "./local-email-delivery.service";
 @Module({
   controllers: [AuthController],
   providers: [AuthService, LocalEmailDeliveryService],
+  exports: [AuthService],
 })
 export class AuthModule {}
