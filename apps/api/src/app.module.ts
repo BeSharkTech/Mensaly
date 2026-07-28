@@ -7,9 +7,10 @@ import { RedisHealthService } from "./infrastructure/cache/redis-health.service"
 import { HealthController } from "./health/health.controller";
 import { HealthService } from "./health/health.service";
 import { OrganizationModule } from "./organization/organization.module";
+import { OperationalModule } from "./operational/operational.module";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule],
+  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule],
   controllers: [HealthController],
   providers: [HealthService, RedisHealthService],
 })
