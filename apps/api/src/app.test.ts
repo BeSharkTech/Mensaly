@@ -569,6 +569,30 @@ describe("HTTP API foundation", () => {
       const guardian=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Maria Guardian",phone:"11999998888",taxId:"44444444444"}}); assert.equal(guardian.statusCode,201);
       assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,payload:{relationship:"Mae"}})).statusCode,201);
       const enrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-01-01"}}); assert.equal(enrollment.statusCode,201); assert.equal(enrollment.json().amountCents,15000);
+      const [firstGeneration, repeatedGeneration] = await Promise.all([
+        fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-02"} }),
+        fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-02"} }),
+      ]);
+      assert.equal(firstGeneration.statusCode,201); assert.equal(repeatedGeneration.statusCode,201);
+      const charges = await getPrismaClient().charge.findMany({ where:{ enrollmentId: enrollment.json().id, referenceMonth:new Date("2026-02-01T00:00:00.000Z") } });
+      assert.equal(charges.length,1); assert.equal(charges[0]?.amountCents,15000); assert.equal(charges[0]?.finalAmountCents,15000); assert.equal(charges[0]?.dueDate.toISOString().slice(0,10),"2026-02-10");
+      const chargeId = charges[0]!.id;
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/charges/${chargeId}/cancel`})).statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/charges/${chargeId}/waive`})).statusCode,409);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/charges/${chargeId}/reopen`})).statusCode,201);
+      const chargeList=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/charges?referenceMonth=2026-02&status=PENDING"}); assert.equal(chargeList.statusCode,200); assert.equal(chargeList.json().total,1);
+      const createdPayment=await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/charges/${chargeId}/payments`,payload:{amountCents:15000,method:"PIX",paidAt:"2026-02-10T12:00:00.000Z",externalReference:"manual-test"}}); assert.equal(createdPayment.statusCode,201); assert.equal(createdPayment.json().status,"PENDING_RECONCILIATION");
+      const paymentId=createdPayment.json().id;
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/payments/${paymentId}/confirm`})).statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/payments/${paymentId}/confirm`})).statusCode,409);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/payments/${paymentId}/reverse`})).statusCode,201);
+      const reopened=await fastify.inject({headers:{cookie},method:"GET",url:`/api/v1/charges/${chargeId}`}); assert.equal(reopened.statusCode,200); assert.equal(reopened.json().status,"PENDING");
+      const concurrentPayment=await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/charges/${chargeId}/payments`,payload:{amountCents:15000,method:"CASH",paidAt:"2026-02-11T12:00:00.000Z"}}); assert.equal(concurrentPayment.statusCode,201);
+      const concurrentPaymentId=concurrentPayment.json().id;
+      const confirmations=await Promise.all([fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/payments/${concurrentPaymentId}/confirm`}),fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/payments/${concurrentPaymentId}/confirm`})]);
+      assert.deepEqual(confirmations.map((response)=>response.statusCode).sort(),[201,409]);
+      const invalidMonth = await fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-13"} });
+      assert.equal(invalidMonth.statusCode,400);
       const listed=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/students?search=Ana&page=1&pageSize=10"}); assert.equal(listed.statusCode,200); assert.equal(listed.json().total,1);
       assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/enrollments/${enrollment.json().id}`,payload:{status:"ENDED",endDate:"2026-12-31"}})).statusCode,200);
     } finally { await app.close(); }
@@ -595,6 +619,8 @@ after(async () => {
       ],
     },
   });
+  await prisma.payment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.charge.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.enrollment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.studentGuardian.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.plan.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
