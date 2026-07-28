@@ -8,6 +8,8 @@
   "scripts": {
     "build": "turbo run build",
     "db:generate": "pnpm --filter @mensaly/database generate",
+    "db:migrate:deploy": "pnpm --filter @mensaly/database migrate:deploy",
+    "db:seed": "pnpm --filter @mensaly/database seed",
     "dev": "turbo run dev",
     "env:test:validate": "docker compose -f infra/docker/compose.test.yaml config --quiet",
     "env:test:up": "docker compose -f infra/docker/compose.test.yaml up -d --wait",
@@ -16,7 +18,8 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "postinstall": "pnpm db:generate",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration"
   },
   "devDependencies": {
     "@mensaly/eslint-config": "workspace:*",
