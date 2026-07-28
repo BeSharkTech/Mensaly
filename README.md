@@ -16,10 +16,22 @@ Monorepo da plataforma Mensaly.
 - `packages/logger`: logger estruturado compartilhado.
 - `packages/config`: leitura e validação de ambiente.
 
-## Começar
+## Infraestrutura local
 
-1. Copie os arquivos `.env.example` necessários para `.env`.
-2. Execute `pnpm install`.
-3. Execute `pnpm dev`.
+O Docker Compose disponibiliza PostgreSQL 17 e Redis 7.2 para desenvolvimento
+local.
 
-Os serviços de PostgreSQL e Redis serão adicionados pela tarefa de infraestrutura correspondente.
+### Início rápido
+
+1. Copie `.env.example` para `.env`.
+2. Inicie os serviços:
+
+   ```powershell
+   docker compose --env-file .env -f infra/docker/compose.yaml up -d --wait
+   ```
+
+3. Execute `pnpm install`.
+4. Execute `pnpm dev`.
+
+Consulte [infra/docker/README.md](infra/docker/README.md) para validação,
+verificação dos serviços, logs e encerramento seguro.
