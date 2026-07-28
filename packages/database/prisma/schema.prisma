@@ -114,6 +114,7 @@ model Organization {
   legalName   String?            @db.VarChar(160)
   taxId       String?            @unique @db.VarChar(14)
   phone       String?            @db.VarChar(20)
+  address     Json?
   timezone    String             @default("America/Sao_Paulo") @db.VarChar(64)
   status      OrganizationStatus @default(ACTIVE)
   brand       Json?
