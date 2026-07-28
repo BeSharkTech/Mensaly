@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { randomUUID } from "node:crypto";
+import { after, describe, it } from "node:test";
 
 import {
   apiEnvironmentSchema,
@@ -7,11 +8,14 @@ import {
   type ApiEnvironment,
 } from "@mensaly/config";
 import { errorEnvelopeSchema } from "@mensaly/contracts";
+import { getPrismaClient } from "@mensaly/database";
+import { verifyPassword } from "@mensaly/auth";
 
 import { createApiApplication } from "./app";
 
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
+const registrationTestEmails = new Set<string>();
 
 if (
   !databaseUrl ||
@@ -143,5 +147,105 @@ describe("HTTP API foundation", () => {
       await app.close();
       process.env.DATABASE_URL = originalDatabaseUrl;
     }
+  });
+
+  it("registers a pending company account with a protected password", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `registration-${randomUUID()}@api.example.test`;
+    registrationTestEmails.add(email);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      const response = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          name: "Mensaly Owner",
+          email: email.toUpperCase(),
+          password: "correct-horse-battery-staple",
+        },
+      });
+
+      assert.equal(response.statusCode, 201);
+      assert.deepEqual(response.json().data, {
+        id: response.json().data.id,
+        name: "Mensaly Owner",
+        email,
+        emailVerified: false,
+        status: "PENDING_VERIFICATION",
+      });
+
+      const user = await getPrismaClient().user.findUniqueOrThrow({
+        where: { email },
+        include: { accounts: true, auditLogs: true },
+      });
+      const credential = user.accounts.find(
+        (account) => account.providerId === "credential",
+      );
+
+      assert.equal(user.role, "COMPANY_ACCOUNT");
+      assert.equal(user.status, "PENDING_VERIFICATION");
+      assert.equal(credential?.password === "correct-horse-battery-staple", false);
+      assert.equal(await verifyPassword("correct-horse-battery-staple", credential?.password ?? ""), true);
+      assert.equal(user.auditLogs[0]?.action, "auth.registration.created");
+
+      const duplicate = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          name: "Another Owner",
+          email,
+          password: "another-correct-password",
+        },
+      });
+      assert.equal(duplicate.statusCode, 409);
+      assert.equal(duplicate.json().error.code, "EMAIL_ALREADY_REGISTERED");
+
+      const invalid = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          name: "A",
+          email: `not-${randomUUID()}.invalid`,
+          password: "short",
+        },
+      });
+      assert.equal(invalid.statusCode, 400);
+      assert.equal(errorEnvelopeSchema.safeParse(invalid.json()).success, true);
+
+      const unexpectedField = await fastify.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          name: "Mensaly Owner",
+          email: `extra-${randomUUID()}@api.example.test`,
+          password: "correct-horse-battery-staple",
+          role: "PLATFORM_ADMIN",
+        },
+      });
+      assert.equal(unexpectedField.statusCode, 400);
+      assert.equal(
+        unexpectedField.json().error.code,
+        "VALIDATION_ERROR",
+      );
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+after(async () => {
+  const prisma = getPrismaClient();
+  const users = await prisma.user.findMany({
+    where: { email: { in: [...registrationTestEmails] } },
+    select: { id: true },
+  });
+
+  await prisma.auditLog.deleteMany({
+    where: { actorUserId: { in: users.map((user) => user.id) } },
+  });
+  await prisma.user.deleteMany({
+    where: { id: { in: users.map((user) => user.id) } },
   });
 });

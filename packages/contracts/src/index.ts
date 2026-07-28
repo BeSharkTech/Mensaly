@@ -19,7 +19,7 @@ export const errorEnvelopeSchema = z.object({
 export type ErrorEnvelope = z.infer<typeof errorEnvelopeSchema>;
 
 export type ZodDtoConstructor = {
-  new (): unknown;
+  new (): object;
   schema: z.ZodTypeAny;
 };
 
