@@ -4,15 +4,15 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
-**Estado atual verificado:** Gate F4, MEN-BE-018 e MEN-BE-019 integrados na
-`main` pelos PRs `#41`, `#42` e `#44`
+**Estado atual verificado:** Gate F4, MEN-BE-018, MEN-BE-019 e MEN-BE-020
+integrados na `main` pelos PRs `#41`, `#42`, `#44` e `#46`
 **Modelo de trabalho:** sequencial, em um único computador
 
 ## Atualização de execução — Fase 5
 
-**Situação em 28 de julho de 2026:** Fases 0 a 4 e as duas primeiras tarefas da
-Fase 5, MEN-BE-018 e MEN-BE-019, estão integradas na `main`. Os PRs `#42` e
-`#44` passaram pelo CI e foram mesclados por squash.
+**Situação em 28 de julho de 2026:** Fases 0 a 4 e as três primeiras tarefas da
+Fase 5, MEN-BE-018, MEN-BE-019 e MEN-BE-020, estão integradas na `main`. Os PRs
+`#42`, `#44` e `#46` passaram pelo CI e foram mesclados por squash.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
@@ -25,6 +25,7 @@ As entregas abaixo foram concluídas na ordem backend-first:
 | F4 | Mensalidades idempotentes, pagamentos internos, transições, auditoria, concorrência e integridade multiempresa integrados na `main`. |
 | F5.1 | Configuração de lembretes com regras, janela de envio, timezone da empresa, limite, ativação e validação de conflitos integrada na `main`. |
 | F5.2 | Templates internos, agendamentos persistidos, histórico, idempotência e cancelamento após pagamento integrados na `main`. |
+| F5.3 | BullMQ com filas nomeadas, jobs idempotentes, retry, DLQ, métricas e shutdown seguro integrado na `main`. |
 
 O Gate F4 foi integrado pelo PR `#41`. MEN-BE-018 foi integrado pelo PR `#42`
 com migration aplicada do zero em PostgreSQL isolado, rotas autenticadas,
@@ -35,9 +36,13 @@ MEN-BE-019 foi integrado pelo PR `#44`, com templates e agendamentos isolados
 por empresa, snapshots imutáveis, histórico de estados, prevenção de
 duplicidade e cancelamento transacional após pagamento.
 
-O próximo trabalho funcional é MEN-BE-020: BullMQ. Nenhuma
-tela funcional nem integração externa deve iniciar antes do gate de conclusão
-do back-end.
+MEN-BE-020 foi integrado pelo PR `#46`, com o pacote compartilhado de filas,
+runtime BullMQ no worker, retry exponencial, falhas permanentes sem repetição,
+dead-letter determinística, métricas locais e encerramento seguro.
+
+O próximo trabalho funcional é MEN-BE-021: worker de mensagens com adaptador
+falso. Nenhuma tela funcional nem integração externa deve iniciar antes do gate
+de conclusão do back-end.
 
 ## 1. Objetivo deste documento
 
@@ -198,12 +203,20 @@ Ela não deve ser usada como base para novas tarefas.
   - cancelamento manual e cancelamento automático após pagamento;
   - locks transacionais para a corrida entre agendamento e pagamento;
   - migration do zero e testes reais de concorrência e isolamento aprovados;
+- MEN-BE-020: infraestrutura BullMQ, integrada pelo PR `#46`, com:
+  - pacote compartilhado `@mensaly/queue`;
+  - filas `message-dispatch` e `dead-letter`;
+  - IDs determinísticos por agendamento e deduplicação concorrente;
+  - retry exponencial e classificação de falha transitória ou permanente;
+  - DLQ idempotente para falhas terminais;
+  - métricas estruturadas, retenção limitada e shutdown seguro;
+  - runtime compilado conectado a PostgreSQL e Redis aprovado;
 - todos os dados operacionais são derivados da empresa da sessão autenticada;
 - `PLATFORM_ADMIN` permanece separado das rotas de empresa.
 
 ### 4.2 Não iniciado
 
-- BullMQ e workers reais;
+- worker funcional de mensagens com adaptador falso;
 - dashboard e painel administrativo;
 - frontend funcional;
 - integrações externas.
@@ -241,6 +254,14 @@ incluindo idempotência concorrente, snapshots, histórico, isolamento entre
 empresas e a corrida entre agendamento e confirmação de pagamento. O gate
 completo (`typecheck`, `lint`, testes, build, runtime e auditoria) e o CI foram
 aprovados; a tarefa foi integrada na `main` pelo PR `#44`.
+
+Para MEN-BE-020, as 11 migrations foram novamente aplicadas do zero. Passaram
+os 7 testes de integração do banco, 5 testes BullMQ reais no Redis, 3 testes do
+lifecycle do worker, 8 testes de configuração e os 15 testes da API. Os
+runtimes compilados da API e do worker conectaram aos serviços isolados e
+encerraram corretamente. Instalação congelada, build, `typecheck`, lint, suíte
+completa e auditoria também passaram; o CI aprovou e o PR `#46` foi integrado
+na `main`.
 
 ## 6. Decisões definitivas de domínio
 
@@ -706,6 +727,8 @@ sem chamar provedores externos.
 
 ### MEN-BE-020 — BullMQ
 
+**Estado:** integrado na `main` pelo PR `#46`.
+
 - conexão;
 - nomes de filas;
 - job IDs idempotentes;
@@ -1003,14 +1026,14 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. iniciar MEN-BE-020 em uma nova branch;
+1. iniciar MEN-BE-021 em uma nova branch;
 2. implementar, revisar, validar, publicar e integrar uma tarefa por vez;
 3. seguir o fluxo até MEN-BE-028;
 4. congelar e aprovar a API;
 5. iniciar e concluir o front-end;
 6. conectar as integrações externas na ordem definida.
 
-MEN-BE-020 está desbloqueado após a integração de MEN-BE-019.
+MEN-BE-021 está desbloqueado após a integração de MEN-BE-020.
 Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
 back-end. Nenhum provedor externo deverá ser conectado antes do gate de
 conclusão do front-end.
