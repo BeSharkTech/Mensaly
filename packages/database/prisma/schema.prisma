@@ -214,9 +214,10 @@ model Charge {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
-  enrollment Enrollment @relation(fields:[enrollmentId],references:[id],onDelete:Restrict)
+  enrollment Enrollment @relation(fields:[organizationId,enrollmentId],references:[organizationId,id],onDelete:Restrict)
   payments Payment[]
   @@unique([organizationId,enrollmentId,referenceMonth])
+  @@unique([organizationId,id])
   @@index([organizationId,status,dueDate])
   @@map("charge")
 }
@@ -225,6 +226,7 @@ model Payment {
   id String @id @default(uuid()) @db.Uuid
   organizationId String @db.Uuid
   chargeId String @db.Uuid
+  idempotencyKey String @db.VarChar(128)
   amountCents Int
   method PaymentMethod
   status PaymentStatus @default(PENDING_RECONCILIATION)
@@ -235,7 +237,8 @@ model Payment {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
-  charge Charge @relation(fields:[chargeId],references:[id],onDelete:Restrict)
+  charge Charge @relation(fields:[organizationId,chargeId],references:[organizationId,id],onDelete:Restrict)
+  @@unique([organizationId,idempotencyKey])
   @@index([organizationId,status,paidAt])
   @@index([chargeId])
   @@map("payment")
@@ -312,6 +315,7 @@ model Enrollment {
   guardian Guardian @relation(fields:[guardianId], references:[id], onDelete: Restrict)
   plan Plan @relation(fields:[planId], references:[id], onDelete: Restrict)
   charges Charge[]
+  @@unique([organizationId,id])
   @@index([organizationId, status])
   @@index([organizationId, studentId])
   @@map("enrollment")

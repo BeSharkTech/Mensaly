@@ -2,7 +2,9 @@ import { z } from "zod";
 
 export const generateChargesSchema = z
   .object({
-    referenceMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM"),
+    referenceMonth: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM"),
   })
   .strict();
 
@@ -17,12 +19,39 @@ export const chargeListQuerySchema = z
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
     status: z.enum(["PENDING", "PAID", "CANCELLED", "WAIVED"]).optional(),
-    referenceMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+    referenceMonth: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+      .optional(),
   })
   .strict();
 
 export type ChargeListQuery = z.infer<typeof chargeListQuerySchema>;
 
-export const createManualPaymentSchema = z.object({ amountCents: z.number().int().positive(), method: z.enum(["CASH", "PIX", "BANK_TRANSFER", "CARD", "OTHER"]), paidAt: z.string().datetime(), externalReference: z.string().trim().max(255).optional(), notes: z.string().trim().max(1000).optional() }).strict();
-export class CreateManualPaymentDto { static readonly schema = createManualPaymentSchema; }
-export type CreateManualPaymentInput = z.infer<typeof createManualPaymentSchema>;
+export const createManualPaymentSchema = z
+  .object({
+    amountCents: z.number().int().positive(),
+    method: z.enum(["CASH", "PIX", "BANK_TRANSFER", "CARD", "OTHER"]),
+    paidAt: z.string().datetime(),
+    externalReference: z.string().trim().min(1).max(255).optional(),
+    notes: z.string().trim().min(1).max(1000).optional(),
+  })
+  .strict();
+
+export class CreateManualPaymentDto {
+  static readonly schema = createManualPaymentSchema;
+}
+
+export type CreateManualPaymentInput = z.infer<
+  typeof createManualPaymentSchema
+>;
+
+export const idempotencyKeySchema = z
+  .string()
+  .trim()
+  .min(8)
+  .max(128)
+  .regex(
+    /^[A-Za-z0-9._:-]+$/,
+    "Use letters, numbers, dots, underscores, colons, or hyphens",
+  );

@@ -4,29 +4,33 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
+**Estado atual verificado:** `main` em `0f7c774`; Fase 4 na branch
+`agent/f4-financial`
 **Modelo de trabalho:** sequencial, em um único computador
 
-## Atualização de execução — Etapa 1
+## Atualização de execução — Fase 4
 
-**Situação em 28 de julho de 2026:** pronta para integração, após validação
-local completa e CI pendente deste último módulo.
+**Situação em 28 de julho de 2026:** Fases 0 a 3 integradas na `main`. A Fase 4
+está implementada e validada localmente na branch `agent/f4-financial`; a
+atualização do PR, o novo CI e a revisão ainda são necessários antes do merge.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
-| Módulo | Resultado prático |
+| Fase | Resultado prático |
 | --- | --- |
-| MEN-BE-001 | Convenções de backend, contratos, erros, transações e isolamento documentados. |
-| MEN-BE-002 | Schema Prisma, migration PostgreSQL, seed seguro de administrador e testes reais de banco. |
-| MEN-BE-003 | Conexão única ao banco, ciclo de vida para API/worker e transações reutilizáveis. |
-| MEN-BE-004 | API `/api/v1`, health/readiness, erros padronizados, validação Zod, logs, correlation ID, CORS e OpenAPI JSON. |
+| F0 | Fundação confiável, dependências auditadas, lint e testes reais. |
+| F1 | Banco, Prisma, migrations, lifecycle e base HTTP segura. |
+| F2 | Cadastro, sessões, verificação, recuperação, empresa única e autorização multiempresa. |
+| F3 | CRUDs de planos, alunos, responsáveis, vínculos e matrículas concluídos na `main`. |
+| F4 | Mensalidades idempotentes, pagamentos internos, transições, auditoria, concorrência e integridade multiempresa implementados na branch atual. |
 
-O gate da Etapa 1 exige e agora possui: migration aplicada em banco isolado,
-testes de integração, build real da API, teste do JavaScript compilado em uma
-porta TCP, auditoria sem vulnerabilidades conhecidas e CI no GitHub.
+O Gate F4 possui migration aplicada do zero em PostgreSQL isolado, testes de
+idempotência, concorrência, rollback e isolamento entre empresas, contratos
+OpenAPI, typecheck, lint, testes, build e auditoria local.
 
-O próximo trabalho funcional, após a integração deste módulo, é a Fase 2:
-cadastro, login, logout, sessão e isolamento da empresa no backend. Nenhuma
-tela funcional nem integração externa deve iniciar antes disso.
+O próximo trabalho funcional, somente após revisão e integração da Fase 4, é a
+Fase 5: mensagens, filas e workers com adaptadores falsos. Nenhuma tela
+funcional nem integração externa deve iniciar antes disso.
 
 ## 1. Objetivo deste documento
 
@@ -163,71 +167,58 @@ Ela não deve ser usada como base para novas tarefas.
 
 ### 4.1 Concluído
 
-- monorepo com `apps/web`, `apps/api` e `apps/worker`;
-- pacotes-base de banco, autenticação, contratos, configuração e logger;
-- Next.js, NestJS/Fastify e worker compilando;
-- PostgreSQL 17 e Redis 7.2 para desenvolvimento local;
-- PostgreSQL e Redis isolados e descartáveis para testes;
-- `.env.example` central;
-- validação de ambiente com Zod na API e no worker;
-- pipeline de CI com install, typecheck, lint, test e build;
-- geração automática do Prisma Client em checkout limpo;
-- ESLint real separado do typecheck;
-- doze testes reais de fundação para API, worker, banco, logger, configuração,
-  auth, contratos e web;
-- `pnpm dev` inicia web, API e worker sem opção obsoleta;
-- documentação inicial do onboarding.
+- Fase 0: fundação do monorepo, ambientes Docker, CI, lint, testes e auditoria;
+- Fase 1: schema base, migrations, seed administrativo, módulo de banco e API
+  HTTP;
+- Fase 2: cadastro, login, logout, sessões, verificação, recuperação, perfil
+  único da empresa e autorização multiempresa;
+- Fase 3: CRUDs operacionais de planos, alunos, responsáveis, vínculos e
+  matrículas;
+- todos os dados operacionais são derivados da empresa da sessão autenticada;
+- `PLATFORM_ADMIN` permanece separado das rotas de empresa.
 
-### 4.2 Parcial ou apenas estrutural
+### 4.2 Concluído localmente e pendente de integração
 
-- `apps/api` inicia, mas o `AppModule` está vazio;
-- `apps/worker` valida o ambiente e escreve uma mensagem no console;
-- `packages/database` exporta `PrismaClient`, mas não possui módulo de conexão,
-  migrations, seeds ou tabelas;
-- `packages/auth` está vazio;
-- `packages/contracts` está vazio;
-- `apps/web` contém somente uma página estática “Mensaly”;
+- Fase 4 na branch `agent/f4-financial`;
+- geração idempotente de mensalidades por matrícula e competência;
+- cancelamento, isenção, reabertura e histórico auditável;
+- pagamentos manuais com `Idempotency-Key` obrigatório;
+- conciliação, cancelamento e estorno controlados;
+- trava por mensalidade e unicidade parcial para impedir duas baixas ativas;
+- chaves estrangeiras compostas impedindo vínculos financeiros entre empresas;
+- testes reais de repetição, concorrência, rollback e isolamento;
+- PR `#41` permanece draft até receber o commit atualizado, CI e revisão.
 
 ### 4.3 Não iniciado
 
-- modelos de domínio no Prisma;
-- migrations e seed;
-- módulo de banco na API;
-- cadastro, login, logout e sessões;
-- verificação e recuperação de senha;
-- organização e vínculo 1:1 com a conta;
-- autorização de `PLATFORM_ADMIN` e `COMPANY_ACCOUNT`;
-- isolamento multiempresa testado;
-- CRUDs de empresa, planos, alunos, responsáveis e matrículas;
-- motor de mensalidades;
-- pagamentos e baixa manual;
 - agendamento e histórico de mensagens;
 - BullMQ e workers reais;
-- auditoria;
-- OpenAPI;
 - dashboard e painel administrativo;
+- frontend funcional;
 - integrações externas.
 
 ## 5. Resultado das validações locais
 
-Depois de sincronizar com `origin/main`, foram executados:
+Para a conclusão local da Fase 4, foram executados:
 
 ```powershell
-pnpm install --frozen-lockfile
-pnpm env:test:validate
+pnpm env:test:up
+pnpm db:migrate:deploy
+pnpm test:integration
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm test:runtime
 pnpm audit --audit-level high
 ```
 
-Todos terminaram com código de saída `0`. O audit não encontrou
-vulnerabilidades conhecidas, não há scripts de teste fictícios e o CI da
-`main` passou após o último merge.
+Todos terminaram com código de saída `0`. As migrations foram aplicadas no banco
+isolado, os testes financeiros usaram PostgreSQL real e o audit não encontrou
+vulnerabilidades conhecidas.
 
-Conclusão: a Fase 0 está concluída; a fundação é confiável para iniciar o
-domínio financeiro na Etapa 1.
+Conclusão: o Gate F4 está concluído localmente. A fase só será considerada
+integrada após commit, push, CI, revisão e merge do PR `#41`.
 
 ## 6. Decisões definitivas de domínio
 
@@ -988,16 +979,17 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. usar somente a `main` atualizada como base;
-2. não continuar pela branch `feat/MEN-003-onboarding-flow`;
-3. criar `MEN-BE-001`;
-4. seguir uma tarefa por vez até `MEN-BE-028`;
-5. congelar e aprovar a API;
-6. iniciar o front-end;
-7. concluir o front-end;
-8. conectar as integrações externas na ordem definida.
+1. revisar o diff final da Fase 4 na branch `agent/f4-financial`;
+2. atualizar o PR `#41` e aguardar o novo CI;
+3. revisar e mesclar a Fase 4 por squash;
+4. sincronizar a `main`;
+5. iniciar MEN-BE-018 em uma branch criada a partir da `main`;
+6. seguir uma tarefa por vez até MEN-BE-028;
+7. congelar e aprovar a API;
+8. iniciar e concluir o front-end;
+9. conectar as integrações externas na ordem definida.
 
-Nenhum CRUD funcional deverá ser iniciado antes da conclusão do Gate F0.
+Nenhum trabalho da Fase 5 deverá começar antes da integração do Gate F4.
 Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
 back-end. Nenhum provedor externo deverá ser conectado antes do gate de
 conclusão do front-end.
