@@ -1,94 +1,37 @@
 # Mensaly
 
-SaaS multiempresa para gerenciamento de alunos, mensalidades, pagamentos e
-mensagens.
+Monorepo da plataforma Mensaly.
+
+## Aplicações
+
+- `apps/web`: aplicação web em Next.js.
+- `apps/api`: API NestJS com Fastify.
+- `apps/worker`: workers para tarefas assíncronas.
+
+## Pacotes
+
+- `packages/database`: schema, migrations e Prisma Client.
+- `packages/contracts`: contratos e validações compartilhadas.
+- `packages/auth`: limites para integração de autenticação.
+- `packages/logger`: logger estruturado compartilhado.
+- `packages/config`: leitura e validação de ambiente.
 
 ## Infraestrutura local
 
-O ambiente local usa Docker Compose para executar:
+O Docker Compose disponibiliza PostgreSQL 17 e Redis 7.2 para desenvolvimento
+local.
 
-- PostgreSQL 17 como banco de dados principal;
-- Redis 7.2 como infraestrutura para as futuras filas BullMQ.
+### Início rápido
 
-### Requisitos
+1. Copie `.env.example` para `.env`.
+2. Inicie os serviços:
 
-- Docker Desktop com o mecanismo Docker em execução;
-- Docker Compose v2.
+   ```powershell
+   docker compose --env-file .env -f infra/docker/compose.yaml up -d --wait
+   ```
 
-### Configurar as variáveis
+3. Execute `pnpm install`.
+4. Execute `pnpm dev`.
 
-No PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-No macOS ou Linux:
-
-```bash
-cp .env.example .env
-```
-
-O arquivo `.env` é local e não deve ser versionado. Os valores presentes em
-`.env.example` são destinados exclusivamente ao desenvolvimento local.
-
-### Validar a configuração
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml config --quiet
-```
-
-Quando o comando termina sem saída e com código `0`, a configuração é válida.
-
-### Iniciar PostgreSQL e Redis
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml up -d
-```
-
-Consultar o estado e aguardar até que ambos apareçam como `healthy`:
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml ps
-```
-
-### Verificar os serviços
-
-PostgreSQL:
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml exec postgres `
-  pg_isready -U mensaly -d mensaly
-```
-
-Redis:
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml exec redis redis-cli ping
-```
-
-O Redis deve responder `PONG`.
-
-### Consultar os logs
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml logs --tail=100
-```
-
-Para acompanhar novos logs:
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml logs --follow
-```
-
-### Parar os serviços
-
-```powershell
-docker compose --env-file .env -f infra/docker/compose.yaml down
-```
-
-Esse comando preserva os volumes `postgres_data` e `redis_data`.
-
-> **Atenção:** `docker compose down --volumes` remove permanentemente os dados
-> locais do PostgreSQL e do Redis. Use essa opção somente quando quiser
-> reinicializar todo o ambiente.
+Consulte [infra/docker/README.md](infra/docker/README.md) para validação,
+verificação dos serviços, logs e encerramento seguro.
