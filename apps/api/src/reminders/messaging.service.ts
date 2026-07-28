@@ -83,6 +83,23 @@ function scheduleView(schedule: ScheduleWithTemplate) {
             reason: schedule.cancellationReason,
           }
         : null,
+    delivery: {
+      providerMessageId: schedule.providerMessageId,
+      sentAt: schedule.sentAt?.toISOString() ?? null,
+      deliveredAt: schedule.deliveredAt?.toISOString() ?? null,
+      readAt: schedule.readAt?.toISOString() ?? null,
+    },
+    attempts: {
+      count: schedule.attemptCount,
+      lastAt: schedule.lastAttemptAt?.toISOString() ?? null,
+      lastError:
+        schedule.lastErrorCode && schedule.lastErrorMessage
+          ? {
+              code: schedule.lastErrorCode,
+              message: schedule.lastErrorMessage,
+            }
+          : null,
+    },
     createdAt: schedule.createdAt.toISOString(),
     updatedAt: schedule.updatedAt.toISOString(),
   };
@@ -493,6 +510,37 @@ export class MessagingService {
       reason: entry.reason,
       metadata: entry.metadata,
       createdAt: entry.createdAt.toISOString(),
+    }));
+  }
+
+  async scheduleAttempts(auth: AuthenticatedContext, id: string) {
+    const orgId = organizationId(auth);
+    const schedule = await this.prisma.client.messageSchedule.findFirst({
+      where: { id, organizationId: orgId },
+      select: { id: true },
+    });
+    if (!schedule) {
+      throw new NotFoundException({
+        code: "MESSAGE_SCHEDULE_NOT_FOUND",
+        message: "Message schedule was not found",
+      });
+    }
+    const attempts = await this.prisma.client.messageDeliveryAttempt.findMany({
+      where: { scheduleId: id, organizationId: orgId },
+      orderBy: [{ attemptNumber: "asc" }, { id: "asc" }],
+    });
+    return attempts.map((attempt) => ({
+      id: attempt.id,
+      attemptNumber: attempt.attemptNumber,
+      status: attempt.status,
+      idempotencyKey: attempt.idempotencyKey,
+      providerMessageId: attempt.providerMessageId,
+      error:
+        attempt.errorCode && attempt.errorMessage
+          ? { code: attempt.errorCode, message: attempt.errorMessage }
+          : null,
+      startedAt: attempt.startedAt.toISOString(),
+      finishedAt: attempt.finishedAt?.toISOString() ?? null,
     }));
   }
 }

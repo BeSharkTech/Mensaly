@@ -1,7 +1,8 @@
 # Filas BullMQ
 
-O MEN-BE-020 estabelece a infraestrutura de filas do Mensaly sem integrar
-provedores externos e sem antecipar o processamento funcional do MEN-BE-021.
+O MEN-BE-020 estabelece a infraestrutura de filas do Mensaly. O MEN-BE-021
+conecta essa infraestrutura ao processamento funcional por meio de um adaptador
+falso, ainda sem integrar provedores externos.
 
 ## Topologia
 
@@ -18,8 +19,9 @@ prefixo pode separar ambientes, mas nunca substitui o isolamento de dados por
 
 Cada job de mensagem usa `message-{scheduleId}` como ID. O mesmo agendamento
 não gera dois jobs enquanto o registro original estiver retido no BullMQ. O
-banco PostgreSQL continua sendo a fonte de verdade; o worker funcional deverá
-revalidar o estado do agendamento antes de qualquer envio.
+banco PostgreSQL continua sendo a fonte de verdade. Antes de cada tentativa, o
+worker revalida o agendamento e usa sua chave de deduplicação também como chave
+idempotente do adaptador.
 
 Jobs concluídos ficam retidos por até sete dias e falhas por até trinta dias,
 com limite de 10.000 registros em cada estado. Essa retenção mantém diagnóstico
@@ -48,8 +50,31 @@ O runtime registra eventos estruturados de início, conclusão, falha, envio par
 dead-letter e encerramento. Também publica periodicamente contagens locais de
 estados das duas filas.
 
+## Processamento funcional local
+
+O worker usa travas transacionais por organização/data, cobrança e agendamento.
+Enquanto mantém essas travas, confirma novamente:
+
+- cobrança pendente e agendamento ainda não enviado;
+- empresa, matrícula, aluno e responsável ativos;
+- vínculo atual entre aluno e responsável;
+- telefone válido e inalterado desde o agendamento;
+- lembretes habilitados, janela de envio e limite diário;
+- ausência de bloqueio ativo para o telefone.
+
+Cada execução cria uma `MessageDeliveryAttempt` e registra as transições em
+`MessageScheduleHistory`. Sucessos podem terminar em `SENT`, `DELIVERED` ou
+`READ`; falhas ficam classificadas como recuperáveis ou permanentes. Confirmação
+de pagamento transforma o agendamento pendente em `CANCELLED` sem chamar o
+adaptador.
+
+O resultado local do adaptador é configurado por
+`FAKE_MESSAGE_ADAPTER_OUTCOME`. Os valores aceitos são `SENT`, `DELIVERED`,
+`READ`, `TRANSIENT_FAILURE` e `PERMANENT_FAILURE`.
+
 ## Limite desta etapa
 
-O handler de produção permanece bloqueado até MEN-BE-021. Não há adaptador
-falso, chamada à Meta, scheduler recorrente ou regra funcional de envio nesta
-entrega.
+Não há token nem chamada à Meta. Scheduler recorrente, recuperação temporal e
+execuções atrasadas pertencem ao MEN-BE-022. A troca do adaptador falso por um
+provedor externo também exigirá retirar a chamada de rede de dentro da transação
+e adotar lease/outbox, sem enfraquecer a idempotência já persistida.

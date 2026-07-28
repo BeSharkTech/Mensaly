@@ -99,6 +99,13 @@ enum MessageScheduleStatus {
   CANCELLED
 }
 
+enum MessageDeliveryAttemptStatus {
+  STARTED
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -197,6 +204,7 @@ model Organization {
   reminderConfiguration ReminderConfiguration?
   messageTemplates MessageTemplate[]
   messageSchedules MessageSchedule[]
+  messageRecipientBlocks MessageRecipientBlock[]
 
   @@index([status])
   @@map("organization")
@@ -325,16 +333,27 @@ model MessageSchedule {
   recipientPhoneSnapshot String @db.VarChar(20)
   cancelledAt DateTime? @db.Timestamptz(3)
   cancellationReason String? @db.VarChar(120)
+  attemptCount Int @default(0)
+  lastAttemptAt DateTime? @db.Timestamptz(3)
+  sentAt DateTime? @db.Timestamptz(3)
+  sentLocalDate DateTime? @db.Date
+  deliveredAt DateTime? @db.Timestamptz(3)
+  readAt DateTime? @db.Timestamptz(3)
+  providerMessageId String? @db.VarChar(255)
+  lastErrorCode String? @db.VarChar(120)
+  lastErrorMessage String? @db.VarChar(1000)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
   charge Charge @relation(fields:[organizationId,chargeId],references:[organizationId,id],onDelete:Restrict)
   template MessageTemplate @relation(fields:[organizationId,templateId],references:[organizationId,id],onDelete:Restrict)
   history MessageScheduleHistory[]
+  deliveryAttempts MessageDeliveryAttempt[]
   @@unique([organizationId,deduplicationKey])
   @@unique([organizationId,id])
   @@index([organizationId,status,scheduledFor])
   @@index([chargeId,status])
+  @@index([organizationId,sentLocalDate])
   @@map("message_schedule")
 }
 
@@ -351,6 +370,39 @@ model MessageScheduleHistory {
   @@index([scheduleId,createdAt])
   @@index([organizationId,createdAt])
   @@map("message_schedule_history")
+}
+
+model MessageDeliveryAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  scheduleId String @db.Uuid
+  attemptNumber Int
+  status MessageDeliveryAttemptStatus @default(STARTED)
+  idempotencyKey String @db.VarChar(128)
+  providerMessageId String? @db.VarChar(255)
+  errorCode String? @db.VarChar(120)
+  errorMessage String? @db.VarChar(1000)
+  startedAt DateTime @default(now()) @db.Timestamptz(3)
+  finishedAt DateTime? @db.Timestamptz(3)
+  schedule MessageSchedule @relation(fields:[organizationId,scheduleId],references:[organizationId,id],onDelete:Restrict)
+  @@unique([organizationId,scheduleId,attemptNumber])
+  @@index([scheduleId,startedAt])
+  @@index([organizationId,status,startedAt])
+  @@map("message_delivery_attempt")
+}
+
+model MessageRecipientBlock {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  phone String @db.VarChar(20)
+  reason String @db.VarChar(120)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  @@unique([organizationId,phone])
+  @@index([organizationId,active])
+  @@map("message_recipient_block")
 }
 
 model Student {

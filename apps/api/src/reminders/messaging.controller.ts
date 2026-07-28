@@ -308,4 +308,16 @@ export class MessagingController {
   ): Promise<{ data: unknown[] }> {
     return { data: await this.messaging.scheduleHistory(auth, id) };
   }
+
+  @Get("message-schedules/:id/attempts")
+  @ApiOperation({ summary: "Lists persisted message delivery attempts" })
+  @ApiParam({ name: "id", format: "uuid" })
+  @ApiOkResponse({ description: "Chronological delivery attempts" })
+  @ApiNotFoundResponse({ description: "Schedule not found" })
+  async attempts(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Param("id") id: string,
+  ): Promise<{ data: unknown[] }> {
+    return { data: await this.messaging.scheduleAttempts(auth, id) };
+  }
 }

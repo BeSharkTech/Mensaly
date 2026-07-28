@@ -31,6 +31,15 @@ const bullmqPrefixSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
   .default("mensaly");
+const fakeMessageAdapterOutcomeSchema = z
+  .enum([
+    "SENT",
+    "DELIVERED",
+    "READ",
+    "TRANSIENT_FAILURE",
+    "PERMANENT_FAILURE",
+  ])
+  .default("READ");
 
 function usesProtocol(value: string, protocols: string[]): boolean {
   try {
@@ -126,6 +135,7 @@ export const workerEnvironmentSchema = baseEnvironmentSchema.extend({
   BULLMQ_JOB_ATTEMPTS: jobAttemptsSchema,
   BULLMQ_BACKOFF_MS: jobBackoffMsSchema,
   BULLMQ_METRICS_INTERVAL_MS: metricsIntervalMsSchema,
+  FAKE_MESSAGE_ADAPTER_OUTCOME: fakeMessageAdapterOutcomeSchema,
 });
 
 export type ApiEnvironment = z.infer<typeof apiEnvironmentSchema>;
