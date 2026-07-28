@@ -8,7 +8,7 @@
   "scripts": {
     "build": "turbo run build",
     "db:generate": "pnpm --filter @mensaly/database generate",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev",
     "env:test:validate": "docker compose -f infra/docker/compose.test.yaml config --quiet",
     "env:test:up": "docker compose -f infra/docker/compose.test.yaml up -d --wait",
     "env:test:status": "docker compose -f infra/docker/compose.test.yaml ps",
