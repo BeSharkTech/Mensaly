@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 
 import { PrismaService } from "../infrastructure/database/prisma.service";
+import type { AuthenticatedContext } from "../authorization/authorization-context";
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
@@ -18,7 +19,7 @@ import {
 
 type CurrentUser = {
   id: string;
-  role: UserRole;
+  role: AuthenticatedContext["role"];
 };
 
 type RequestMetadata = {
@@ -121,10 +122,11 @@ export class OrganizationService {
   }
 
   async create(
-    user: CurrentUser,
+    auth: AuthenticatedContext,
     rawInput: unknown,
     requestMetadata: RequestMetadata,
   ) {
+    const user: CurrentUser = { id: auth.userId, role: auth.role };
     this.assertCompanyAccount(user);
     const input = validatedCreate(rawInput);
     const taxId = normalizeTaxId(input.taxId);
@@ -188,10 +190,17 @@ export class OrganizationService {
     }
   }
 
-  async getOwn(user: CurrentUser) {
+  async getOwn(auth: AuthenticatedContext) {
+    const user: CurrentUser = { id: auth.userId, role: auth.role };
     this.assertCompanyAccount(user);
-    const organization = await this.prisma.client.organization.findUnique({
-      where: { ownerUserId: user.id },
+    if (!auth.organizationId) {
+      throw new NotFoundException({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "No organization exists for this account",
+      });
+    }
+    const organization = await this.prisma.client.organization.findFirst({
+      where: { id: auth.organizationId, ownerUserId: user.id },
     });
     if (!organization) {
       throw new NotFoundException({
@@ -203,14 +212,21 @@ export class OrganizationService {
   }
 
   async update(
-    user: CurrentUser,
+    auth: AuthenticatedContext,
     rawInput: unknown,
     requestMetadata: RequestMetadata,
   ) {
+    const user: CurrentUser = { id: auth.userId, role: auth.role };
     this.assertCompanyAccount(user);
     const input = validatedUpdate(rawInput);
-    const current = await this.prisma.client.organization.findUnique({
-      where: { ownerUserId: user.id },
+    if (!auth.organizationId) {
+      throw new NotFoundException({
+        code: "ORGANIZATION_NOT_FOUND",
+        message: "No organization exists for this account",
+      });
+    }
+    const current = await this.prisma.client.organization.findFirst({
+      where: { id: auth.organizationId, ownerUserId: user.id },
     });
     if (!current) {
       throw new NotFoundException({
