@@ -453,10 +453,43 @@ export class FinancialService {
         },
       });
       if (target === "CONFIRMED") {
+        const cancelledAt = new Date();
         await tx.charge.update({
           where: { id: payment.chargeId, organizationId: orgId },
           data: { status: "PAID", paidAt: payment.paidAt },
         });
+        const schedules = await tx.messageSchedule.findMany({
+          where: {
+            organizationId: orgId,
+            chargeId: payment.chargeId,
+            status: { in: ["SCHEDULED", "QUEUED"] },
+          },
+          select: { id: true, status: true },
+        });
+        if (schedules.length > 0) {
+          await tx.messageSchedule.updateMany({
+            where: {
+              id: { in: schedules.map((schedule) => schedule.id) },
+              organizationId: orgId,
+              status: { in: ["SCHEDULED", "QUEUED"] },
+            },
+            data: {
+              status: "CANCELLED",
+              cancelledAt,
+              cancellationReason: "CHARGE_PAID",
+            },
+          });
+          await tx.messageScheduleHistory.createMany({
+            data: schedules.map((schedule) => ({
+              organizationId: orgId,
+              scheduleId: schedule.id,
+              fromStatus: schedule.status,
+              toStatus: "CANCELLED",
+              reason: "CHARGE_PAID",
+              metadata: { paymentId: updated.id },
+            })),
+          });
+        }
       }
       if (target === "REVERSED") {
         await tx.charge.update({

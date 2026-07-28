@@ -150,6 +150,28 @@ describe("HTTP API foundation", () => {
           .schema.required,
         ["enabled", "allowedHours", "dailyLimit", "rules"],
       );
+      const messageTemplateOperation =
+        openApi.json().paths["/api/v1/message-templates"]?.post;
+      assert.ok(
+        messageTemplateOperation,
+        "OpenAPI must document internal message templates",
+      );
+      assert.deepEqual(
+        messageTemplateOperation.requestBody.content["application/json"].schema
+          .required,
+        ["name", "body"],
+      );
+      const messageScheduleOperation =
+        openApi.json().paths["/api/v1/message-schedules"]?.post;
+      assert.ok(
+        messageScheduleOperation,
+        "OpenAPI must document persisted message schedules",
+      );
+      assert.deepEqual(
+        messageScheduleOperation.requestBody.content["application/json"].schema
+          .required,
+        ["chargeId", "templateId", "scheduledFor"],
+      );
     } finally {
       await app.close();
     }
@@ -942,6 +964,529 @@ describe("HTTP API foundation", () => {
       await app.close();
     }
   });
+
+  it("persists idempotent message schedules and cancels them after payment", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const emailA = `messaging-a-${randomUUID()}@api.example.test`;
+    const emailB = `messaging-b-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(emailA);
+    registrationTestEmails.add(emailB);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      const createAccount = async (
+        email: string,
+        name: string,
+        taxId: string,
+      ) => {
+        const registration = await fastify.inject({
+          method: "POST",
+          url: "/api/v1/auth/register",
+          payload: { name, email, password },
+        });
+        assert.equal(registration.statusCode, 201);
+        await getPrismaClient().user.update({
+          where: { email },
+          data: { emailVerified: true, status: "ACTIVE" },
+        });
+        const login = await fastify.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: { email, password },
+        });
+        const cookie = firstHeader(login.headers["set-cookie"])?.split(";")[0];
+        assert.ok(cookie);
+        const organization = await fastify.inject({
+          headers: { cookie },
+          method: "POST",
+          url: "/api/v1/organization",
+          payload: { name, taxId, phone: "11999999999" },
+        });
+        assert.equal(organization.statusCode, 201);
+        return {
+          cookie,
+          organizationId: organization.json().data.id as string,
+        };
+      };
+
+      const accountA = await createAccount(
+        emailA,
+        "Messaging School A",
+        "88888888888",
+      );
+      const accountB = await createAccount(
+        emailB,
+        "Messaging School B",
+        "99999999999",
+      );
+
+      assert.equal(
+        (
+          await fastify.inject({
+            method: "POST",
+            url: "/api/v1/message-templates",
+            payload: { name: "Cobrança mensal", body: "Olá" },
+          })
+        ).statusCode,
+        401,
+      );
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountA.cookie },
+            method: "POST",
+            url: "/api/v1/message-templates",
+            payload: {
+              name: "Cobrança mensal",
+              body: "Olá {{responsavel}}, há uma mensalidade pendente.",
+              organizationId: accountB.organizationId,
+            },
+          })
+        ).statusCode,
+        400,
+      );
+
+      const templateA = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/message-templates",
+        payload: {
+          name: "Cobrança mensal",
+          body: "Olá {{responsavel}}, há uma mensalidade pendente.",
+        },
+      });
+      assert.equal(templateA.statusCode, 201);
+      assert.equal(templateA.json().data.active, true);
+      const templateAId = templateA.json().data.id as string;
+
+      const duplicateTemplate = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/message-templates",
+        payload: {
+          name: "cobrança mensal",
+          body: "Outro conteúdo",
+        },
+      });
+      assert.equal(duplicateTemplate.statusCode, 409);
+      assert.equal(
+        duplicateTemplate.json().error.code,
+        "MESSAGE_TEMPLATE_NAME_CONFLICT",
+      );
+
+      const templateB = await fastify.inject({
+        headers: { cookie: accountB.cookie },
+        method: "POST",
+        url: "/api/v1/message-templates",
+        payload: { name: "Cobrança mensal", body: "Template B" },
+      });
+      assert.equal(templateB.statusCode, 201);
+      const templateBId = templateB.json().data.id as string;
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountB.cookie },
+            method: "GET",
+            url: `/api/v1/message-templates/${templateAId}`,
+          })
+        ).statusCode,
+        404,
+      );
+
+      const plan = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/plans",
+        payload: { name: "Mensal", amountCents: 15000, dueDay: 10 },
+      });
+      const student = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/students",
+        payload: { name: "Aluno Mensagens" },
+      });
+      const guardian = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/guardians",
+        payload: {
+          name: "Responsável Mensagens",
+          phone: "11988887777",
+        },
+      });
+      assert.equal(plan.statusCode, 201);
+      assert.equal(student.statusCode, 201);
+      assert.equal(guardian.statusCode, 201);
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountA.cookie },
+            method: "POST",
+            url: `/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,
+            payload: { relationship: "Responsável financeiro" },
+          })
+        ).statusCode,
+        201,
+      );
+      const enrollment = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/enrollments",
+        payload: {
+          studentId: student.json().id,
+          guardianId: guardian.json().id,
+          planId: plan.json().id,
+          startDate: "2026-01-01",
+        },
+      });
+      assert.equal(enrollment.statusCode, 201);
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountA.cookie },
+            method: "POST",
+            url: "/api/v1/charges/generate",
+            payload: { referenceMonth: "2030-01" },
+          })
+        ).statusCode,
+        201,
+      );
+      const charge = await getPrismaClient().charge.findFirstOrThrow({
+        where: {
+          organizationId: accountA.organizationId,
+          enrollmentId: enrollment.json().id,
+          referenceMonth: new Date("2030-01-01T00:00:00.000Z"),
+        },
+      });
+
+      const invalidPastSchedule = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/message-schedules",
+        payload: {
+          chargeId: charge.id,
+          templateId: templateAId,
+          scheduledFor: "2020-01-05T12:00:00.000Z",
+        },
+      });
+      assert.equal(invalidPastSchedule.statusCode, 400);
+
+      const crossTenantSchedule = await fastify.inject({
+        headers: { cookie: accountB.cookie },
+        method: "POST",
+        url: "/api/v1/message-schedules",
+        payload: {
+          chargeId: charge.id,
+          templateId: templateBId,
+          scheduledFor: "2030-01-05T12:00:00.000Z",
+        },
+      });
+      assert.equal(crossTenantSchedule.statusCode, 404);
+
+      const schedulePayload = {
+        chargeId: charge.id,
+        templateId: templateAId,
+        scheduledFor: "2030-01-05T12:00:00.000Z",
+      };
+      const concurrentSchedules = await Promise.all([
+        fastify.inject({
+          headers: { cookie: accountA.cookie },
+          method: "POST",
+          url: "/api/v1/message-schedules",
+          payload: schedulePayload,
+        }),
+        fastify.inject({
+          headers: { cookie: accountA.cookie },
+          method: "POST",
+          url: "/api/v1/message-schedules",
+          payload: schedulePayload,
+        }),
+      ]);
+      assert.deepEqual(
+        concurrentSchedules.map((response) => response.statusCode),
+        [201, 201],
+      );
+      assert.deepEqual(
+        concurrentSchedules
+          .map((response) => response.json().meta.idempotentReplay)
+          .sort(),
+        [false, true],
+      );
+      const scheduleId = concurrentSchedules[0]?.json().data.id as string;
+      assert.equal(
+        concurrentSchedules[1]?.json().data.id,
+        scheduleId,
+      );
+      assert.equal(
+        await getPrismaClient().messageSchedule.count({
+          where: {
+            organizationId: accountA.organizationId,
+            chargeId: charge.id,
+          },
+        }),
+        1,
+      );
+
+      const updatedTemplate = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "PATCH",
+        url: `/api/v1/message-templates/${templateAId}`,
+        payload: { body: "Conteúdo atualizado para agendamentos futuros." },
+      });
+      assert.equal(updatedTemplate.statusCode, 200);
+      const persistedSchedule = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: `/api/v1/message-schedules/${scheduleId}`,
+      });
+      assert.equal(persistedSchedule.statusCode, 200);
+      assert.equal(
+        persistedSchedule.json().data.bodySnapshot,
+        "Olá {{responsavel}}, há uma mensalidade pendente.",
+      );
+      assert.deepEqual(persistedSchedule.json().data.recipient, {
+        name: "Responsável Mensagens",
+        phone: "11988887777",
+      });
+
+      const createdHistory = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: `/api/v1/message-schedules/${scheduleId}/history`,
+      });
+      assert.equal(createdHistory.statusCode, 200);
+      assert.deepEqual(
+        createdHistory.json().data.map(
+          (entry: { toStatus: string }) => entry.toStatus,
+        ),
+        ["SCHEDULED"],
+      );
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountB.cookie },
+            method: "GET",
+            url: `/api/v1/message-schedules/${scheduleId}`,
+          })
+        ).statusCode,
+        404,
+      );
+
+      const manualSchedule = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/message-schedules",
+        payload: {
+          ...schedulePayload,
+          scheduledFor: "2030-01-06T12:00:00.000Z",
+        },
+      });
+      assert.equal(manualSchedule.statusCode, 201);
+      const manualScheduleId = manualSchedule.json().data.id as string;
+      const manualCancellation = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: `/api/v1/message-schedules/${manualScheduleId}/cancel`,
+      });
+      assert.equal(manualCancellation.statusCode, 200);
+      assert.equal(manualCancellation.json().data.status, "CANCELLED");
+      assert.equal(
+        manualCancellation.json().data.cancellation.reason,
+        "MANUAL_CANCELLATION",
+      );
+
+      const payment = await fastify.inject({
+        headers: {
+          cookie: accountA.cookie,
+          "idempotency-key": "messaging:payment:2030-01",
+        },
+        method: "POST",
+        url: `/api/v1/charges/${charge.id}/payments`,
+        payload: {
+          amountCents: 15000,
+          method: "PIX",
+          paidAt: "2030-01-10T12:00:00.000Z",
+        },
+      });
+      assert.equal(payment.statusCode, 201);
+      const confirmation = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: `/api/v1/payments/${payment.json().data.id}/confirm`,
+      });
+      assert.equal(confirmation.statusCode, 200);
+
+      const cancelledAfterPayment = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: `/api/v1/message-schedules/${scheduleId}`,
+      });
+      assert.equal(cancelledAfterPayment.statusCode, 200);
+      assert.equal(cancelledAfterPayment.json().data.status, "CANCELLED");
+      assert.equal(
+        cancelledAfterPayment.json().data.cancellation.reason,
+        "CHARGE_PAID",
+      );
+      const paidHistory = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: `/api/v1/message-schedules/${scheduleId}/history`,
+      });
+      assert.deepEqual(
+        paidHistory.json().data.map(
+          (entry: { toStatus: string }) => entry.toStatus,
+        ),
+        ["SCHEDULED", "CANCELLED"],
+      );
+      assert.equal(
+        paidHistory.json().data[1]?.metadata.paymentId,
+        payment.json().data.id,
+      );
+
+      const schedulePaidCharge = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/message-schedules",
+        payload: {
+          ...schedulePayload,
+          scheduledFor: "2030-01-07T12:00:00.000Z",
+        },
+      });
+      assert.equal(schedulePaidCharge.statusCode, 409);
+      assert.equal(
+        schedulePaidCharge.json().error.code,
+        "CHARGE_STATE_CONFLICT",
+      );
+
+      const raceChargeGeneration = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "POST",
+        url: "/api/v1/charges/generate",
+        payload: { referenceMonth: "2030-02" },
+      });
+      assert.equal(raceChargeGeneration.statusCode, 201);
+      const raceCharge = await getPrismaClient().charge.findFirstOrThrow({
+        where: {
+          organizationId: accountA.organizationId,
+          enrollmentId: enrollment.json().id,
+          referenceMonth: new Date("2030-02-01T00:00:00.000Z"),
+        },
+      });
+      const racePayment = await fastify.inject({
+        headers: {
+          cookie: accountA.cookie,
+          "idempotency-key": "messaging:payment:2030-02",
+        },
+        method: "POST",
+        url: `/api/v1/charges/${raceCharge.id}/payments`,
+        payload: {
+          amountCents: 15000,
+          method: "PIX",
+          paidAt: "2030-02-10T12:00:00.000Z",
+        },
+      });
+      assert.equal(racePayment.statusCode, 201);
+
+      const [racingSchedule, racingConfirmation] = await Promise.all([
+        fastify.inject({
+          headers: { cookie: accountA.cookie },
+          method: "POST",
+          url: "/api/v1/message-schedules",
+          payload: {
+            chargeId: raceCharge.id,
+            templateId: templateAId,
+            scheduledFor: "2030-02-05T12:00:00.000Z",
+          },
+        }),
+        fastify.inject({
+          headers: { cookie: accountA.cookie },
+          method: "POST",
+          url: `/api/v1/payments/${racePayment.json().data.id}/confirm`,
+        }),
+      ]);
+      assert.equal(racingConfirmation.statusCode, 200);
+      assert.equal([201, 409].includes(racingSchedule.statusCode), true);
+      assert.equal(
+        await getPrismaClient().messageSchedule.count({
+          where: {
+            organizationId: accountA.organizationId,
+            chargeId: raceCharge.id,
+            status: { in: ["SCHEDULED", "QUEUED"] },
+          },
+        }),
+        0,
+      );
+      if (racingSchedule.statusCode === 201) {
+        const racedSchedule = await fastify.inject({
+          headers: { cookie: accountA.cookie },
+          method: "GET",
+          url: `/api/v1/message-schedules/${racingSchedule.json().data.id}`,
+        });
+        assert.equal(racedSchedule.statusCode, 200);
+        assert.equal(racedSchedule.json().data.status, "CANCELLED");
+        assert.equal(
+          racedSchedule.json().data.cancellation.reason,
+          "CHARGE_PAID",
+        );
+      } else {
+        assert.equal(
+          racingSchedule.json().error.code,
+          "CHARGE_STATE_CONFLICT",
+        );
+      }
+
+      const cancelledList = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: `/api/v1/message-schedules?status=CANCELLED&chargeId=${charge.id}`,
+      });
+      assert.equal(cancelledList.statusCode, 200);
+      assert.equal(cancelledList.json().meta.total, 2);
+
+      await assert.rejects(
+        getPrismaClient().messageSchedule.create({
+          data: {
+            organizationId: accountB.organizationId,
+            chargeId: charge.id,
+            templateId: templateBId,
+            scheduledFor: new Date("2030-01-08T12:00:00.000Z"),
+            deduplicationKey: "a".repeat(64),
+            templateBodySnapshot: "Cross tenant",
+            recipientNameSnapshot: "Cross tenant",
+            recipientPhoneSnapshot: "11999999999",
+          },
+        }),
+        (error: unknown) =>
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "P2003",
+      );
+
+      const messagingAudit = await getPrismaClient().auditLog.findMany({
+        where: {
+          organizationId: accountA.organizationId,
+          action: {
+            in: [
+              "message_template.created",
+              "message_template.updated",
+              "message_schedule.created",
+              "message_schedule.cancelled",
+            ],
+          },
+        },
+      });
+      assert.equal(messagingAudit.length >= 4, true);
+      assert.equal(
+        messagingAudit.every((entry) => entry.correlationId !== null),
+        true,
+      );
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 after(async () => {
@@ -964,6 +1509,9 @@ after(async () => {
       ],
     },
   });
+  await prisma.messageScheduleHistory.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.messageSchedule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.messageTemplate.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.payment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.charge.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.reminderRule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });

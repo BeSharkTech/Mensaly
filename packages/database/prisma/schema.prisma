@@ -87,6 +87,18 @@ enum ReminderTiming {
   AFTER_DUE
 }
 
+enum MessageScheduleStatus {
+  SCHEDULED
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  READ
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+  CANCELLED
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -183,6 +195,8 @@ model Organization {
   charges Charge[]
   payments Payment[]
   reminderConfiguration ReminderConfiguration?
+  messageTemplates MessageTemplate[]
+  messageSchedules MessageSchedule[]
 
   @@index([status])
   @@map("organization")
@@ -223,6 +237,7 @@ model Charge {
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
   enrollment Enrollment @relation(fields:[organizationId,enrollmentId],references:[organizationId,id],onDelete:Restrict)
   payments Payment[]
+  messageSchedules MessageSchedule[]
   @@unique([organizationId,enrollmentId,referenceMonth])
   @@unique([organizationId,id])
   @@index([organizationId,status,dueDate])
@@ -279,6 +294,63 @@ model ReminderRule {
   @@unique([organizationId,timing,dayOffset])
   @@index([configurationId,enabled])
   @@map("reminder_rule")
+}
+
+model MessageTemplate {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.Citext
+  body String @db.VarChar(4000)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  schedules MessageSchedule[]
+  @@unique([organizationId,name])
+  @@unique([organizationId,id])
+  @@index([organizationId,active,name])
+  @@map("message_template")
+}
+
+model MessageSchedule {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  chargeId String @db.Uuid
+  templateId String @db.Uuid
+  status MessageScheduleStatus @default(SCHEDULED)
+  scheduledFor DateTime @db.Timestamptz(3)
+  deduplicationKey String @db.VarChar(64)
+  templateBodySnapshot String @db.VarChar(4000)
+  recipientNameSnapshot String @db.VarChar(120)
+  recipientPhoneSnapshot String @db.VarChar(20)
+  cancelledAt DateTime? @db.Timestamptz(3)
+  cancellationReason String? @db.VarChar(120)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  charge Charge @relation(fields:[organizationId,chargeId],references:[organizationId,id],onDelete:Restrict)
+  template MessageTemplate @relation(fields:[organizationId,templateId],references:[organizationId,id],onDelete:Restrict)
+  history MessageScheduleHistory[]
+  @@unique([organizationId,deduplicationKey])
+  @@unique([organizationId,id])
+  @@index([organizationId,status,scheduledFor])
+  @@index([chargeId,status])
+  @@map("message_schedule")
+}
+
+model MessageScheduleHistory {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  scheduleId String @db.Uuid
+  fromStatus MessageScheduleStatus?
+  toStatus MessageScheduleStatus
+  reason String @db.VarChar(120)
+  metadata Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  schedule MessageSchedule @relation(fields:[organizationId,scheduleId],references:[organizationId,id],onDelete:Restrict)
+  @@index([scheduleId,createdAt])
+  @@index([organizationId,createdAt])
+  @@map("message_schedule_history")
 }
 
 model Student {
