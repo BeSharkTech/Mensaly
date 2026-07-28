@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Patch, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiBody, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
 import type { FastifyRequest } from "fastify";
 
-import { AuthService } from "../auth/auth.service";
-import { readSessionToken } from "../auth/session-cookie";
+import { CurrentAuth, type AuthenticatedContext } from "../authorization/authorization-context";
+import { CompanyAccountGuard, SessionAuthGuard } from "../authorization/authorization.guards";
 import { CreateOrganizationDto, UpdateOrganizationDto } from "./organization.dto";
 import { OrganizationService } from "./organization.service";
 
@@ -17,11 +17,9 @@ function requestMetadata(request: FastifyRequest): { ipAddress?: string; userAge
 
 @ApiTags("Organization")
 @Controller({ path: "organization", version: "1" })
+@UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class OrganizationController {
-  constructor(
-    @Inject(AuthService) private readonly authService: AuthService,
-    @Inject(OrganizationService) private readonly organizationService: OrganizationService,
-  ) {}
+  constructor(@Inject(OrganizationService) private readonly organizationService: OrganizationService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -29,17 +27,15 @@ export class OrganizationController {
   @ApiCreatedResponse({ description: "Organization created for the authenticated account" })
   @ApiConflictResponse({ description: "The account already has an organization or tax ID is in use" })
   @ApiUnauthorizedResponse({ description: "A valid session is required" })
-  async create(@Body() input: CreateOrganizationDto, @Req() request: FastifyRequest): Promise<{ data: unknown }> {
-    const user = await this.authService.currentSession(readSessionToken(request.headers.cookie));
-    return { data: await this.organizationService.create(user, input, requestMetadata(request)) };
+  async create(@Body() input: CreateOrganizationDto, @CurrentAuth() auth: AuthenticatedContext, @Req() request: FastifyRequest): Promise<{ data: unknown }> {
+    return { data: await this.organizationService.create(auth, input, requestMetadata(request)) };
   }
 
   @Get()
   @ApiOkResponse({ description: "Authenticated account organization" })
   @ApiUnauthorizedResponse({ description: "A valid session is required" })
-  async getOwn(@Req() request: FastifyRequest): Promise<{ data: unknown }> {
-    const user = await this.authService.currentSession(readSessionToken(request.headers.cookie));
-    return { data: await this.organizationService.getOwn(user) };
+  async getOwn(@CurrentAuth() auth: AuthenticatedContext): Promise<{ data: unknown }> {
+    return { data: await this.organizationService.getOwn(auth) };
   }
 
   @Patch()
@@ -47,8 +43,7 @@ export class OrganizationController {
   @ApiOkResponse({ description: "Authenticated account organization updated" })
   @ApiConflictResponse({ description: "Tax ID is already in use" })
   @ApiUnauthorizedResponse({ description: "A valid session is required" })
-  async update(@Body() input: UpdateOrganizationDto, @Req() request: FastifyRequest): Promise<{ data: unknown }> {
-    const user = await this.authService.currentSession(readSessionToken(request.headers.cookie));
-    return { data: await this.organizationService.update(user, input, requestMetadata(request)) };
+  async update(@Body() input: UpdateOrganizationDto, @CurrentAuth() auth: AuthenticatedContext, @Req() request: FastifyRequest): Promise<{ data: unknown }> {
+    return { data: await this.organizationService.update(auth, input, requestMetadata(request)) };
   }
 }

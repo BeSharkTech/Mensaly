@@ -494,6 +494,64 @@ describe("HTTP API foundation", () => {
       await app.close();
     }
   });
+
+  it("derives organization context from the session and separates platform administration", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const emailA = `scope-a-${randomUUID()}@api.example.test`;
+    const emailB = `scope-b-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(emailA);
+    registrationTestEmails.add(emailB);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      const createAccount = async (email: string, name: string, taxId: string) => {
+        assert.equal((await fastify.inject({ method: "POST", url: "/api/v1/auth/register", payload: { name, email, password } })).statusCode, 201);
+        await getPrismaClient().user.update({ where: { email }, data: { emailVerified: true, status: "ACTIVE" } });
+        const login = await fastify.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email, password } });
+        const cookie = firstHeader(login.headers["set-cookie"])?.split(";")[0];
+        assert.ok(cookie);
+        const created = await fastify.inject({
+          headers: { cookie }, method: "POST", url: "/api/v1/organization",
+          payload: { name, taxId, phone: "11999999999" },
+        });
+        assert.equal(created.statusCode, 201);
+        return { cookie, organizationId: created.json().data.id as string };
+      };
+
+      const accountA = await createAccount(emailA, "Scope A", "11111111111");
+      const accountB = await createAccount(emailB, "Scope B", "22222222222");
+
+      const attemptedCrossTenantRead = await fastify.inject({
+        headers: { cookie: accountA.cookie, "x-organization-id": accountB.organizationId },
+        method: "GET",
+        url: `/api/v1/organization?organizationId=${accountB.organizationId}`,
+      });
+      assert.equal(attemptedCrossTenantRead.statusCode, 200);
+      assert.equal(attemptedCrossTenantRead.json().data.id, accountA.organizationId);
+      assert.equal(attemptedCrossTenantRead.json().data.id === accountB.organizationId, false);
+
+      await getPrismaClient().organization.update({
+        where: { id: accountA.organizationId },
+        data: { status: "INACTIVE" },
+      });
+      const inactiveOrganization = await fastify.inject({ headers: { cookie: accountA.cookie }, method: "GET", url: "/api/v1/organization" });
+      assert.equal(inactiveOrganization.statusCode, 403);
+      assert.equal(inactiveOrganization.json().error.code, "ORGANIZATION_INACTIVE");
+      assert.equal((await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/organization" })).statusCode, 200);
+
+      await getPrismaClient().user.update({ where: { email: emailB }, data: { role: "PLATFORM_ADMIN" } });
+      const adminSession = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/admin/session" });
+      assert.equal(adminSession.statusCode, 200);
+      assert.deepEqual(adminSession.json().data, { id: adminSession.json().data.id, email: emailB, role: "PLATFORM_ADMIN", organizationId: null });
+      const adminUsingCompanyRoute = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/organization" });
+      assert.equal(adminUsingCompanyRoute.statusCode, 403);
+      assert.equal(adminUsingCompanyRoute.json().error.code, "COMPANY_ACCOUNT_REQUIRED");
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 after(async () => {
