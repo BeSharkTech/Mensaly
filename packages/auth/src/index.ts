@@ -1,4 +1,5 @@
 import {
+  createHash,
   randomBytes,
   scrypt as scryptCallback,
   timingSafeEqual,
@@ -36,6 +37,14 @@ function deriveKey(password: string, salt: Buffer, keyLength: number): Promise<B
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+export function createSessionToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashSessionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export async function hashPassword(password: string): Promise<string> {

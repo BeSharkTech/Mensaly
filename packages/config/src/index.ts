@@ -7,6 +7,12 @@ export const baseEnvironmentSchema = z.object({
 });
 
 const portSchema = z.coerce.number().int().min(1).max(65_535).default(3001);
+const sessionTtlHoursSchema = z
+  .coerce.number()
+  .int()
+  .min(1)
+  .max(24 * 30)
+  .default(24 * 7);
 
 function usesProtocol(value: string, protocols: string[]): boolean {
   try {
@@ -64,6 +70,7 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     DATABASE_URL: databaseUrlSchema,
     REDIS_URL: redisUrlSchema,
     CORS_ORIGINS: corsOriginsSchema,
+    AUTH_SESSION_TTL_HOURS: sessionTtlHoursSchema,
   })
   .superRefine((environment, context) => {
     if (
