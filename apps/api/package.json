@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
     "test": "echo No API tests configured yet"
   },
   "dependencies": {

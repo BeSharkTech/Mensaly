@@ -6,7 +6,7 @@
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
     "test": "echo No database tests configured yet"
   },
   "dependencies": {
