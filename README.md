@@ -23,6 +23,17 @@ Monorepo da plataforma Mensaly.
 - `pnpm test` executa os testes configurados no monorepo.
 - `pnpm build` valida as compilações de produção.
 
+## Segurança de dependências
+
+O workspace força versões corrigidas de dependências transitivas de produção
+(`sharp`, `postcss` e `find-my-way`) em `pnpm-workspace.yaml`. Isso protege as
+aplicações enquanto as dependências diretas ainda não publicam seus próprios
+patches compatíveis.
+
+Execute `pnpm audit --audit-level high` antes de publicar alterações de
+dependências. Uma atualização direta de Next.js ou NestJS/Fastify deve remover
+essas substituições somente depois de passar pela mesma validação completa.
+
 ## Infraestrutura local
 
 O Docker Compose disponibiliza PostgreSQL 17 e Redis 7.2 para desenvolvimento
