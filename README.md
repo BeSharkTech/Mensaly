@@ -20,8 +20,13 @@ Monorepo da plataforma Mensaly.
 
 - `pnpm lint` executa ESLint real nos aplicativos e pacotes com código.
 - `pnpm typecheck` verifica os tipos TypeScript separadamente.
-- `pnpm test` executa os testes configurados no monorepo.
+- `pnpm test` executa os testes reais de fundação do monorepo.
 - `pnpm build` valida as compilações de produção.
+
+Os testes usam o runner nativo do Node com `tsx`. Cada pacote ou aplicativo
+que possui código executável deve manter ao menos um teste de fundação; novas
+regras de negócio devem acrescentar seus próprios testes unitários e de
+integração.
 
 ## Segurança de dependências
 

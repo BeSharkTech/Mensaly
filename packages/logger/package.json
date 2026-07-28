@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
-    "test": "echo No logger tests configured yet"
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "pino": "^9.6.0"

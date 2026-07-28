@@ -1,5 +1,3 @@
-import { parseEnvironment, workerEnvironmentSchema } from "@mensaly/config";
+import { startWorker } from "./worker";
 
-parseEnvironment(workerEnvironmentSchema, process.env);
-
-console.info("Mensaly worker started");
+startWorker();
