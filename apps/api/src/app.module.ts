@@ -9,9 +9,10 @@ import { HealthService } from "./health/health.service";
 import { OrganizationModule } from "./organization/organization.module";
 import { OperationalModule } from "./operational/operational.module";
 import { FinancialModule } from "./financial/financial.module";
+import { RemindersModule } from "./reminders/reminders.module";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule],
+  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule],
   controllers: [HealthController],
   providers: [HealthService, RedisHealthService],
 })

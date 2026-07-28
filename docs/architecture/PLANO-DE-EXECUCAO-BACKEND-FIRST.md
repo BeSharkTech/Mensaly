@@ -4,15 +4,15 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
-**Estado atual verificado:** `main` em `0f7c774`; Fase 4 na branch
-`agent/f4-financial`
+**Estado atual verificado:** `main` em `07fc2d6`, com o Gate F4 integrado;
+MEN-BE-018 na branch `codex/men-be-018-reminder-config`
 **Modelo de trabalho:** sequencial, em um único computador
 
-## Atualização de execução — Fase 4
+## Atualização de execução — MEN-BE-018
 
-**Situação em 28 de julho de 2026:** Fases 0 a 3 integradas na `main`. A Fase 4
-está implementada e validada localmente na branch `agent/f4-financial`; a
-atualização do PR, o novo CI e a revisão ainda são necessários antes do merge.
+**Situação em 28 de julho de 2026:** Fases 0 a 4 integradas na `main`. A primeira
+tarefa da Fase 5, MEN-BE-018, está implementada e validada localmente na branch
+`codex/men-be-018-reminder-config`, ainda sem commit, push ou pull request.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
@@ -22,15 +22,16 @@ As entregas abaixo foram concluídas na ordem backend-first:
 | F1 | Banco, Prisma, migrations, lifecycle e base HTTP segura. |
 | F2 | Cadastro, sessões, verificação, recuperação, empresa única e autorização multiempresa. |
 | F3 | CRUDs de planos, alunos, responsáveis, vínculos e matrículas concluídos na `main`. |
-| F4 | Mensalidades idempotentes, pagamentos internos, transições, auditoria, concorrência e integridade multiempresa implementados na branch atual. |
+| F4 | Mensalidades idempotentes, pagamentos internos, transições, auditoria, concorrência e integridade multiempresa integrados na `main`. |
+| F5.1 | Configuração de lembretes com regras, janela de envio, timezone da empresa, limite, ativação e validação de conflitos concluída localmente. |
 
-O Gate F4 possui migration aplicada do zero em PostgreSQL isolado, testes de
-idempotência, concorrência, rollback e isolamento entre empresas, contratos
-OpenAPI, typecheck, lint, testes, build e auditoria local.
+O Gate F4 foi integrado pelo PR `#41`. MEN-BE-018 possui migration aplicada do
+zero em PostgreSQL isolado, rotas autenticadas, contrato OpenAPI, auditoria,
+integridade multiempresa e testes de conflitos e isolamento.
 
-O próximo trabalho funcional, somente após revisão e integração da Fase 4, é a
-Fase 5: mensagens, filas e workers com adaptadores falsos. Nenhuma tela
-funcional nem integração externa deve iniciar antes disso.
+O próximo trabalho funcional, somente após revisão e integração de MEN-BE-018,
+é MEN-BE-019: templates e agendamentos. Nenhuma tela funcional nem integração
+externa deve iniciar antes do gate de conclusão do back-end.
 
 ## 1. Objetivo deste documento
 
@@ -174,24 +175,26 @@ Ela não deve ser usada como base para novas tarefas.
   único da empresa e autorização multiempresa;
 - Fase 3: CRUDs operacionais de planos, alunos, responsáveis, vínculos e
   matrículas;
+- Fase 4: mensalidades, pagamentos internos, transações, concorrência e
+  integridade financeira, integrada pelo PR `#41`;
 - todos os dados operacionais são derivados da empresa da sessão autenticada;
 - `PLATFORM_ADMIN` permanece separado das rotas de empresa.
 
 ### 4.2 Concluído localmente e pendente de integração
 
-- Fase 4 na branch `agent/f4-financial`;
-- geração idempotente de mensalidades por matrícula e competência;
-- cancelamento, isenção, reabertura e histórico auditável;
-- pagamentos manuais com `Idempotency-Key` obrigatório;
-- conciliação, cancelamento e estorno controlados;
-- trava por mensalidade e unicidade parcial para impedir duas baixas ativas;
-- chaves estrangeiras compostas impedindo vínculos financeiros entre empresas;
-- testes reais de repetição, concorrência, rollback e isolamento;
-- PR `#41` permanece draft até receber o commit atualizado, CI e revisão.
+- MEN-BE-018 na branch `codex/men-be-018-reminder-config`;
+- uma configuração de lembretes por empresa;
+- regras `BEFORE_DUE`, `ON_DUE` e `AFTER_DUE`, com limites de deslocamento;
+- janela diária de envio, limite diário e ativação ou desativação;
+- timezone derivado da empresa autenticada;
+- validação de janela, duplicidade, deslocamentos e configuração ativa sem regra;
+- chave estrangeira composta impedindo vínculos de regras entre empresas;
+- leitura e substituição autenticadas, auditadas e documentadas no OpenAPI;
+- migration aplicada do zero e testes reais de conflitos e isolamento aprovados.
 
 ### 4.3 Não iniciado
 
-- agendamento e histórico de mensagens;
+- templates, agendamento e histórico de mensagens;
 - BullMQ e workers reais;
 - dashboard e painel administrativo;
 - frontend funcional;
@@ -217,8 +220,13 @@ Todos terminaram com código de saída `0`. As migrations foram aplicadas no ban
 isolado, os testes financeiros usaram PostgreSQL real e o audit não encontrou
 vulnerabilidades conhecidas.
 
-Conclusão: o Gate F4 está concluído localmente. A fase só será considerada
-integrada após commit, push, CI, revisão e merge do PR `#41`.
+O Gate F4 foi integrado na `main` pelo PR `#41`.
+
+Para MEN-BE-018, as 10 migrations foram reaplicadas do zero no PostgreSQL
+isolado. Os 7 testes de integração do banco e os 14 testes da API passaram,
+incluindo conflitos de configuração, autenticação, auditoria e isolamento entre
+empresas. A tarefa está concluída localmente e só será considerada integrada
+após commit, push, CI, revisão e merge.
 
 ## 6. Decisões definitivas de domínio
 
@@ -979,17 +987,18 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. revisar o diff final da Fase 4 na branch `agent/f4-financial`;
-2. atualizar o PR `#41` e aguardar o novo CI;
-3. revisar e mesclar a Fase 4 por squash;
-4. sincronizar a `main`;
-5. iniciar MEN-BE-018 em uma branch criada a partir da `main`;
-6. seguir uma tarefa por vez até MEN-BE-028;
-7. congelar e aprovar a API;
-8. iniciar e concluir o front-end;
-9. conectar as integrações externas na ordem definida.
+1. revisar o diff final de MEN-BE-018;
+2. criar commit e push somente após autorização explícita;
+3. abrir o pull request e aguardar o CI;
+4. revisar e mesclar MEN-BE-018 por squash;
+5. sincronizar a `main`;
+6. iniciar MEN-BE-019 em uma nova branch;
+7. seguir uma tarefa por vez até MEN-BE-028;
+8. congelar e aprovar a API;
+9. iniciar e concluir o front-end;
+10. conectar as integrações externas na ordem definida.
 
-Nenhum trabalho da Fase 5 deverá começar antes da integração do Gate F4.
+Nenhum trabalho de MEN-BE-019 deverá começar antes da integração de MEN-BE-018.
 Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
 back-end. Nenhum provedor externo deverá ser conectado antes do gate de
 conclusão do front-end.
