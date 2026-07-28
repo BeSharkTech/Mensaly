@@ -37,6 +37,9 @@ importers:
       '@mensaly/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@mensaly/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@nestjs/common':
         specifier: ^11.1.6
         version: 11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0)
@@ -93,6 +96,9 @@ importers:
       '@mensaly/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@mensaly/database':
+        specifier: workspace:*
+        version: link:../../packages/database
     devDependencies:
       '@types/node':
         specifier: ^22.15.3

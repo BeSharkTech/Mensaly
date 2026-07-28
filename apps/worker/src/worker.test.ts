@@ -8,12 +8,48 @@ const validEnvironment = {
   REDIS_URL: "redis://localhost:6379",
 };
 
-describe("worker foundation", () => {
-  it("validates its environment before starting", () => {
-    assert.doesNotThrow(() => startWorker(validEnvironment));
+function createDependencies() {
+  const events: string[] = [];
+
+  return {
+    events,
+    dependencies: {
+      database: {
+        async $connect() {
+          events.push("connect");
+        },
+      },
+      async disconnectDatabase() {
+        events.push("disconnect");
+      },
+      log(message: string) {
+        events.push(message);
+      },
+    },
+  };
+}
+
+describe("worker database lifecycle", () => {
+  it("connects before starting and disconnects once", async () => {
+    const { dependencies, events } = createDependencies();
+    const runtime = await startWorker(validEnvironment, dependencies);
+
+    assert.deepEqual(events, ["connect", "Mensaly worker started"]);
+
+    await runtime.stop();
+    await runtime.stop();
+
+    assert.deepEqual(events, [
+      "connect",
+      "Mensaly worker started",
+      "disconnect",
+    ]);
   });
 
-  it("does not start with an incomplete environment", () => {
-    assert.throws(() => startWorker({}));
+  it("does not connect with an incomplete environment", async () => {
+    const { dependencies, events } = createDependencies();
+
+    await assert.rejects(startWorker({}, dependencies));
+    assert.deepEqual(events, []);
   });
 });
