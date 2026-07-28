@@ -16,6 +16,13 @@ Monorepo da plataforma Mensaly.
 - `packages/logger`: logger estruturado compartilhado.
 - `packages/config`: leitura e validação de ambiente.
 
+## Qualidade
+
+- `pnpm lint` executa ESLint real nos aplicativos e pacotes com código.
+- `pnpm typecheck` verifica os tipos TypeScript separadamente.
+- `pnpm test` executa os testes configurados no monorepo.
+- `pnpm build` valida as compilações de produção.
+
 ## Infraestrutura local
 
 O Docker Compose disponibiliza PostgreSQL 17 e Redis 7.2 para desenvolvimento

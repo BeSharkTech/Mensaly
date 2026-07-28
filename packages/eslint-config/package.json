@@ -1,5 +1,22 @@
 {
   "name": "@mensaly/eslint-config",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "15.5.22",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.8.0",
+    "typescript-eslint": "8.65.0"
+  },
+  "peerDependencies": {
+    "eslint": "^10.8.0"
+  }
 }
