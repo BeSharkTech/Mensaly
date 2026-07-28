@@ -7,7 +7,7 @@
     "migrate:dev": "prisma migrate dev",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
-    "test": "echo No database tests configured yet"
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.7.0"
