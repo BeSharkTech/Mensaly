@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "db:generate": "pnpm --filter @mensaly/database generate",
     "dev": "turbo run dev --parallel",
     "env:test:validate": "docker compose -f infra/docker/compose.test.yaml config --quiet",
     "env:test:up": "docker compose -f infra/docker/compose.test.yaml up -d --wait",
@@ -14,6 +15,7 @@
     "env:test:down": "docker compose -f infra/docker/compose.test.yaml down --volumes",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
+    "postinstall": "pnpm db:generate",
     "test": "turbo run test"
   },
   "devDependencies": {
