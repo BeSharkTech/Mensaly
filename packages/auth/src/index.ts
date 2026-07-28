@@ -47,6 +47,9 @@ export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+export const createVerificationToken = createSessionToken;
+export const hashVerificationToken = hashSessionToken;
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const derivedKey = await deriveKey(password, salt, SCRYPT_KEY_LENGTH);
