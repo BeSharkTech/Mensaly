@@ -22,8 +22,12 @@ function dtoSchema(
 
 @Injectable()
 export class ZodValidationPipe implements PipeTransform {
+  constructor(
+    private readonly explicitSchema?: ZodDtoConstructor["schema"],
+  ) {}
+
   transform(value: unknown, metadata: ArgumentMetadata): unknown {
-    const schema = dtoSchema(metadata.metatype);
+    const schema = this.explicitSchema ?? dtoSchema(metadata.metatype);
 
     if (!schema) {
       return value;

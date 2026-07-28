@@ -139,6 +139,17 @@ describe("HTTP API foundation", () => {
           .required,
         ["amountCents", "method", "paidAt"],
       );
+      const reminderConfigurationOperation =
+        openApi.json().paths["/api/v1/reminder-configuration"]?.put;
+      assert.ok(
+        reminderConfigurationOperation,
+        "OpenAPI must document reminder configuration",
+      );
+      assert.deepEqual(
+        reminderConfigurationOperation.requestBody.content["application/json"]
+          .schema.required,
+        ["enabled", "allowedHours", "dailyLimit", "rules"],
+      );
     } finally {
       await app.close();
     }
@@ -682,6 +693,255 @@ describe("HTTP API foundation", () => {
       assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/enrollments/${enrollment.json().id}`,payload:{status:"ENDED",endDate:"2026-12-31"}})).statusCode,200);
     } finally { await app.close(); }
   });
+
+  it("configures reminder rules without crossing organization boundaries", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const emailA = `reminders-a-${randomUUID()}@api.example.test`;
+    const emailB = `reminders-b-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(emailA);
+    registrationTestEmails.add(emailB);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      const createAccount = async (
+        email: string,
+        name: string,
+        taxId: string,
+        timezone: string,
+      ) => {
+        assert.equal(
+          (
+            await fastify.inject({
+              method: "POST",
+              url: "/api/v1/auth/register",
+              payload: { name, email, password },
+            })
+          ).statusCode,
+          201,
+        );
+        await getPrismaClient().user.update({
+          where: { email },
+          data: { emailVerified: true, status: "ACTIVE" },
+        });
+        const login = await fastify.inject({
+          method: "POST",
+          url: "/api/v1/auth/login",
+          payload: { email, password },
+        });
+        const cookie = firstHeader(login.headers["set-cookie"])?.split(";")[0];
+        assert.ok(cookie);
+        const organization = await fastify.inject({
+          headers: { cookie },
+          method: "POST",
+          url: "/api/v1/organization",
+          payload: { name, taxId, phone: "11999999999", timezone },
+        });
+        assert.equal(organization.statusCode, 201);
+        return {
+          cookie,
+          organizationId: organization.json().data.id as string,
+        };
+      };
+
+      const accountA = await createAccount(
+        emailA,
+        "Reminder School A",
+        "66666666666",
+        "America/Recife",
+      );
+      const accountB = await createAccount(
+        emailB,
+        "Reminder School B",
+        "77777777777",
+        "America/Sao_Paulo",
+      );
+
+      assert.equal(
+        (
+          await fastify.inject({
+            method: "GET",
+            url: "/api/v1/reminder-configuration",
+          })
+        ).statusCode,
+        401,
+      );
+      const missing = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: "/api/v1/reminder-configuration",
+      });
+      assert.equal(missing.statusCode, 404);
+      assert.equal(
+        missing.json().error.code,
+        "REMINDER_CONFIGURATION_NOT_FOUND",
+      );
+
+      const validPayload = {
+        enabled: true,
+        allowedHours: { start: "08:30", end: "18:00" },
+        dailyLimit: 50,
+        rules: [
+          { timing: "BEFORE_DUE", dayOffset: 3, enabled: true },
+          { timing: "ON_DUE", dayOffset: 0, enabled: true },
+          { timing: "AFTER_DUE", dayOffset: 2, enabled: false },
+        ],
+      };
+      const invalidPayloads = [
+        {
+          ...validPayload,
+          allowedHours: { start: "18:00", end: "08:00" },
+        },
+        {
+          ...validPayload,
+          rules: [
+            { timing: "BEFORE_DUE", dayOffset: 3, enabled: true },
+            { timing: "BEFORE_DUE", dayOffset: 3, enabled: false },
+          ],
+        },
+        {
+          ...validPayload,
+          rules: [{ timing: "ON_DUE", dayOffset: 1, enabled: true }],
+        },
+        {
+          ...validPayload,
+          rules: [{ timing: "ON_DUE", dayOffset: 0, enabled: false }],
+        },
+      ];
+      for (const payload of invalidPayloads) {
+        const invalid = await fastify.inject({
+          headers: { cookie: accountA.cookie },
+          method: "PUT",
+          url: "/api/v1/reminder-configuration",
+          payload,
+        });
+        assert.equal(invalid.statusCode, 400);
+        assert.equal(invalid.json().error.code, "VALIDATION_ERROR");
+      }
+
+      const created = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "PUT",
+        url: "/api/v1/reminder-configuration",
+        payload: validPayload,
+      });
+      assert.equal(created.statusCode, 200);
+      assert.equal(created.json().data.enabled, true);
+      assert.equal(created.json().data.timezone, "America/Recife");
+      assert.deepEqual(created.json().data.allowedHours, {
+        start: "08:30",
+        end: "18:00",
+      });
+      assert.equal(created.json().data.dailyLimit, 50);
+      assert.equal(created.json().data.rules.length, 3);
+      assert.equal("organizationId" in created.json().data, false);
+
+      const injectedOrganization = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "PUT",
+        url: "/api/v1/reminder-configuration",
+        payload: { ...validPayload, organizationId: accountB.organizationId },
+      });
+      assert.equal(injectedOrganization.statusCode, 400);
+
+      const disabled = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "PUT",
+        url: "/api/v1/reminder-configuration",
+        payload: {
+          enabled: false,
+          allowedHours: { start: "09:00", end: "17:30" },
+          dailyLimit: 25,
+          rules: [
+            { timing: "BEFORE_DUE", dayOffset: 5, enabled: false },
+          ],
+        },
+      });
+      assert.equal(disabled.statusCode, 200);
+      assert.equal(disabled.json().data.enabled, false);
+      assert.equal(disabled.json().data.rules.length, 1);
+
+      const accountBRead = await fastify.inject({
+        headers: { cookie: accountB.cookie },
+        method: "GET",
+        url: "/api/v1/reminder-configuration",
+      });
+      assert.equal(accountBRead.statusCode, 404);
+      const accountBConfiguration = await fastify.inject({
+        headers: { cookie: accountB.cookie },
+        method: "PUT",
+        url: "/api/v1/reminder-configuration",
+        payload: validPayload,
+      });
+      assert.equal(accountBConfiguration.statusCode, 200);
+      assert.equal(
+        accountBConfiguration.json().data.timezone,
+        "America/Sao_Paulo",
+      );
+
+      const configurationA =
+        await getPrismaClient().reminderConfiguration.findUniqueOrThrow({
+          where: { organizationId: accountA.organizationId },
+        });
+      await assert.rejects(
+        getPrismaClient().reminderRule.create({
+          data: {
+            organizationId: accountB.organizationId,
+            configurationId: configurationA.id,
+            timing: "AFTER_DUE",
+            dayOffset: 59,
+          },
+        }),
+        (error: unknown) =>
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "P2003",
+      );
+
+      const timezoneUpdate = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "PATCH",
+        url: "/api/v1/organization",
+        payload: { timezone: "America/Manaus" },
+      });
+      assert.equal(timezoneUpdate.statusCode, 200);
+      const refreshed = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: "/api/v1/reminder-configuration",
+      });
+      assert.equal(refreshed.statusCode, 200);
+      assert.equal(refreshed.json().data.timezone, "America/Manaus");
+      assert.equal(refreshed.json().data.enabled, false);
+
+      const audit = await getPrismaClient().auditLog.findMany({
+        where: {
+          organizationId: accountA.organizationId,
+          action: {
+            in: [
+              "reminder_configuration.created",
+              "reminder_configuration.updated",
+            ],
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.deepEqual(
+        audit.map((entry) => entry.action),
+        [
+          "reminder_configuration.created",
+          "reminder_configuration.updated",
+        ],
+      );
+      assert.equal(audit.every((entry) => entry.correlationId !== null), true);
+      assert.equal(audit[1]?.before !== null, true);
+      assert.equal(audit[1]?.after !== null, true);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 after(async () => {
@@ -706,6 +966,8 @@ after(async () => {
   });
   await prisma.payment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.charge.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.reminderRule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.reminderConfiguration.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.enrollment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.studentGuardian.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.plan.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
