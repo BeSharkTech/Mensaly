@@ -34,6 +34,31 @@ enum VerificationType {
   PASSWORD_RESET
 }
 
+enum PlanFrequency {
+  MONTHLY
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum GuardianStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -123,9 +148,105 @@ model Organization {
 
   owner     User       @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   auditLogs AuditLog[]
+  plans Plan[]
+  students Student[]
+  guardians Guardian[]
+  enrollments Enrollment[]
 
   @@index([status])
   @@map("organization")
+}
+
+model Plan {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.VarChar(120)
+  description String? @db.VarChar(1000)
+  amountCents Int
+  dueDay Int
+  frequency PlanFrequency @default(MONTHLY)
+  status PlanStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
+  enrollments Enrollment[]
+  @@index([organizationId, status])
+  @@map("plan")
+}
+
+model Student {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.VarChar(120)
+  email String? @db.Citext
+  phone String? @db.VarChar(20)
+  notes String? @db.VarChar(2000)
+  status StudentStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
+  guardianLinks StudentGuardian[]
+  enrollments Enrollment[]
+  @@index([organizationId, status, name])
+  @@map("student")
+}
+
+model Guardian {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.VarChar(120)
+  taxId String? @db.VarChar(14)
+  phone String @db.VarChar(20)
+  email String? @db.Citext
+  status GuardianStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
+  studentLinks StudentGuardian[]
+  enrollments Enrollment[]
+  @@index([organizationId, status, name])
+  @@unique([organizationId, taxId])
+  @@map("guardian")
+}
+
+model StudentGuardian {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  studentId String @db.Uuid
+  guardianId String @db.Uuid
+  relationship String? @db.VarChar(80)
+  active Boolean @default(true)
+  startedAt DateTime @default(now()) @db.Timestamptz(3)
+  endedAt DateTime? @db.Timestamptz(3)
+  student Student @relation(fields:[studentId], references:[id], onDelete: Restrict)
+  guardian Guardian @relation(fields:[guardianId], references:[id], onDelete: Restrict)
+  @@index([organizationId, studentId, active])
+  @@index([organizationId, guardianId, active])
+  @@map("student_guardian")
+}
+
+model Enrollment {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  studentId String @db.Uuid
+  guardianId String @db.Uuid
+  planId String @db.Uuid
+  amountCents Int
+  dueDay Int
+  discountCents Int @default(0)
+  startDate DateTime @db.Date
+  endDate DateTime? @db.Date
+  status EnrollmentStatus @default(ACTIVE)
+  planNameSnapshot String @db.VarChar(120)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
+  student Student @relation(fields:[studentId], references:[id], onDelete: Restrict)
+  guardian Guardian @relation(fields:[guardianId], references:[id], onDelete: Restrict)
+  plan Plan @relation(fields:[planId], references:[id], onDelete: Restrict)
+  @@index([organizationId, status])
+  @@index([organizationId, studentId])
+  @@map("enrollment")
 }
 
 model AuditLog {

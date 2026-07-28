@@ -552,6 +552,27 @@ describe("HTTP API foundation", () => {
       await app.close();
     }
   });
+
+  it("runs the operational CRUD flow without crossing organization boundaries", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `operational-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(email);
+    try {
+      await app.init(); const fastify = app.getHttpAdapter().getInstance();
+      assert.equal((await fastify.inject({ method:"POST",url:"/api/v1/auth/register",payload:{name:"Operational Owner",email,password} })).statusCode,201);
+      await getPrismaClient().user.update({where:{email},data:{emailVerified:true,status:"ACTIVE"}});
+      const login=await fastify.inject({method:"POST",url:"/api/v1/auth/login",payload:{email,password}}); const cookie=firstHeader(login.headers["set-cookie"])?.split(";")[0]; assert.ok(cookie);
+      const organization=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/organization",payload:{name:"Operational School",taxId:"33333333333",phone:"11999999999"}}); assert.equal(organization.statusCode,201);
+      const plan=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/plans",payload:{name:"Mensal",amountCents:15000,dueDay:10}}); assert.equal(plan.statusCode,201);
+      const student=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/students",payload:{name:"Ana Student",phone:"(11) 98888-7777"}}); assert.equal(student.statusCode,201);
+      const guardian=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Maria Guardian",phone:"11999998888",taxId:"44444444444"}}); assert.equal(guardian.statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,payload:{relationship:"Mae"}})).statusCode,201);
+      const enrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-01-01"}}); assert.equal(enrollment.statusCode,201); assert.equal(enrollment.json().amountCents,15000);
+      const listed=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/students?search=Ana&page=1&pageSize=10"}); assert.equal(listed.statusCode,200); assert.equal(listed.json().total,1);
+      assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/enrollments/${enrollment.json().id}`,payload:{status:"ENDED",endDate:"2026-12-31"}})).statusCode,200);
+    } finally { await app.close(); }
+  });
 });
 
 after(async () => {
@@ -574,6 +595,11 @@ after(async () => {
       ],
     },
   });
+  await prisma.enrollment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.studentGuardian.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.plan.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.student.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.guardian.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.organization.deleteMany({
     where: { id: { in: organizations.map((organization) => organization.id) } },
   });
