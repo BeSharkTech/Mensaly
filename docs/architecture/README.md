@@ -1,3 +1,4 @@
 # Arquitetura
 
-Este diretório reunirá as decisões e diagramas de arquitetura da Mensaly.
+- [Convenções oficiais do back-end](backend-conventions.md)
+- [Variáveis de ambiente](environment-variables.md)
