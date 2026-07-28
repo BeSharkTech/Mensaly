@@ -4,6 +4,14 @@ import {
   getPrismaClient,
   type PrismaClient,
 } from "@mensaly/database";
+import { logger } from "@mensaly/logger";
+import {
+  createMessageQueueRuntime,
+  PermanentJobError,
+  type MessageQueueRuntime,
+  type MessageQueueRuntimeOptions,
+  type QueueLogger,
+} from "@mensaly/queue";
 
 export type WorkerRuntime = {
   stop: () => Promise<void>;
@@ -12,33 +20,83 @@ export type WorkerRuntime = {
 type WorkerDependencies = {
   database: Pick<PrismaClient, "$connect">;
   disconnectDatabase: () => Promise<void>;
-  log: (message: string) => void;
+  createQueueRuntime: (
+    options: MessageQueueRuntimeOptions,
+  ) => Promise<Pick<MessageQueueRuntime, "stop">>;
+  logger: QueueLogger;
 };
 
 export async function startWorker(
   environment: NodeJS.ProcessEnv = process.env,
   dependencies?: WorkerDependencies,
 ): Promise<WorkerRuntime> {
-  parseEnvironment(workerEnvironmentSchema, environment);
+  const configuration = parseEnvironment(
+    workerEnvironmentSchema,
+    environment,
+  );
   const resolvedDependencies = dependencies ?? {
     database: getPrismaClient(),
     disconnectDatabase: disconnectPrismaClient,
-    log: console.info,
+    createQueueRuntime: createMessageQueueRuntime,
+    logger,
   };
 
   await resolvedDependencies.database.$connect();
-  resolvedDependencies.log("Mensaly worker started");
+  let queues: Pick<MessageQueueRuntime, "stop">;
+  try {
+    queues = await resolvedDependencies.createQueueRuntime({
+      redisUrl: configuration.REDIS_URL,
+      prefix: configuration.BULLMQ_PREFIX,
+      concurrency: configuration.BULLMQ_WORKER_CONCURRENCY,
+      attempts: configuration.BULLMQ_JOB_ATTEMPTS,
+      backoffMs: configuration.BULLMQ_BACKOFF_MS,
+      metricsIntervalMs: configuration.BULLMQ_METRICS_INTERVAL_MS,
+      logger: resolvedDependencies.logger,
+      async handler() {
+        throw new PermanentJobError(
+          "Message dispatch is not configured before MEN-BE-021",
+        );
+      },
+    });
+  } catch (error) {
+    await resolvedDependencies.disconnectDatabase();
+    throw error;
+  }
+  resolvedDependencies.logger.info(
+    {
+      component: "worker",
+      queues: ["message-dispatch", "dead-letter"],
+    },
+    "Mensaly worker started",
+  );
 
-  let stopped = false;
+  let stopPromise: Promise<void> | undefined;
 
   return {
-    async stop() {
-      if (stopped) {
-        return;
+    stop() {
+      if (stopPromise) {
+        return stopPromise;
       }
 
-      stopped = true;
-      await resolvedDependencies.disconnectDatabase();
+      stopPromise = (async () => {
+        const queueResult = await Promise.allSettled([queues.stop()]);
+        const databaseResult = await Promise.allSettled([
+          resolvedDependencies.disconnectDatabase(),
+        ]);
+        const failure = [...queueResult, ...databaseResult].find(
+          (result) => result.status === "rejected",
+        );
+        if (failure?.status === "rejected") {
+          throw failure.reason;
+        }
+
+        resolvedDependencies.logger.info(
+          { component: "worker" },
+          "Mensaly worker stopped",
+        );
+      })();
+
+      return stopPromise;
     },
   };
 }

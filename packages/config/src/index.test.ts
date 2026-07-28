@@ -76,6 +76,42 @@ describe("environment configuration", () => {
     );
   });
 
+  it("applies safe BullMQ worker defaults", () => {
+    const environment = parseEnvironment(
+      workerEnvironmentSchema,
+      validConnections,
+    );
+
+    assert.equal(environment.BULLMQ_PREFIX, "mensaly");
+    assert.equal(environment.BULLMQ_WORKER_CONCURRENCY, 5);
+    assert.equal(environment.BULLMQ_JOB_ATTEMPTS, 4);
+    assert.equal(environment.BULLMQ_BACKOFF_MS, 1000);
+    assert.equal(environment.BULLMQ_METRICS_INTERVAL_MS, 30_000);
+  });
+
+  it("rejects unsafe BullMQ worker configuration", () => {
+    assert.throws(
+      () =>
+        parseEnvironment(workerEnvironmentSchema, {
+          ...validConnections,
+          BULLMQ_PREFIX: "mensaly:unsafe",
+          BULLMQ_WORKER_CONCURRENCY: "0",
+          BULLMQ_JOB_ATTEMPTS: "0",
+          BULLMQ_BACKOFF_MS: "1",
+          BULLMQ_METRICS_INTERVAL_MS: "1",
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /BULLMQ_PREFIX/);
+        assert.match(error.message, /BULLMQ_WORKER_CONCURRENCY/);
+        assert.match(error.message, /BULLMQ_JOB_ATTEMPTS/);
+        assert.match(error.message, /BULLMQ_BACKOFF_MS/);
+        assert.match(error.message, /BULLMQ_METRICS_INTERVAL_MS/);
+        return true;
+      },
+    );
+  });
+
   it("rejects incorrect connection protocols", () => {
     assert.throws(
       () =>

@@ -34,6 +34,11 @@ aplicação web ainda não possui variáveis públicas próprias.
 | `REDIS_PORT`         | Docker Compose          | Sim no ambiente local | Porta exposta pelo Redis local.                                            |
 | `DATABASE_URL`       | API, Prisma e worker    | Sim                   | Endereço PostgreSQL completo.                                              |
 | `REDIS_URL`          | API e worker            | Sim                   | Endereço Redis completo.                                                   |
+| `BULLMQ_PREFIX`      | Worker                  | Não                   | Prefixo das chaves BullMQ; o padrão é `mensaly`.                           |
+| `BULLMQ_WORKER_CONCURRENCY` | Worker            | Não                   | Jobs concorrentes; o padrão é `5`.                                         |
+| `BULLMQ_JOB_ATTEMPTS` | Worker                 | Não                   | Total de tentativas por job; o padrão é `4`.                               |
+| `BULLMQ_BACKOFF_MS`  | Worker                  | Não                   | Base do retry exponencial; o padrão é `1000` ms.                           |
+| `BULLMQ_METRICS_INTERVAL_MS` | Worker           | Não                   | Intervalo das métricas locais; o padrão é `30000` ms.                      |
 | `AUTH_SESSION_TTL_HOURS` | API                  | Não                   | Duração da sessão em horas; padrão de 7 dias.                              |
 | `TEST_POSTGRES_PORT` | Docker Compose de teste | Não                   | Porta do PostgreSQL de teste; o padrão é `55432`.                          |
 | `TEST_REDIS_PORT`    | Docker Compose de teste | Não                   | Porta do Redis de teste; o padrão é `56379`.                               |
