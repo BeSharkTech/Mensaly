@@ -1250,6 +1250,17 @@ describe("HTTP API foundation", () => {
         name: "Responsável Mensagens",
         phone: "11988887777",
       });
+      assert.deepEqual(persistedSchedule.json().data.delivery, {
+        providerMessageId: null,
+        sentAt: null,
+        deliveredAt: null,
+        readAt: null,
+      });
+      assert.deepEqual(persistedSchedule.json().data.attempts, {
+        count: 0,
+        lastAt: null,
+        lastError: null,
+      });
 
       const createdHistory = await fastify.inject({
         headers: { cookie: accountA.cookie },
@@ -1262,6 +1273,23 @@ describe("HTTP API foundation", () => {
           (entry: { toStatus: string }) => entry.toStatus,
         ),
         ["SCHEDULED"],
+      );
+      const createdAttempts = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "GET",
+        url: `/api/v1/message-schedules/${scheduleId}/attempts`,
+      });
+      assert.equal(createdAttempts.statusCode, 200);
+      assert.deepEqual(createdAttempts.json().data, []);
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountB.cookie },
+            method: "GET",
+            url: `/api/v1/message-schedules/${scheduleId}/attempts`,
+          })
+        ).statusCode,
+        404,
       );
       assert.equal(
         (

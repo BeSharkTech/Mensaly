@@ -7,11 +7,14 @@ import {
 import { logger } from "@mensaly/logger";
 import {
   createMessageQueueRuntime,
-  PermanentJobError,
+  type MessageDispatchHandler,
   type MessageQueueRuntime,
   type MessageQueueRuntimeOptions,
   type QueueLogger,
 } from "@mensaly/queue";
+
+import { FakeMessageAdapter } from "./fake-message.adapter";
+import { MessageDispatchProcessor } from "./message-dispatch.processor";
 
 export type WorkerRuntime = {
   stop: () => Promise<void>;
@@ -23,6 +26,7 @@ type WorkerDependencies = {
   createQueueRuntime: (
     options: MessageQueueRuntimeOptions,
   ) => Promise<Pick<MessageQueueRuntime, "stop">>;
+  createMessageHandler: () => MessageDispatchHandler;
   logger: QueueLogger;
 };
 
@@ -34,12 +38,22 @@ export async function startWorker(
     workerEnvironmentSchema,
     environment,
   );
-  const resolvedDependencies = dependencies ?? {
-    database: getPrismaClient(),
-    disconnectDatabase: disconnectPrismaClient,
-    createQueueRuntime: createMessageQueueRuntime,
-    logger,
-  };
+  const resolvedDependencies =
+    dependencies ??
+    (() => {
+      const database = getPrismaClient();
+      const adapter = new FakeMessageAdapter(
+        configuration.FAKE_MESSAGE_ADAPTER_OUTCOME,
+      );
+      const processor = new MessageDispatchProcessor(database, adapter);
+      return {
+        database,
+        disconnectDatabase: disconnectPrismaClient,
+        createQueueRuntime: createMessageQueueRuntime,
+        createMessageHandler: () => (job) => processor.process(job.data),
+        logger,
+      };
+    })();
 
   await resolvedDependencies.database.$connect();
   let queues: Pick<MessageQueueRuntime, "stop">;
@@ -52,11 +66,7 @@ export async function startWorker(
       backoffMs: configuration.BULLMQ_BACKOFF_MS,
       metricsIntervalMs: configuration.BULLMQ_METRICS_INTERVAL_MS,
       logger: resolvedDependencies.logger,
-      async handler() {
-        throw new PermanentJobError(
-          "Message dispatch is not configured before MEN-BE-021",
-        );
-      },
+      handler: resolvedDependencies.createMessageHandler(),
     });
   } catch (error) {
     await resolvedDependencies.disconnectDatabase();

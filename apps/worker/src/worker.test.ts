@@ -40,6 +40,9 @@ function createDependencies(options?: { queueStartupError?: Error }) {
           },
         };
       },
+      createMessageHandler() {
+        return async () => {};
+      },
       logger: {
         info(_attributes: Record<string, unknown>, message: string) {
           events.push(`info:${message}`);

@@ -87,6 +87,23 @@ describe("environment configuration", () => {
     assert.equal(environment.BULLMQ_JOB_ATTEMPTS, 4);
     assert.equal(environment.BULLMQ_BACKOFF_MS, 1000);
     assert.equal(environment.BULLMQ_METRICS_INTERVAL_MS, 30_000);
+    assert.equal(environment.FAKE_MESSAGE_ADAPTER_OUTCOME, "READ");
+  });
+
+  it("validates the configured fake adapter outcome", () => {
+    const environment = parseEnvironment(workerEnvironmentSchema, {
+      ...validConnections,
+      FAKE_MESSAGE_ADAPTER_OUTCOME: "DELIVERED",
+    });
+    assert.equal(environment.FAKE_MESSAGE_ADAPTER_OUTCOME, "DELIVERED");
+    assert.throws(
+      () =>
+        parseEnvironment(workerEnvironmentSchema, {
+          ...validConnections,
+          FAKE_MESSAGE_ADAPTER_OUTCOME: "META",
+        }),
+      /FAKE_MESSAGE_ADAPTER_OUTCOME/,
+    );
   });
 
   it("rejects unsafe BullMQ worker configuration", () => {

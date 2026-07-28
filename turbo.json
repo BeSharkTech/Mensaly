@@ -18,7 +18,8 @@
         "BULLMQ_WORKER_CONCURRENCY",
         "BULLMQ_JOB_ATTEMPTS",
         "BULLMQ_BACKOFF_MS",
-        "BULLMQ_METRICS_INTERVAL_MS"
+        "BULLMQ_METRICS_INTERVAL_MS",
+        "FAKE_MESSAGE_ADAPTER_OUTCOME"
       ]
     },
     "typecheck": {
@@ -39,7 +40,8 @@
         "BULLMQ_WORKER_CONCURRENCY",
         "BULLMQ_JOB_ATTEMPTS",
         "BULLMQ_BACKOFF_MS",
-        "BULLMQ_METRICS_INTERVAL_MS"
+        "BULLMQ_METRICS_INTERVAL_MS",
+        "FAKE_MESSAGE_ADAPTER_OUTCOME"
       ]
     },
     "test:integration": {
