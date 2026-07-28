@@ -27,10 +27,11 @@ if (databaseName !== "mensaly_test") {
 }
 
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+const testEmailSuffix = "@schema.example.test";
 
 describe("foundation database schema", () => {
   it("enforces a one-to-one organization owner and records audit data", async () => {
-    const email = `owner-${randomUUID()}@example.test`;
+    const email = `owner-${randomUUID()}${testEmailSuffix}`;
     const owner = await prisma.user.create({
       data: {
         name: "Test owner",
@@ -81,7 +82,7 @@ describe("foundation database schema", () => {
   });
 
   it("enforces case-insensitive unique user emails", async () => {
-    const email = `case-${randomUUID()}@example.test`;
+    const email = `case-${randomUUID()}${testEmailSuffix}`;
 
     await prisma.user.create({
       data: { name: "First", email: email.toLowerCase() },
@@ -96,7 +97,7 @@ describe("foundation database schema", () => {
   });
 
   it("seeds exactly one passwordless platform administrator", async () => {
-    const email = `admin-${randomUUID()}@example.test`;
+    const email = `admin-${randomUUID()}${testEmailSuffix}`;
     const environment = {
       NODE_ENV: "test",
       SEED_PLATFORM_ADMIN_EMAIL: email.toUpperCase(),
@@ -122,7 +123,7 @@ describe("foundation database schema", () => {
     await assert.rejects(
       seedPlatformAdmin(prisma, {
         NODE_ENV: "production",
-        SEED_PLATFORM_ADMIN_EMAIL: "admin@example.test",
+        SEED_PLATFORM_ADMIN_EMAIL: `admin${testEmailSuffix}`,
       }),
       /cannot run in production/,
     );
@@ -131,13 +132,13 @@ describe("foundation database schema", () => {
 
 after(async () => {
   await prisma.auditLog.deleteMany({
-    where: { actor: { email: { endsWith: "@example.test" } } },
+    where: { actor: { email: { endsWith: testEmailSuffix } } },
   });
   await prisma.organization.deleteMany({
-    where: { owner: { email: { endsWith: "@example.test" } } },
+    where: { owner: { email: { endsWith: testEmailSuffix } } },
   });
   await prisma.user.deleteMany({
-    where: { email: { endsWith: "@example.test" } },
+    where: { email: { endsWith: testEmailSuffix } },
   });
   await prisma.$disconnect();
 });

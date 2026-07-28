@@ -11,7 +11,8 @@
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@mensaly/config": "workspace:*"
+    "@mensaly/config": "workspace:*",
+    "@mensaly/database": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

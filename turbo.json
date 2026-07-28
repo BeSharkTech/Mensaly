@@ -20,7 +20,8 @@
     },
     "test": {
       "dependsOn": ["^test"],
-      "outputs": []
+      "outputs": [],
+      "env": ["DATABASE_URL", "REDIS_URL"]
     },
     "test:integration": {
       "dependsOn": ["^build"],

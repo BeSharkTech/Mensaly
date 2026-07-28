@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@mensaly/config": "workspace:*",
+    "@mensaly/database": "workspace:*",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-fastify": "^11.1.6",

@@ -1,12 +1,37 @@
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 
-import { PrismaClient } from "./index";
+import {
+  createPrismaClient,
+  disconnectPrismaClient,
+  getPrismaClient,
+  PrismaClient,
+} from "./index";
 
-describe("database package foundation", () => {
-  it("exports a Prisma client without opening a database connection", () => {
-    assert.equal(typeof PrismaClient, "function");
-    assert.equal(typeof PrismaClient.prototype.$connect, "function");
-    assert.equal(typeof PrismaClient.prototype.$disconnect, "function");
+describe("database client lifecycle", () => {
+  afterEach(async () => {
+    await disconnectPrismaClient();
+  });
+
+  it("creates an independent Prisma client on demand", async () => {
+    const client = createPrismaClient();
+
+    try {
+      assert.equal(typeof client.$connect, "function");
+      assert.equal(typeof client.$disconnect, "function");
+      assert.equal(typeof PrismaClient, "function");
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("reuses one shared Prisma client per process", () => {
+    assert.equal(getPrismaClient(), getPrismaClient());
+  });
+
+  it("can disconnect more than once safely", async () => {
+    getPrismaClient();
+    await disconnectPrismaClient();
+    await disconnectPrismaClient();
   });
 });
