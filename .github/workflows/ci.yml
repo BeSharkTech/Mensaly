@@ -67,7 +67,7 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Test compiled API runtime
+      - name: Test compiled runtimes
         run: pnpm test:runtime
 
       - name: Stop isolated test services
