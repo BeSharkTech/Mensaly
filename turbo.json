@@ -12,6 +12,9 @@
       "env": [
         "NODE_ENV",
         "API_PORT",
+        "TRUST_PROXY_HOPS",
+        "CORS_ORIGINS",
+        "AUTH_SESSION_TTL_HOURS",
         "DATABASE_URL",
         "REDIS_URL",
         "LOCAL_STORAGE_PATH",
