@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { ApiBody, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
+import { ApiBody, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
 import type { FastifyRequest } from "fastify";
 
 import { CurrentAuth, type AuthenticatedContext } from "../authorization/authorization-context";
@@ -23,6 +23,7 @@ export class OrganizationController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Creates the authenticated owner's organization" })
   @ApiBody({ schema: { type: "object", required: ["name", "taxId", "phone"], properties: { name: { type: "string", minLength: 2, maxLength: 120 }, legalName: { type: "string", maxLength: 160 }, taxId: { type: "string", description: "CPF or CNPJ" }, phone: { type: "string" }, timezone: { type: "string", example: "America/Sao_Paulo" }, address: { type: "object" }, brand: { type: "object" } } } })
   @ApiCreatedResponse({ description: "Organization created for the authenticated account" })
   @ApiConflictResponse({ description: "The account already has an organization or tax ID is in use" })
@@ -32,6 +33,7 @@ export class OrganizationController {
   }
 
   @Get()
+  @ApiOperation({ summary: "Gets the authenticated owner's organization" })
   @ApiOkResponse({ description: "Authenticated account organization" })
   @ApiUnauthorizedResponse({ description: "A valid session is required" })
   async getOwn(@CurrentAuth() auth: AuthenticatedContext): Promise<{ data: unknown }> {
@@ -39,6 +41,7 @@ export class OrganizationController {
   }
 
   @Patch()
+  @ApiOperation({ summary: "Updates the authenticated owner's organization" })
   @ApiBody({ schema: { type: "object", minProperties: 1, properties: { name: { type: "string" }, legalName: { type: "string" }, taxId: { type: "string" }, phone: { type: "string" }, timezone: { type: "string" }, address: { type: "object" }, brand: { type: "object" } } } })
   @ApiOkResponse({ description: "Authenticated account organization updated" })
   @ApiConflictResponse({ description: "Tax ID is already in use" })

@@ -14,7 +14,9 @@ import {
   ApiAcceptedResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
+  ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
@@ -72,6 +74,7 @@ export class AuthController {
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Registers a company owner account" })
   @ApiBody({
     schema: {
       type: "object",
@@ -91,6 +94,7 @@ export class AuthController {
 
   @Post("verify-email/request")
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: "Requests an email verification token" })
   @ApiBody({ schema: { type: "object", required: ["email"], properties: { email: { type: "string", format: "email" } } } })
   @ApiAcceptedResponse({ description: "Verification request accepted without revealing account existence" })
   async requestEmailVerification(@Body() input: EmailRequestDto): Promise<{ data: { accepted: true } }> {
@@ -100,6 +104,7 @@ export class AuthController {
 
   @Post("verify-email/confirm")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: "Confirms an email verification token" })
   @ApiBody({ schema: { type: "object", required: ["token"], properties: { token: { type: "string" } } } })
   async verifyEmail(@Body() input: TokenDto): Promise<void> {
     await this.authService.verifyEmail(input);
@@ -107,6 +112,7 @@ export class AuthController {
 
   @Post("password-reset/request")
   @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: "Requests a password reset token" })
   @ApiBody({ schema: { type: "object", required: ["email"], properties: { email: { type: "string", format: "email" } } } })
   @ApiAcceptedResponse({ description: "Reset request accepted without revealing account existence" })
   async requestPasswordReset(@Body() input: EmailRequestDto): Promise<{ data: { accepted: true } }> {
@@ -116,6 +122,7 @@ export class AuthController {
 
   @Post("password-reset/confirm")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: "Resets a password with a valid token" })
   @ApiBody({
     schema: {
       type: "object",
@@ -132,6 +139,7 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Creates an authenticated session" })
   @ApiBody({
     schema: {
       type: "object",
@@ -160,6 +168,7 @@ export class AuthController {
   }
 
   @Get("session")
+  @ApiOperation({ summary: "Gets the current authenticated session" })
   @ApiOkResponse({ description: "Current authenticated session" })
   @ApiUnauthorizedResponse({ description: "Session is missing, expired, or revoked" })
   async session(@Req() request: FastifyRequest): Promise<{ data: unknown }> {
@@ -172,7 +181,8 @@ export class AuthController {
 
   @Post("logout")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOkResponse({ description: "Session revoked" })
+  @ApiOperation({ summary: "Revokes the current session" })
+  @ApiNoContentResponse({ description: "Session revoked" })
   async logout(
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,

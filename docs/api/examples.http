@@ -1,0 +1,51 @@
+@baseUrl = http://localhost:3000/api/v1
+@email = owner.demo@mensaly.local
+@password = replace-with-demo-seed-password
+@organizationId = 10000000-0000-4000-8000-000000000002
+
+### Health
+GET {{baseUrl}}/health/ready
+
+### Login (preserve the Set-Cookie value in your client)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Current owner and organization
+GET {{baseUrl}}/auth/session
+
+###
+GET {{baseUrl}}/organization
+
+### Paginated operational data
+GET {{baseUrl}}/students?page=1&pageSize=20&status=ACTIVE
+
+###
+GET {{baseUrl}}/charges?page=1&pageSize=20&status=PENDING
+
+### Dashboard snapshot
+GET {{baseUrl}}/dashboard/overview
+
+###
+GET {{baseUrl}}/dashboard/monthly-evolution?months=12
+
+### Audit trail
+GET {{baseUrl}}/audit-logs?page=1&pageSize=20
+
+### Manual payment; replace IDs before executing
+POST {{baseUrl}}/charges/00000000-0000-4000-8000-000000000000/payments
+Content-Type: application/json
+Idempotency-Key: manual:example:001
+
+{
+  "amountCents": 15000,
+  "method": "PIX",
+  "paidAt": "2026-07-29T12:00:00.000Z"
+}
+
+### Logout
+POST {{baseUrl}}/auth/logout

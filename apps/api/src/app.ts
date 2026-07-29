@@ -41,8 +41,15 @@ function configureCors(
 function configureOpenApi(app: NestFastifyApplication): void {
   const configuration = new DocumentBuilder()
     .setTitle("Mensaly API")
-    .setDescription("Backend HTTP API for Mensaly")
-    .setVersion("1.0")
+    .setDescription(
+      "Versioned backend API for Mensaly company owners and platform administrators",
+    )
+    .setVersion("1.0.0")
+    .addCookieAuth(
+      "mensaly_session",
+      { type: "apiKey", in: "cookie" },
+      "sessionCookie",
+    )
     .build();
   const document = SwaggerModule.createDocument(app, configuration);
 

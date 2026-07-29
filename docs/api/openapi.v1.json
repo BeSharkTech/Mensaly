@@ -1,0 +1,2342 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "operationId": "HealthController_live_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The API process is alive"
+          }
+        },
+        "summary": "Confirms that the API process is alive",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All required dependencies are ready"
+          },
+          "503": {
+            "description": "At least one required dependency is unavailable"
+          }
+        },
+        "summary": "Checks PostgreSQL and Redis readiness",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "AuthController_register_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 12,
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account registered and awaiting email verification"
+          },
+          "409": {
+            "description": "An account already uses this email"
+          }
+        },
+        "summary": "Registers a company owner account",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/verify-email/request": {
+      "post": {
+        "operationId": "AuthController_requestEmailVerification_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Verification request accepted without revealing account existence"
+          }
+        },
+        "summary": "Requests an email verification token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/verify-email/confirm": {
+      "post": {
+        "operationId": "AuthController_verifyEmail_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Confirms an email verification token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/request": {
+      "post": {
+        "operationId": "AuthController_requestPasswordReset_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Reset request accepted without revealing account existence"
+          }
+        },
+        "summary": "Requests a password reset token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/password-reset/confirm": {
+      "post": {
+        "operationId": "AuthController_resetPassword_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token",
+                  "password"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 12,
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Resets a password with a valid token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_login_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated and session cookie issued"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        },
+        "summary": "Creates an authenticated session",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "AuthController_session_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current authenticated session"
+          },
+          "401": {
+            "description": "Session is missing, expired, or revoked"
+          }
+        },
+        "summary": "Gets the current authenticated session",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout_v1",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Session revoked"
+          }
+        },
+        "summary": "Revokes the current session",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/organization": {
+      "post": {
+        "operationId": "OrganizationController_create_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "taxId",
+                  "phone"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "legalName": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "taxId": {
+                    "type": "string",
+                    "description": "CPF or CNPJ"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "example": "America/Sao_Paulo"
+                  },
+                  "address": {
+                    "type": "object"
+                  },
+                  "brand": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Organization created for the authenticated account"
+          },
+          "401": {
+            "description": "A valid session is required"
+          },
+          "409": {
+            "description": "The account already has an organization or tax ID is in use"
+          }
+        },
+        "summary": "Creates the authenticated owner's organization",
+        "tags": [
+          "Organization"
+        ]
+      },
+      "get": {
+        "operationId": "OrganizationController_getOwn_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authenticated account organization"
+          },
+          "401": {
+            "description": "A valid session is required"
+          }
+        },
+        "summary": "Gets the authenticated owner's organization",
+        "tags": [
+          "Organization"
+        ]
+      },
+      "patch": {
+        "operationId": "OrganizationController_update_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "legalName": {
+                    "type": "string"
+                  },
+                  "taxId": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "object"
+                  },
+                  "brand": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated account organization updated"
+          },
+          "401": {
+            "description": "A valid session is required"
+          },
+          "409": {
+            "description": "Tax ID is already in use"
+          }
+        },
+        "summary": "Updates the authenticated owner's organization",
+        "tags": [
+          "Organization"
+        ]
+      }
+    },
+    "/api/v1/admin/session": {
+      "get": {
+        "operationId": "AdminController_session_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authenticated platform administrator session without organization context"
+          },
+          "401": {
+            "description": "A valid platform administrator session is required"
+          }
+        },
+        "summary": "Gets the platform administrator session",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
+    "/api/v1/admin/organizations/{id}/status": {
+      "patch": {
+        "operationId": "AdminController_updateOrganizationStatus_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "INACTIVE",
+                      "BLOCKED"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Updates an organization status",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
+    "/api/v1/plans": {
+      "get": {
+        "operationId": "OperationalController_plans_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Lists organization plans",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "post": {
+        "operationId": "OperationalController_createPlan_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "frequency": {
+                    "type": "string",
+                    "enum": [
+                      "MONTHLY"
+                    ],
+                    "default": "MONTHLY"
+                  }
+                },
+                "required": [
+                  "name",
+                  "amountCents",
+                  "dueDay"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Creates an organization plan",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/plans/{id}": {
+      "get": {
+        "operationId": "OperationalController_plan_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets an organization plan",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "patch": {
+        "operationId": "OperationalController_updatePlan_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "frequency": {
+                    "type": "string",
+                    "enum": [
+                      "MONTHLY"
+                    ],
+                    "default": "MONTHLY"
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Updates an organization plan",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/students": {
+      "get": {
+        "operationId": "OperationalController_students_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Lists organization students",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "post": {
+        "operationId": "OperationalController_createStudent_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Creates an organization student",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/students/{id}": {
+      "get": {
+        "operationId": "OperationalController_student_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets an organization student",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "patch": {
+        "operationId": "OperationalController_updateStudent_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "INACTIVE"
+                    ]
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Updates an organization student",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/students/{studentId}/guardians/{guardianId}": {
+      "post": {
+        "operationId": "OperationalController_link_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "relationship"
+                ],
+                "properties": {
+                  "relationship": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 80
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Links a guardian to a student",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/guardians": {
+      "get": {
+        "operationId": "OperationalController_guardians_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Lists organization guardians",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "post": {
+        "operationId": "OperationalController_createGuardian_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "phone": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 32
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "taxId": {
+                    "type": "string",
+                    "minLength": 11,
+                    "maxLength": 18
+                  }
+                },
+                "required": [
+                  "name",
+                  "phone"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Creates an organization guardian",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/guardians/{id}": {
+      "get": {
+        "operationId": "OperationalController_guardian_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets an organization guardian",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "patch": {
+        "operationId": "OperationalController_updateGuardian_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "phone": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 32
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "taxId": {
+                    "type": "string",
+                    "minLength": 11,
+                    "maxLength": 18
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "INACTIVE"
+                    ]
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Updates an organization guardian",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/enrollments": {
+      "get": {
+        "operationId": "OperationalController_enrollments_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Lists organization enrollments",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "post": {
+        "operationId": "OperationalController_createEnrollment_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "studentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "guardianId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "planId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "discountCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "studentId",
+                  "guardianId",
+                  "planId",
+                  "startDate"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Creates an organization enrollment",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/enrollments/{id}": {
+      "get": {
+        "operationId": "OperationalController_enrollment_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets an organization enrollment",
+        "tags": [
+          "Operational CRUD"
+        ]
+      },
+      "patch": {
+        "operationId": "OperationalController_updateEnrollment_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "dueDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "discountCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 0
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "ENDED",
+                      "CANCELLED"
+                    ]
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Updates an organization enrollment",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
+    "/api/v1/charges/generate": {
+      "post": {
+        "operationId": "FinancialController_generateCharges_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "referenceMonth"
+                ],
+                "properties": {
+                  "referenceMonth": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                    "example": "2026-02"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Monthly charges generated or reused"
+          },
+          "400": {
+            "description": "Invalid reference month"
+          },
+          "401": {
+            "description": "A valid company session is required"
+          }
+        },
+        "summary": "Generates idempotent monthly charges",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges": {
+      "get": {
+        "operationId": "FinancialController_charges_v1",
+        "parameters": [
+          {
+            "name": "referenceMonth",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "PENDING",
+                "PAID",
+                "CANCELLED",
+                "WAIVED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated organization charges"
+          }
+        },
+        "summary": "Lists charges in the authenticated organization",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}": {
+      "get": {
+        "operationId": "FinancialController_charge_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Charge with enrollment and payment history"
+          },
+          "404": {
+            "description": "Charge not found in this organization"
+          }
+        },
+        "summary": "Gets one organization-scoped charge",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}/cancel": {
+      "post": {
+        "operationId": "FinancialController_cancel_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Charge cancelled"
+          },
+          "409": {
+            "description": "Charge state or payment conflict"
+          }
+        },
+        "summary": "Cancels a pending charge",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}/waive": {
+      "post": {
+        "operationId": "FinancialController_waive_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Charge waived"
+          },
+          "409": {
+            "description": "Charge state or payment conflict"
+          }
+        },
+        "summary": "Waives a pending charge",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}/reopen": {
+      "post": {
+        "operationId": "FinancialController_reopen_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Charge reopened"
+          },
+          "409": {
+            "description": "Charge state conflict"
+          }
+        },
+        "summary": "Reopens a cancelled or waived charge",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}/payments": {
+      "post": {
+        "operationId": "FinancialController_createPayment_v1",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Unique payment operation key within the organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amountCents",
+                  "method",
+                  "paidAt"
+                ],
+                "properties": {
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 15000
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "CASH",
+                      "PIX",
+                      "BANK_TRANSFER",
+                      "CARD",
+                      "OTHER"
+                    ]
+                  },
+                  "paidAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-02-10T12:00:00.000Z"
+                  },
+                  "externalReference": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Payment created or replayed from the idempotency key"
+          },
+          "400": {
+            "description": "Invalid header, payload, or payment amount"
+          },
+          "404": {
+            "description": "Charge not found in this organization"
+          },
+          "409": {
+            "description": "Active payment, charge state, or idempotency conflict"
+          }
+        },
+        "summary": "Creates one idempotent manual payment",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/payments/{id}/confirm": {
+      "post": {
+        "operationId": "FinancialController_confirmPayment_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Payment confirmed and charge paid"
+          },
+          "409": {
+            "description": "Payment state conflict"
+          }
+        },
+        "summary": "Confirms a reconciled payment",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/payments/{id}/cancel": {
+      "post": {
+        "operationId": "FinancialController_cancelPayment_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Payment cancelled"
+          },
+          "409": {
+            "description": "Payment state conflict"
+          }
+        },
+        "summary": "Cancels a payment pending reconciliation",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/payments/{id}/reverse": {
+      "post": {
+        "operationId": "FinancialController_reversePayment_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Payment reversed and charge reopened"
+          },
+          "409": {
+            "description": "Payment state conflict"
+          }
+        },
+        "summary": "Reverses a confirmed payment",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/reminder-configuration": {
+      "get": {
+        "operationId": "ReminderConfigurationController_get_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Configuration with the organization timezone"
+          },
+          "401": {
+            "description": "A valid company session is required"
+          },
+          "404": {
+            "description": "Configuration does not exist yet"
+          }
+        },
+        "summary": "Gets the authenticated organization reminder configuration",
+        "tags": [
+          "Reminder configuration"
+        ]
+      },
+      "put": {
+        "operationId": "ReminderConfigurationController_upsert_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "enabled",
+                  "allowedHours",
+                  "dailyLimit",
+                  "rules"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "allowedHours": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                      },
+                      "end": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                      }
+                    }
+                  },
+                  "dailyLimit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "rules": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "timing",
+                        "dayOffset"
+                      ],
+                      "properties": {
+                        "timing": {
+                          "type": "string",
+                          "enum": [
+                            "BEFORE_DUE",
+                            "ON_DUE",
+                            "AFTER_DUE"
+                          ]
+                        },
+                        "dayOffset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 60
+                        },
+                        "templateId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "default": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration created or replaced"
+          },
+          "400": {
+            "description": "Invalid window, limit, duplicate rule, or rule conflict"
+          },
+          "401": {
+            "description": "A valid company session is required"
+          }
+        },
+        "summary": "Creates or replaces the organization reminder configuration",
+        "tags": [
+          "Reminder configuration"
+        ]
+      }
+    },
+    "/api/v1/message-templates": {
+      "get": {
+        "operationId": "MessagingController_templates_v1",
+        "parameters": [
+          {
+            "name": "active",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated organization templates"
+          }
+        },
+        "summary": "Lists internal message templates",
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "post": {
+        "operationId": "MessagingController_createTemplate_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "body"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created"
+          },
+          "400": {
+            "description": "Invalid template payload"
+          },
+          "401": {
+            "description": "A valid company session is required"
+          },
+          "409": {
+            "description": "Template name already exists"
+          }
+        },
+        "summary": "Creates an internal message template",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/message-templates/{id}": {
+      "get": {
+        "operationId": "MessagingController_template_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message template"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "summary": "Gets one organization-scoped message template",
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "patch": {
+        "operationId": "MessagingController_updateTemplate_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated"
+          },
+          "400": {
+            "description": "Invalid template payload"
+          },
+          "404": {
+            "description": "Template not found"
+          },
+          "409": {
+            "description": "Template name already exists"
+          }
+        },
+        "summary": "Updates or deactivates a message template",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/message-schedules": {
+      "get": {
+        "operationId": "MessagingController_schedules_v1",
+        "parameters": [
+          {
+            "name": "chargeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "SCHEDULED",
+                "QUEUED",
+                "PROCESSING",
+                "SENT",
+                "DELIVERED",
+                "READ",
+                "FAILED_RETRYABLE",
+                "FAILED_PERMANENT",
+                "CANCELLED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated organization schedules"
+          }
+        },
+        "summary": "Lists persisted message schedules",
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "post": {
+        "operationId": "MessagingController_createSchedule_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "chargeId",
+                  "templateId",
+                  "scheduledFor"
+                ],
+                "properties": {
+                  "chargeId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "templateId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scheduledFor": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Schedule created or reused"
+          },
+          "400": {
+            "description": "Invalid schedule payload"
+          },
+          "404": {
+            "description": "Charge or active template not found"
+          },
+          "409": {
+            "description": "Charge state does not allow scheduling"
+          }
+        },
+        "summary": "Persists an idempotent message schedule",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/message-schedules/{id}": {
+      "get": {
+        "operationId": "MessagingController_schedule_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message schedule"
+          },
+          "404": {
+            "description": "Schedule not found"
+          }
+        },
+        "summary": "Gets one organization-scoped message schedule",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/message-schedules/{id}/cancel": {
+      "post": {
+        "operationId": "MessagingController_cancelSchedule_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule cancelled"
+          },
+          "404": {
+            "description": "Schedule not found"
+          },
+          "409": {
+            "description": "Schedule state does not allow cancellation"
+          }
+        },
+        "summary": "Cancels a scheduled message",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/message-schedules/{id}/history": {
+      "get": {
+        "operationId": "MessagingController_history_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chronological status history"
+          },
+          "404": {
+            "description": "Schedule not found"
+          }
+        },
+        "summary": "Lists the persisted schedule status history",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/message-schedules/{id}/attempts": {
+      "get": {
+        "operationId": "MessagingController_attempts_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chronological delivery attempts"
+          },
+          "404": {
+            "description": "Schedule not found"
+          }
+        },
+        "summary": "Lists persisted message delivery attempts",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/admin/webhook-events": {
+      "post": {
+        "operationId": "WebhookInboxController_receive_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "provider",
+                  "externalEventId",
+                  "eventType",
+                  "payload"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "example": "internal"
+                  },
+                  "externalEventId": {
+                    "type": "string",
+                    "example": "event-123"
+                  },
+                  "eventType": {
+                    "type": "string",
+                    "example": "resource.updated"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "organizationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event persisted idempotently"
+          }
+        },
+        "summary": "Receives a provider-neutral webhook event",
+        "tags": [
+          "Webhook inbox"
+        ]
+      },
+      "get": {
+        "operationId": "WebhookInboxController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated webhook events"
+          }
+        },
+        "summary": "Lists webhook inbox events",
+        "tags": [
+          "Webhook inbox"
+        ]
+      }
+    },
+    "/api/v1/admin/webhook-events/{id}": {
+      "get": {
+        "operationId": "WebhookInboxController_get_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook event details"
+          }
+        },
+        "summary": "Gets a webhook event and its attempts",
+        "tags": [
+          "Webhook inbox"
+        ]
+      }
+    },
+    "/api/v1/admin/webhook-events/{id}/process": {
+      "post": {
+        "operationId": "WebhookInboxController_process_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current processing state"
+          }
+        },
+        "summary": "Processes or resumes one webhook event",
+        "tags": [
+          "Webhook inbox"
+        ]
+      }
+    },
+    "/api/v1/files": {
+      "post": {
+        "operationId": "FilesController_upload_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "File persisted with integrity metadata"
+          }
+        },
+        "summary": "Uploads a validated organization file",
+        "tags": [
+          "Files"
+        ]
+      },
+      "get": {
+        "operationId": "FilesController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated file metadata"
+          }
+        },
+        "summary": "Lists active files from the current organization",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/cleanup": {
+      "post": {
+        "operationId": "FilesController_cleanup_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Cleanup summary, limited to 100 objects"
+          }
+        },
+        "summary": "Retries controlled cleanup of incomplete files",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/{id}": {
+      "get": {
+        "operationId": "FilesController_get_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File metadata"
+          }
+        },
+        "summary": "Gets organization-scoped file metadata",
+        "tags": [
+          "Files"
+        ]
+      },
+      "delete": {
+        "operationId": "FilesController_delete_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "File deleted or already deleted"
+          }
+        },
+        "summary": "Deletes a file through a retry-safe cleanup flow",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/files/{id}/content": {
+      "get": {
+        "operationId": "FilesController_download_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Original file bytes"
+          }
+        },
+        "summary": "Downloads an integrity-checked organization file",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/dashboard/overview": {
+      "get": {
+        "operationId": "DashboardController_overview_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Dashboard overview"
+          }
+        },
+        "summary": "Gets organization financial and student totals",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/upcoming-due": {
+      "get": {
+        "operationId": "DashboardController_upcoming_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Upcoming charges with student and guardian"
+          }
+        },
+        "summary": "Lists upcoming pending charges",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/recent-payments": {
+      "get": {
+        "operationId": "DashboardController_recentPayments_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Recent payments"
+          }
+        },
+        "summary": "Lists the latest confirmed payments",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/message-failures": {
+      "get": {
+        "operationId": "DashboardController_messageFailures_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Message failures without cross-tenant data"
+          }
+        },
+        "summary": "Lists recent message delivery failures",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/monthly-evolution": {
+      "get": {
+        "operationId": "DashboardController_evolution_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Continuous monthly time series"
+          }
+        },
+        "summary": "Gets monthly financial evolution",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/admin/overview": {
+      "get": {
+        "operationId": "AdminInsightsController_overview_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Platform overview"
+          }
+        },
+        "summary": "Gets platform-wide totals and internal usage",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
+    "/api/v1/admin/organizations": {
+      "get": {
+        "operationId": "AdminInsightsController_organizations_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Paginated organization administration"
+          }
+        },
+        "summary": "Lists organizations with consumption totals",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
+    "/api/v1/admin/organizations/{id}/history": {
+      "get": {
+        "operationId": "AdminInsightsController_history_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated audit history"
+          }
+        },
+        "summary": "Gets one organization's administrative history",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
+    "/api/v1/admin/failures": {
+      "get": {
+        "operationId": "AdminInsightsController_failures_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Recent operational failures"
+          }
+        },
+        "summary": "Gets message and webhook failures",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
+    "/api/v1/audit-logs": {
+      "get": {
+        "operationId": "AuditController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Immutable and paginated audit records"
+          }
+        },
+        "summary": "Lists the current organization's audit trail",
+        "tags": [
+          "Audit"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Mensaly API",
+    "description": "Versioned backend API for Mensaly company owners and platform administrators",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "mensaly_session"
+      }
+    },
+    "schemas": {}
+  }
+}

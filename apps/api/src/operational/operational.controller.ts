@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBody, ApiOperation, ApiTags } from "@nestjs/swagger";
 
 import {
   CurrentAuth,
@@ -54,6 +54,49 @@ import {
 } from "./operational.dto";
 import { OperationalService } from "./operational.service";
 
+const statusSchema = { type: "string", enum: ["ACTIVE", "INACTIVE"] };
+const planBodySchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", minLength: 2, maxLength: 120 },
+    description: { type: "string", maxLength: 1000 },
+    amountCents: { type: "integer", minimum: 1 },
+    dueDay: { type: "integer", minimum: 1, maximum: 31 },
+    frequency: { type: "string", enum: ["MONTHLY"], default: "MONTHLY" },
+  },
+};
+const studentBodySchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", minLength: 2, maxLength: 120 },
+    email: { type: "string", format: "email", maxLength: 255 },
+    phone: { type: "string", maxLength: 32 },
+    notes: { type: "string", maxLength: 2000 },
+  },
+};
+const guardianBodySchema = {
+  type: "object",
+  properties: {
+    name: { type: "string", minLength: 2, maxLength: 120 },
+    phone: { type: "string", minLength: 8, maxLength: 32 },
+    email: { type: "string", format: "email", maxLength: 255 },
+    taxId: { type: "string", minLength: 11, maxLength: 18 },
+  },
+};
+const enrollmentBodySchema = {
+  type: "object",
+  properties: {
+    studentId: { type: "string", format: "uuid" },
+    guardianId: { type: "string", format: "uuid" },
+    planId: { type: "string", format: "uuid" },
+    amountCents: { type: "integer", minimum: 1 },
+    dueDay: { type: "integer", minimum: 1, maximum: 31 },
+    discountCents: { type: "integer", minimum: 0, default: 0 },
+    startDate: { type: "string", format: "date" },
+    endDate: { type: "string", format: "date" },
+  },
+};
+
 @ApiTags("Operational CRUD")
 @Controller({ path: "", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
@@ -74,6 +117,12 @@ export class OperationalController {
 
   @Post("plans")
   @ApiOperation({ summary: "Creates an organization plan" })
+  @ApiBody({
+    schema: {
+      ...planBodySchema,
+      required: ["name", "amountCents", "dueDay"],
+    },
+  })
   createPlan(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createPlanSchema)) input: CreatePlanDto,
@@ -92,6 +141,7 @@ export class OperationalController {
 
   @Patch("plans/:id")
   @ApiOperation({ summary: "Updates an organization plan" })
+  @ApiBody({ schema: { ...planBodySchema, minProperties: 1 } })
   updatePlan(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id") id: string,
@@ -116,6 +166,9 @@ export class OperationalController {
 
   @Post("students")
   @ApiOperation({ summary: "Creates an organization student" })
+  @ApiBody({
+    schema: { ...studentBodySchema, required: ["name"] },
+  })
   createStudent(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createStudentSchema)) input: CreateStudentDto,
@@ -134,6 +187,13 @@ export class OperationalController {
 
   @Patch("students/:id")
   @ApiOperation({ summary: "Updates an organization student" })
+  @ApiBody({
+    schema: {
+      ...studentBodySchema,
+      minProperties: 1,
+      properties: { ...studentBodySchema.properties, status: statusSchema },
+    },
+  })
   updateStudent(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id") id: string,
@@ -148,6 +208,15 @@ export class OperationalController {
 
   @Post("students/:studentId/guardians/:guardianId")
   @ApiOperation({ summary: "Links a guardian to a student" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["relationship"],
+      properties: {
+        relationship: { type: "string", minLength: 2, maxLength: 80 },
+      },
+    },
+  })
   link(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("studentId") studentId: string,
@@ -174,6 +243,9 @@ export class OperationalController {
 
   @Post("guardians")
   @ApiOperation({ summary: "Creates an organization guardian" })
+  @ApiBody({
+    schema: { ...guardianBodySchema, required: ["name", "phone"] },
+  })
   createGuardian(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createGuardianSchema)) input: CreateGuardianDto,
@@ -192,6 +264,13 @@ export class OperationalController {
 
   @Patch("guardians/:id")
   @ApiOperation({ summary: "Updates an organization guardian" })
+  @ApiBody({
+    schema: {
+      ...guardianBodySchema,
+      minProperties: 1,
+      properties: { ...guardianBodySchema.properties, status: statusSchema },
+    },
+  })
   updateGuardian(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id") id: string,
@@ -217,6 +296,12 @@ export class OperationalController {
 
   @Post("enrollments")
   @ApiOperation({ summary: "Creates an organization enrollment" })
+  @ApiBody({
+    schema: {
+      ...enrollmentBodySchema,
+      required: ["studentId", "guardianId", "planId", "startDate"],
+    },
+  })
   createEnrollment(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createEnrollmentSchema))
@@ -239,6 +324,22 @@ export class OperationalController {
 
   @Patch("enrollments/:id")
   @ApiOperation({ summary: "Updates an organization enrollment" })
+  @ApiBody({
+    schema: {
+      ...enrollmentBodySchema,
+      minProperties: 1,
+      properties: {
+        amountCents: enrollmentBodySchema.properties.amountCents,
+        dueDay: enrollmentBodySchema.properties.dueDay,
+        discountCents: enrollmentBodySchema.properties.discountCents,
+        endDate: enrollmentBodySchema.properties.endDate,
+        status: {
+          type: "string",
+          enum: ["ACTIVE", "ENDED", "CANCELLED"],
+        },
+      },
+    },
+  })
   updateEnrollment(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id") id: string,

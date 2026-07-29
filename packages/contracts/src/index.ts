@@ -1,5 +1,31 @@
 import { z } from "zod";
 
+export const API_VERSION = "v1" as const;
+
+export const paginationMetaSchema = z.object({
+  page: z.number().int().positive(),
+  limit: z.number().int().min(1).max(100),
+  total: z.number().int().nonnegative(),
+  pages: z.number().int().nonnegative(),
+});
+
+export type PaginationMeta = z.infer<typeof paginationMetaSchema>;
+
+export function dataEnvelopeSchema<TSchema extends z.ZodTypeAny>(
+  data: TSchema,
+) {
+  return z.object({ data });
+}
+
+export function paginatedEnvelopeSchema<TSchema extends z.ZodTypeAny>(
+  item: TSchema,
+) {
+  return z.object({
+    data: z.array(item),
+    meta: paginationMetaSchema,
+  });
+}
+
 export const errorDetailSchema = z.object({
   field: z.string().optional(),
   message: z.string(),
