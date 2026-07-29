@@ -21,6 +21,7 @@ describe("environment configuration", () => {
 
     assert.equal(environment.NODE_ENV, "development");
     assert.equal(environment.API_PORT, 3001);
+    assert.equal(environment.TRUST_PROXY_HOPS, 0);
     assert.equal(environment.AUTH_SESSION_TTL_HOURS, 168);
     assert.equal(environment.LOCAL_STORAGE_PATH, ".local-storage");
     assert.equal(environment.FILE_MAX_SIZE_BYTES, 5 * 1024 * 1024);
@@ -60,10 +61,12 @@ describe("environment configuration", () => {
       ...validConnections,
       NODE_ENV: "test",
       API_PORT: "4000",
+      TRUST_PROXY_HOPS: "2",
     });
 
     assert.equal(environment.NODE_ENV, "test");
     assert.equal(environment.API_PORT, 4000);
+    assert.equal(environment.TRUST_PROXY_HOPS, 2);
   });
 
   it("reports every missing worker variable", () => {

@@ -11,7 +11,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { ApiBody, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBody, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { FastifyRequest } from "fastify";
 
 import {
@@ -76,7 +76,7 @@ const planBodySchema = {
   properties: {
     name: { type: "string", minLength: 2, maxLength: 120 },
     description: { type: "string", maxLength: 1000 },
-    amountCents: { type: "integer", minimum: 1 },
+    amountCents: { type: "integer", minimum: 1, maximum: 2_000_000_000 },
     dueDay: { type: "integer", minimum: 1, maximum: 31 },
     frequency: { type: "string", enum: ["MONTHLY"], default: "MONTHLY" },
   },
@@ -105,15 +105,21 @@ const enrollmentBodySchema = {
     studentId: { type: "string", format: "uuid" },
     guardianId: { type: "string", format: "uuid" },
     planId: { type: "string", format: "uuid" },
-    amountCents: { type: "integer", minimum: 1 },
+    amountCents: { type: "integer", minimum: 1, maximum: 2_000_000_000 },
     dueDay: { type: "integer", minimum: 1, maximum: 31 },
-    discountCents: { type: "integer", minimum: 0, default: 0 },
+    discountCents: {
+      type: "integer",
+      minimum: 0,
+      maximum: 2_000_000_000,
+      default: 0,
+    },
     startDate: { type: "string", format: "date" },
     endDate: { type: "string", format: "date" },
   },
 };
 
 @ApiTags("Operational CRUD")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class OperationalController {

@@ -12,6 +12,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBody,
+  ApiCookieAuth,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -91,6 +92,7 @@ const configurationBodySchema = {
 } as const;
 
 @ApiTags("Reminder configuration")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "reminder-configuration", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class ReminderConfigurationController {

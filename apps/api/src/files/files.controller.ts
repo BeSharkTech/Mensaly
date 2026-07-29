@@ -17,6 +17,7 @@ import {
 import {
   ApiBody,
   ApiConsumes,
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
@@ -52,6 +53,7 @@ function requestMetadata(request: FastifyRequest): FileAuditMetadata {
 }
 
 @ApiTags("Files")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "files", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class FilesController {

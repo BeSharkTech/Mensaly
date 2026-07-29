@@ -631,6 +631,12 @@ describe("HTTP API foundation", () => {
       const adminSession = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/admin/session" });
       assert.equal(adminSession.statusCode, 200);
       assert.deepEqual(adminSession.json().data, { id: adminSession.json().data.id, email: emailB, role: "PLATFORM_ADMIN", organizationId: null });
+      const statusUpdate = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "PATCH", url: `/api/v1/admin/organizations/${accountA.organizationId}/status`, payload: { status: "ACTIVE" } });
+      assert.equal(statusUpdate.statusCode, 200);
+      assert.equal(statusUpdate.json().data.status, "ACTIVE");
+      assert.equal((await fastify.inject({ headers: { cookie: accountB.cookie }, method: "PATCH", url: "/api/v1/admin/organizations/not-a-uuid/status", payload: { status: "ACTIVE" } })).statusCode, 400);
+      const statusAudit = await getPrismaClient().auditLog.findFirstOrThrow({ where: { organizationId: accountA.organizationId, action: "organization.status.updated" } });
+      assert.notEqual(statusAudit.correlationId, null);
       const adminUsingCompanyRoute = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/organization" });
       assert.equal(adminUsingCompanyRoute.statusCode, 403);
       assert.equal(adminUsingCompanyRoute.json().error.code, "COMPANY_ACCOUNT_REQUIRED");

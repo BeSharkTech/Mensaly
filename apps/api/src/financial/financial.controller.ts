@@ -18,6 +18,7 @@ import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConflictResponse,
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -85,7 +86,12 @@ const paymentBodySchema = {
   additionalProperties: false,
   required: ["amountCents", "method", "paidAt"] as string[],
   properties: {
-    amountCents: { type: "integer", minimum: 1, example: 15000 },
+    amountCents: {
+      type: "integer",
+      minimum: 1,
+      maximum: 2_000_000_000,
+      example: 15000,
+    },
     method: {
       type: "string",
       enum: ["CASH", "PIX", "BANK_TRANSFER", "CARD", "OTHER"] as string[],
@@ -101,6 +107,7 @@ const paymentBodySchema = {
 } as const;
 
 @ApiTags("Financial")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class FinancialController {
@@ -119,7 +126,7 @@ export class FinancialController {
       properties: {
         referenceMonth: {
           type: "string",
-          pattern: "^\\d{4}-(0[1-9]|1[0-2])$",
+          pattern: "^(?:20\\d{2}|[3-9]\\d{3})-(0[1-9]|1[0-2])$",
           example: "2026-02",
         },
       },
