@@ -4,15 +4,15 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
-**Estado atual verificado:** Gate F4 e MEN-BE-018 a MEN-BE-021 integrados na
-`main` pelos PRs `#41`, `#42`, `#44`, `#46` e `#48`
+**Estado atual verificado:** Gates F4 e F5, incluindo MEN-BE-018 a MEN-BE-022,
+integrados na `main` pelos PRs `#41`, `#42`, `#44`, `#46`, `#48` e `#50`
 **Modelo de trabalho:** sequencial, em um único computador
 
 ## Atualização de execução — Fase 5
 
-**Situação em 28 de julho de 2026:** Fases 0 a 4 e as quatro primeiras tarefas
-da Fase 5, MEN-BE-018 a MEN-BE-021, estão integradas na `main`. Os PRs `#42`,
-`#44`, `#46` e `#48` passaram pelo CI e foram mesclados por squash.
+**Situação em 29 de julho de 2026:** Fases 0 a 5, incluindo MEN-BE-018 a
+MEN-BE-022, estão integradas na `main`. Os PRs `#42`, `#44`, `#46`, `#48` e
+`#50` passaram pelo CI e foram mesclados por squash.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
@@ -27,6 +27,7 @@ As entregas abaixo foram concluídas na ordem backend-first:
 | F5.2 | Templates internos, agendamentos persistidos, histórico, idempotência e cancelamento após pagamento integrados na `main`. |
 | F5.3 | BullMQ com filas nomeadas, jobs idempotentes, retry, DLQ, métricas e shutdown seguro integrado na `main`. |
 | F5.4 | Worker com adaptador falso, revalidação antes do envio, tentativas persistidas e estados `SENT`, `DELIVERED` e `READ` integrado na `main`. |
+| F5.5 | Scheduler recorrente de mensalidades e lembretes, jobs atrasados, recuperação após reinício, concorrência e relógio controlado integrados na `main`. |
 
 O Gate F4 foi integrado pelo PR `#41`. MEN-BE-018 foi integrado pelo PR `#42`
 com migration aplicada do zero em PostgreSQL isolado, rotas autenticadas,
@@ -47,7 +48,14 @@ histórico persistidos, limite diário concorrente e consulta de tentativas pela
 API. O CI validou migration limpa, PostgreSQL, Redis, BullMQ, build, testes e
 runtimes compilados, sem token ou chamada Meta.
 
-O próximo trabalho funcional é MEN-BE-022: geração e tarefas agendadas. Nenhuma
+MEN-BE-022 foi integrado pelo PR `#50`, com geração mensal idempotente,
+scheduler recorrente, jobs atrasados, recuperação após reinício, proteção
+contra concorrência e revalidação de pagamento e regras. O CI validou migration
+limpa, PostgreSQL, Redis, BullMQ, build, testes com relógio controlado e
+runtimes compilados, sem token ou chamada Meta. Com isso, o Gate F5 foi
+concluído.
+
+O próximo trabalho funcional é MEN-BE-023: webhook inbox genérico. Nenhuma
 tela funcional nem integração externa deve iniciar antes do gate de conclusão
 do back-end.
 
@@ -764,6 +772,8 @@ integração Meta Cloud será adicionada somente na fase final.
 
 ### MEN-BE-022 — Geração e tarefas agendadas
 
+**Estado:** integrado na `main` pelo PR `#50`.
+
 - scheduler de mensalidades;
 - jobs recorrentes;
 - recuperação após reinício;
@@ -772,6 +782,8 @@ integração Meta Cloud será adicionada somente na fase final.
 - testes com relógio controlado.
 
 ### Gate F5
+
+**Estado:** concluído após a integração de MEN-BE-022 pelo PR `#50`.
 
 - filas e workers funcionam localmente;
 - jobs são idempotentes;
@@ -1033,14 +1045,14 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. iniciar MEN-BE-022 em uma nova branch;
+1. iniciar MEN-BE-023 em uma nova branch;
 2. implementar, revisar, validar, publicar e integrar uma tarefa por vez;
 3. seguir o fluxo até MEN-BE-028;
 4. congelar e aprovar a API;
 5. iniciar e concluir o front-end;
 6. conectar as integrações externas na ordem definida.
 
-MEN-BE-022 está desbloqueado após a integração de MEN-BE-021.
+MEN-BE-023 está desbloqueado após a conclusão do Gate F5.
 Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
 back-end. Nenhum provedor externo deverá ser conectado antes do gate de
 conclusão do front-end.
