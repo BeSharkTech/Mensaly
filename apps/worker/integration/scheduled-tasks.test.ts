@@ -238,6 +238,48 @@ describe("scheduled tasks integration", () => {
     );
   });
 
+  it("reschedules an automated reminder after its payment is reversed", async () => {
+    const fixture = await createFixture();
+    const recorder = queueRecorder();
+    const now = new Date("2026-07-01T12:00:00.000Z");
+    const service = new ScheduledTasksService(prisma, recorder.queue, {
+      now: () => now,
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+    await service.reconcile();
+    const schedule = await prisma.messageSchedule.findFirstOrThrow({
+      where: { organizationId: fixture.organization.id },
+    });
+    await prisma.messageSchedule.update({
+      where: { id: schedule.id },
+      data: {
+        status: MessageScheduleStatus.CANCELLED,
+        cancelledAt: now,
+        cancellationReason: "CHARGE_PAID",
+        queuedAt: null,
+        enqueuedFor: null,
+      },
+    });
+
+    const result = await service.reconcile();
+    const recovered = await prisma.messageSchedule.findUniqueOrThrow({
+      where: { id: schedule.id },
+      include: { history: { orderBy: { createdAt: "asc" } } },
+    });
+
+    assert.equal(result.schedulesCreated, 1);
+    assert.equal(recovered.status, MessageScheduleStatus.QUEUED);
+    assert.equal(recovered.cancelledAt, null);
+    assert.equal(recovered.cancellationReason, null);
+    assert.equal(
+      recovered.history.some(
+        (entry) => entry.reason === "PAYMENT_REVERSED_RESCHEDULED",
+      ),
+      true,
+    );
+    assert.equal(recorder.enqueued.length, 2);
+  });
+
   it("recovers queued work after restart and executes overdue work immediately", async () => {
     const fixture = await createFixture();
     const firstQueue = queueRecorder();

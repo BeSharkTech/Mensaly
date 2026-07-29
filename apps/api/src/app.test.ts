@@ -761,6 +761,9 @@ describe("HTTP API foundation", () => {
 
       const invalidMonth = await fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-13"} });
       assert.equal(invalidMonth.statusCode,400);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/charges/generate",payload:{referenceMonth:"0001-01"}})).statusCode,400);
+      assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/charges/not-a-uuid"})).statusCode,400);
+      assert.equal((await fastify.inject({headers:{cookie,"idempotency-key":"manual:overflow:test"},method:"POST",url:`/api/v1/charges/${aprilCharge.id}/payments`,payload:{amountCents:3000000000,method:"PIX",paidAt:"2026-04-10T12:00:00.000Z"}})).statusCode,400);
       const listed=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/students?search=Ana&page=1&pageSize=10"}); assert.equal(listed.statusCode,200); assert.equal(listed.json().total,1);
       assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/plans?search=Mensal"})).json().total,1);
       assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/guardians?search=Maria"})).json().total,1);

@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -186,7 +187,7 @@ export class FinancialController {
   @ApiNotFoundResponse({ description: "Charge not found in this organization" })
   async charge(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ): Promise<{ data: unknown }> {
     return { data: await this.financial.charge(auth, id) };
   }
@@ -198,7 +199,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Charge state or payment conflict" })
   async cancel(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -218,7 +219,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Charge state or payment conflict" })
   async waive(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -238,7 +239,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Charge state conflict" })
   async reopen(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -272,7 +273,7 @@ export class FinancialController {
   @ApiNotFoundResponse({ description: "Charge not found in this organization" })
   async createPayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Headers("idempotency-key") header: string | undefined,
     @Body(new ZodValidationPipe(createManualPaymentSchema))
     input: CreateManualPaymentDto,
@@ -298,7 +299,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Payment state conflict" })
   async confirmPayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -318,7 +319,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Payment state conflict" })
   async cancelPayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -338,7 +339,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Payment state conflict" })
   async reversePayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {

@@ -371,6 +371,36 @@ export class ScheduledTasksService {
                 continue;
               }
               if (
+                existing.status === MessageScheduleStatus.CANCELLED &&
+                existing.cancellationReason === "CHARGE_PAID"
+              ) {
+                await tx.messageSchedule.update({
+                  where: { id: existing.id },
+                  data: {
+                    status: MessageScheduleStatus.SCHEDULED,
+                    scheduledFor,
+                    templateId: rule.templateId,
+                    templateBodySnapshot: rule.template.body,
+                    recipientNameSnapshot: charge.enrollment.guardian.name,
+                    recipientPhoneSnapshot: charge.enrollment.guardian.phone,
+                    cancelledAt: null,
+                    cancellationReason: null,
+                    queuedAt: null,
+                    enqueuedFor: null,
+                    history: {
+                      create: {
+                        fromStatus: MessageScheduleStatus.CANCELLED,
+                        toStatus: MessageScheduleStatus.SCHEDULED,
+                        reason: "PAYMENT_REVERSED_RESCHEDULED",
+                        metadata: { automationKey },
+                      },
+                    },
+                  },
+                });
+                result.schedulesCreated += 1;
+                continue;
+              }
+              if (
                 existing.status !== MessageScheduleStatus.SCHEDULED &&
                 existing.status !== MessageScheduleStatus.QUEUED
               ) {
