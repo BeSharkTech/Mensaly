@@ -779,6 +779,22 @@ describe("HTTP API foundation", () => {
         "77777777777",
         "America/Sao_Paulo",
       );
+      const [reminderTemplateA, reminderTemplateB] = await Promise.all([
+        getPrismaClient().messageTemplate.create({
+          data: {
+            organizationId: accountA.organizationId,
+            name: "Lembrete automático A",
+            body: "Sua mensalidade está próxima do vencimento.",
+          },
+        }),
+        getPrismaClient().messageTemplate.create({
+          data: {
+            organizationId: accountB.organizationId,
+            name: "Lembrete automático B",
+            body: "Sua mensalidade está próxima do vencimento.",
+          },
+        }),
+      ]);
 
       assert.equal(
         (
@@ -805,10 +821,27 @@ describe("HTTP API foundation", () => {
         allowedHours: { start: "08:30", end: "18:00" },
         dailyLimit: 50,
         rules: [
-          { timing: "BEFORE_DUE", dayOffset: 3, enabled: true },
-          { timing: "ON_DUE", dayOffset: 0, enabled: true },
+          {
+            timing: "BEFORE_DUE",
+            dayOffset: 3,
+            templateId: reminderTemplateA.id,
+            enabled: true,
+          },
+          {
+            timing: "ON_DUE",
+            dayOffset: 0,
+            templateId: reminderTemplateA.id,
+            enabled: true,
+          },
           { timing: "AFTER_DUE", dayOffset: 2, enabled: false },
         ],
+      };
+      const validPayloadB = {
+        ...validPayload,
+        rules: validPayload.rules.map((rule) => ({
+          ...rule,
+          ...(rule.enabled ? { templateId: reminderTemplateB.id } : {}),
+        })),
       };
       const invalidPayloads = [
         {
@@ -857,6 +890,10 @@ describe("HTTP API foundation", () => {
       });
       assert.equal(created.json().data.dailyLimit, 50);
       assert.equal(created.json().data.rules.length, 3);
+      assert.equal(
+        created.json().data.rules[0]?.templateId,
+        reminderTemplateA.id,
+      );
       assert.equal("organizationId" in created.json().data, false);
 
       const injectedOrganization = await fastify.inject({
@@ -866,6 +903,23 @@ describe("HTTP API foundation", () => {
         payload: { ...validPayload, organizationId: accountB.organizationId },
       });
       assert.equal(injectedOrganization.statusCode, 400);
+      const crossTenantTemplate = await fastify.inject({
+        headers: { cookie: accountA.cookie },
+        method: "PUT",
+        url: "/api/v1/reminder-configuration",
+        payload: {
+          ...validPayload,
+          rules: validPayload.rules.map((rule) => ({
+            ...rule,
+            ...(rule.enabled ? { templateId: reminderTemplateB.id } : {}),
+          })),
+        },
+      });
+      assert.equal(crossTenantTemplate.statusCode, 404);
+      assert.equal(
+        crossTenantTemplate.json().error.code,
+        "MESSAGE_TEMPLATE_NOT_FOUND",
+      );
 
       const disabled = await fastify.inject({
         headers: { cookie: accountA.cookie },
@@ -894,7 +948,7 @@ describe("HTTP API foundation", () => {
         headers: { cookie: accountB.cookie },
         method: "PUT",
         url: "/api/v1/reminder-configuration",
-        payload: validPayload,
+        payload: validPayloadB,
       });
       assert.equal(accountBConfiguration.statusCode, 200);
       assert.equal(
@@ -1539,10 +1593,10 @@ after(async () => {
   });
   await prisma.messageScheduleHistory.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.messageSchedule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.reminderRule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.messageTemplate.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.payment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.charge.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
-  await prisma.reminderRule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.reminderConfiguration.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.enrollment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.studentGuardian.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });

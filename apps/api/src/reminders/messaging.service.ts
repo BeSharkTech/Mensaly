@@ -71,6 +71,14 @@ function scheduleView(schedule: ScheduleWithTemplate) {
     template: schedule.template,
     status: schedule.status,
     scheduledFor: schedule.scheduledFor.toISOString(),
+    automation:
+      schedule.automationKey
+        ? {
+            ruleKey: schedule.automationKey,
+            queuedAt: schedule.queuedAt?.toISOString() ?? null,
+            enqueuedFor: schedule.enqueuedFor?.toISOString() ?? null,
+          }
+        : null,
     bodySnapshot: schedule.templateBodySnapshot,
     recipient: {
       name: schedule.recipientNameSnapshot,

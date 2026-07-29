@@ -9,6 +9,7 @@ falso, ainda sem integrar provedores externos.
 | Fila | Job | Finalidade |
 | --- | --- | --- |
 | `message-dispatch` | `dispatch-message` | Receber um agendamento persistido para processamento posterior. |
+| `scheduled-tasks` | `scheduler-tick` | Reconciliar mensalidades, agendamentos e jobs atrasados. |
 | `dead-letter` | `dead-letter` | Preservar falhas terminais para inspeção e recuperação manual. |
 
 As chaves no Redis recebem o prefixo configurável `mensaly` por padrão. O
@@ -75,6 +76,7 @@ O resultado local do adaptador é configurado por
 ## Limite desta etapa
 
 Não há token nem chamada à Meta. Scheduler recorrente, recuperação temporal e
-execuções atrasadas pertencem ao MEN-BE-022. A troca do adaptador falso por um
+execuções atrasadas estão documentados em
+[`scheduled-tasks.md`](./scheduled-tasks.md). A troca do adaptador falso por um
 provedor externo também exigirá retirar a chamada de rede de dentro da transação
 e adotar lease/outbox, sem enfraquecer a idempotência já persistida.

@@ -11,17 +11,23 @@ import {
 
 export const QUEUE_NAMES = {
   MESSAGE_DISPATCH: "message-dispatch",
+  SCHEDULED_TASKS: "scheduled-tasks",
   DEAD_LETTER: "dead-letter",
 } as const;
 
 export const JOB_NAMES = {
   MESSAGE_DISPATCH: "dispatch-message",
+  SCHEDULER_TICK: "scheduler-tick",
   DEAD_LETTER: "dead-letter",
 } as const;
 
 export type MessageDispatchJob = {
   organizationId: string;
   scheduleId: string;
+};
+
+export type SchedulerTickJob = {
+  source: "recurring";
 };
 
 export type JobFailureClassification = "transient" | "permanent";
@@ -47,6 +53,10 @@ export type MessageDispatchHandler = (
   job: Job<MessageDispatchJob>,
 ) => Promise<void>;
 
+export type SchedulerTickHandler = (
+  job: Job<SchedulerTickJob>,
+) => Promise<void>;
+
 export type MessageQueueRuntimeOptions = {
   redisUrl: string;
   prefix: string;
@@ -55,18 +65,26 @@ export type MessageQueueRuntimeOptions = {
   backoffMs: number;
   metricsIntervalMs: number;
   handler: MessageDispatchHandler;
+  schedulerIntervalMs: number;
+  schedulerHandler: SchedulerTickHandler;
   logger?: QueueLogger;
 };
 
 export type QueueMetrics = {
   messages: Record<string, number>;
+  scheduler: Record<string, number>;
   deadLetters: Record<string, number>;
 };
 
 export type MessageQueueRuntime = {
   messageQueue: Queue<MessageDispatchJob>;
+  schedulerQueue: Queue<SchedulerTickJob>;
   deadLetterQueue: Queue<DeadLetterJob>;
-  enqueue: (payload: MessageDispatchJob) => Promise<Job<MessageDispatchJob>>;
+  enqueue: (
+    payload: MessageDispatchJob,
+    options?: { delayMs?: number },
+  ) => Promise<Job<MessageDispatchJob>>;
+  remove: (scheduleId: string) => Promise<boolean>;
   waitForJob: (
     job: Job<MessageDispatchJob>,
     timeoutMs?: number,
@@ -199,6 +217,10 @@ export async function createMessageQueueRuntime(
     options.metricsIntervalMs,
     "metricsIntervalMs",
   );
+  const schedulerIntervalMs = positiveInteger(
+    options.schedulerIntervalMs,
+    "schedulerIntervalMs",
+  );
   const logger = options.logger ?? silentLogger;
   const producerConnection = redisConnectionOptions(options.redisUrl, false);
   const blockingConnection = redisConnectionOptions(options.redisUrl, true);
@@ -226,6 +248,13 @@ export async function createMessageQueueRuntime(
     connection: producerConnection,
     prefix: options.prefix,
   });
+  const schedulerQueue = new Queue<SchedulerTickJob>(
+    QUEUE_NAMES.SCHEDULED_TASKS,
+    {
+      connection: producerConnection,
+      prefix: options.prefix,
+    },
+  );
   const queueEvents = new QueueEvents(QUEUE_NAMES.MESSAGE_DISPATCH, {
     connection: blockingConnection,
     prefix: options.prefix,
@@ -247,6 +276,15 @@ export async function createMessageQueueRuntime(
       connection: blockingConnection,
       prefix: options.prefix,
       concurrency,
+    },
+  );
+  const schedulerWorker = new Worker<SchedulerTickJob>(
+    QUEUE_NAMES.SCHEDULED_TASKS,
+    options.schedulerHandler,
+    {
+      connection: blockingConnection,
+      prefix: options.prefix,
+      concurrency: 1,
     },
   );
 
@@ -359,31 +397,68 @@ export async function createMessageQueueRuntime(
       "BullMQ worker error",
     );
   });
+  schedulerWorker.on("failed", (job, error) => {
+    logger.error(
+      {
+        queue: QUEUE_NAMES.SCHEDULED_TASKS,
+        jobId: job?.id,
+        attemptsMade: job?.attemptsMade,
+        error,
+      },
+      "BullMQ scheduler tick failed",
+    );
+  });
+  schedulerWorker.on("error", (error) => {
+    logger.error(
+      { queue: QUEUE_NAMES.SCHEDULED_TASKS, error },
+      "BullMQ scheduler worker error",
+    );
+  });
 
   try {
     await Promise.all([
       messageQueue.waitUntilReady(),
+      schedulerQueue.waitUntilReady(),
       deadLetterQueue.waitUntilReady(),
       queueEvents.waitUntilReady(),
       worker.waitUntilReady(),
+      schedulerWorker.waitUntilReady(),
     ]);
+    await schedulerQueue.upsertJobScheduler(
+      "mensaly-scheduler",
+      { every: schedulerIntervalMs },
+      {
+        name: JOB_NAMES.SCHEDULER_TICK,
+        data: { source: "recurring" },
+        opts: {
+          attempts,
+          backoff: { type: "exponential", delay: backoffMs },
+          removeOnComplete: true,
+          removeOnFail: 100,
+        },
+      },
+    );
   } catch (error) {
     await Promise.allSettled([
       worker.close(true),
+      schedulerWorker.close(true),
       queueEvents.close(),
       messageQueue.close(),
+      schedulerQueue.close(),
       deadLetterQueue.close(),
     ]);
     throw error;
   }
 
   const metrics = async (): Promise<QueueMetrics> => {
-    const [messages, deadLetters] = await Promise.all([
+    const [messages, scheduler, deadLetters] = await Promise.all([
       messageQueue.getJobCounts(),
+      schedulerQueue.getJobCounts(),
       deadLetterQueue.getJobCounts(),
     ]);
     return {
       messages: { ...messages },
+      scheduler: { ...scheduler },
       deadLetters: { ...deadLetters },
     };
   };
@@ -419,6 +494,7 @@ export async function createMessageQueueRuntime(
       concurrency,
       attempts,
       backoffMs,
+      schedulerIntervalMs,
     },
     "BullMQ runtime ready",
   );
@@ -427,11 +503,24 @@ export async function createMessageQueueRuntime(
 
   return {
     messageQueue,
+    schedulerQueue,
     deadLetterQueue,
-    enqueue(payload) {
+    enqueue(payload, enqueueOptions) {
       return messageQueue.add(JOB_NAMES.MESSAGE_DISPATCH, payload, {
         jobId: messageDispatchJobId(payload.scheduleId),
+        delay: nonNegativeInteger(
+          enqueueOptions?.delayMs ?? 0,
+          "delayMs",
+        ),
       });
+    },
+    async remove(scheduleId) {
+      const job = await messageQueue.getJob(messageDispatchJobId(scheduleId));
+      if (!job) {
+        return false;
+      }
+      await job.remove();
+      return true;
     },
     waitForJob(job, timeoutMs = 10_000) {
       return job.waitUntilFinished(queueEvents, timeoutMs);
@@ -447,11 +536,15 @@ export async function createMessageQueueRuntime(
           clearInterval(metricsTimer);
         }
 
-        const workerResult = await Promise.allSettled([worker.close()]);
+        const workerResult = await Promise.allSettled([
+          schedulerWorker.close(),
+          worker.close(),
+        ]);
         await Promise.allSettled([...pendingDeadLetters]);
         const connectionResults = await Promise.allSettled([
           queueEvents.close(),
           messageQueue.close(),
+          schedulerQueue.close(),
           deadLetterQueue.close(),
         ]);
         const failure = [...workerResult, ...connectionResults].find(

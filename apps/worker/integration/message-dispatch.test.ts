@@ -268,6 +268,47 @@ describe("message dispatch processor integration", () => {
     assert.equal(adapter.calls, 0);
   });
 
+  it("cancels an automated reminder when its rule was disabled before delivery", async () => {
+    const fixture = await createFixture(prisma);
+    const configuration =
+      await prisma.reminderConfiguration.findUniqueOrThrow({
+        where: { organizationId: fixture.organization.id },
+      });
+    await prisma.reminderRule.create({
+      data: {
+        organizationId: fixture.organization.id,
+        configurationId: configuration.id,
+        templateId: fixture.template.id,
+        timing: "ON_DUE",
+        dayOffset: 0,
+        enabled: true,
+      },
+    });
+    await prisma.messageSchedule.update({
+      where: { id: fixture.schedule.id },
+      data: { automationKey: "ON_DUE:0" },
+    });
+    await prisma.reminderConfiguration.update({
+      where: { id: configuration.id },
+      data: { enabled: false },
+    });
+    const adapter = new FakeMessageAdapter("READ");
+    const processor = new MessageDispatchProcessor(prisma, adapter, () => now);
+
+    await processor.process({
+      organizationId: fixture.organization.id,
+      scheduleId: fixture.schedule.id,
+    });
+
+    const schedule = await prisma.messageSchedule.findUniqueOrThrow({
+      where: { id: fixture.schedule.id },
+    });
+    assert.equal(schedule.status, MessageScheduleStatus.CANCELLED);
+    assert.equal(schedule.cancellationReason, "REMINDER_RULE_DISABLED");
+    assert.equal(schedule.attemptCount, 0);
+    assert.equal(adapter.calls, 0);
+  });
+
   it("revalidates active links, blocks and the daily limit", async () => {
     const unlinked = await createFixture(prisma);
     await prisma.studentGuardian.update({
@@ -438,7 +479,9 @@ describe("message dispatch processor integration", () => {
       attempts: 2,
       backoffMs: 10,
       metricsIntervalMs: 0,
+      schedulerIntervalMs: 60_000,
       handler: (job) => processor.process(job.data),
+      async schedulerHandler() {},
     });
     try {
       const job = await runtime.enqueue({
@@ -469,6 +512,9 @@ after(async () => {
     where: { organizationId: organizations },
   });
   await prisma.messageSchedule.deleteMany({
+    where: { organizationId: organizations },
+  });
+  await prisma.reminderRule.deleteMany({
     where: { organizationId: organizations },
   });
   await prisma.messageTemplate.deleteMany({
