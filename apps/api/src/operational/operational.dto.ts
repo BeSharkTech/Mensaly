@@ -1,8 +1,15 @@
 import { z } from "zod";
 
 const id = z.string().uuid();
-const amount = z.number().int().positive();
+export const MAX_MONEY_CENTS = 2_000_000_000;
+const amount = z.number().int().positive().max(MAX_MONEY_CENTS);
 const dueDay = z.number().int().min(1).max(31);
+const date = z
+  .string()
+  .date()
+  .refine((value) => Number(value.slice(0, 4)) >= 2000, {
+    message: "Date must use a year from 2000 onwards",
+  });
 
 const operationalListBaseSchema = z
   .object({
@@ -29,8 +36,41 @@ export const createStudentSchema = z.object({ name: z.string().trim().min(2).max
 export const updateStudentSchema = createStudentSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() }).refine((value) => Object.keys(value).length > 0);
 export const createGuardianSchema = z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(8).max(32), email: z.string().trim().email().max(255).optional(), taxId: z.string().trim().min(11).max(18).optional() }).strict();
 export const updateGuardianSchema = createGuardianSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() }).refine((value) => Object.keys(value).length > 0);
-export const createEnrollmentSchema = z.object({ studentId: id, guardianId: id, planId: id, amountCents: amount.optional(), dueDay: dueDay.optional(), discountCents: z.number().int().nonnegative().default(0), startDate: z.string().date(), endDate: z.string().date().optional() }).strict();
-export const updateEnrollmentSchema = z.object({ amountCents: amount.optional(), dueDay: dueDay.optional(), discountCents: z.number().int().nonnegative().optional(), endDate: z.string().date().optional(), status: z.enum(["ACTIVE", "ENDED", "CANCELLED"]).optional() }).strict().refine((value) => Object.keys(value).length > 0);
+export const createEnrollmentSchema = z
+  .object({
+    studentId: id,
+    guardianId: id,
+    planId: id,
+    amountCents: amount.optional(),
+    dueDay: dueDay.optional(),
+    discountCents: z.number().int().nonnegative().max(MAX_MONEY_CENTS).default(0),
+    startDate: date,
+    endDate: date.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      !value.endDate ||
+      new Date(`${value.endDate}T00:00:00.000Z`) >=
+        new Date(`${value.startDate}T00:00:00.000Z`),
+    { path: ["endDate"], message: "End date cannot precede start date" },
+  )
+  .refine(
+    (value) =>
+      value.amountCents === undefined ||
+      value.discountCents < value.amountCents,
+    { path: ["discountCents"], message: "Discount must be lower than amount" },
+  );
+export const updateEnrollmentSchema = z
+  .object({
+    amountCents: amount.optional(),
+    dueDay: dueDay.optional(),
+    discountCents: z.number().int().nonnegative().max(MAX_MONEY_CENTS).optional(),
+    endDate: date.optional(),
+    status: z.enum(["ACTIVE", "ENDED", "CANCELLED"]).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0);
 
 export class CreatePlanDto { static readonly schema = createPlanSchema; }
 export class UpdatePlanDto { static readonly schema = updatePlanSchema; }
