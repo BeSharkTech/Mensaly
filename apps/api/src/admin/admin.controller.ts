@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, NotFoundException, Param, Patch, UseGuards } from "@nestjs/common";
 import { AuditActorType, OrganizationStatus } from "@mensaly/database";
-import { ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
+import { ApiBody, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
 
 import { CurrentAuth, type AuthenticatedContext } from "../authorization/authorization-context";
 import { PlatformAdminGuard, SessionAuthGuard } from "../authorization/authorization.guards";
@@ -17,6 +17,7 @@ import {
 export class AdminController {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
   @Get("session")
+  @ApiOperation({ summary: "Gets the platform administrator session" })
   @ApiOkResponse({ description: "Authenticated platform administrator session without organization context" })
   @ApiUnauthorizedResponse({ description: "A valid platform administrator session is required" })
   session(@CurrentAuth() auth: AuthenticatedContext): { data: unknown } {
@@ -24,6 +25,16 @@ export class AdminController {
   }
 
   @Patch("organizations/:id/status")
+  @ApiOperation({ summary: "Updates an organization status" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["status"],
+      properties: {
+        status: { type: "string", enum: ["ACTIVE", "INACTIVE", "BLOCKED"] },
+      },
+    },
+  })
   async updateOrganizationStatus(@CurrentAuth() auth: AuthenticatedContext, @Param("id") id: string, @Body(new ZodValidationPipe(organizationStatusSchema)) input: OrganizationStatusDto): Promise<{ data: unknown }> {
     const value = input as unknown as { status: OrganizationStatus };
     const current = await this.prisma.client.organization.findUnique({ where: { id } });

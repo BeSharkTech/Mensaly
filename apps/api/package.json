@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "tsx --test src/**/*.test.ts",
+    "test:coverage": "tsx --test --experimental-test-coverage src/**/*.test.ts",
+    "openapi:export": "tsx scripts/export-openapi.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "test:runtime": "node --test integration/runtime.test.cjs"
   },
   "dependencies": {

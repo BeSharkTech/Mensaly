@@ -4,6 +4,25 @@ import { describe, it } from "node:test";
 import * as contracts from "./index";
 
 describe("HTTP contracts", () => {
+  it("exports stable v1 data and pagination envelopes", () => {
+    assert.equal(contracts.API_VERSION, "v1");
+    assert.deepEqual(
+      contracts.dataEnvelopeSchema(contracts.errorDetailSchema).parse({
+        data: { message: "ok" },
+      }),
+      { data: { message: "ok" } },
+    );
+    assert.equal(
+      contracts
+        .paginatedEnvelopeSchema(contracts.errorDetailSchema)
+        .parse({
+          data: [{ message: "one" }],
+          meta: { page: 1, limit: 20, total: 1, pages: 1 },
+        }).meta.limit,
+      20,
+    );
+  });
+
   it("validates the global error envelope", () => {
     const result = contracts.errorEnvelopeSchema.safeParse({
       error: { code: "NOT_FOUND", message: "Resource not found" },

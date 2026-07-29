@@ -1,0 +1,21 @@
+# F6 security checklist
+
+- [x] Organization scope derives from the authenticated owner session.
+- [x] Company and platform-admin routes have mutually exclusive guards.
+- [x] Cross-tenant reads and writes have regression coverage.
+- [x] Mutable operational payloads use strict explicit validation.
+- [x] Pagination is positive and capped at 100.
+- [x] Mass-assignment attempts are rejected and tenant IDs are assigned last.
+- [x] Request body and multipart limits are configured.
+- [x] Local mutation and sensitive-auth rate limits are active.
+- [x] Session cookies are HTTP-only, same-site and secure in production.
+- [x] Passwords use salted scrypt and session tokens are stored as hashes.
+- [x] Credentials, bodies, webhook payloads and common PII are redacted in logs.
+- [x] Audit history is immutable through the API and tenant-scoped.
+- [x] Payment and webhook idempotency are covered by concurrency tests.
+- [x] File type, magic bytes, size, path and integrity are verified.
+- [x] Dashboard, payment, message, webhook, file and audit indexes were reviewed.
+- [x] No external provider is required to run the test suite.
+- [ ] Production edge rate limiting and TLS termination must be configured at deployment.
+- [ ] Production backup encryption, retention and restore drills require the selected host.
+- [ ] Central dependency and secret scanning must remain enabled in the deployment repository.
