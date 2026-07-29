@@ -4,6 +4,7 @@ import { after, before, describe, it } from "node:test";
 
 import {
   createPrismaClient,
+  EnrollmentStatus,
   MessageScheduleStatus,
   OrganizationStatus,
   Prisma,
@@ -364,6 +365,50 @@ describe("scheduled tasks integration", () => {
 
     assert.equal(
       await prisma.messageSchedule.count({
+        where: { organizationId: fixture.organization.id },
+      }),
+      0,
+    );
+    assert.equal(recorder.enqueued.length, 0);
+  });
+
+  it("waits for a concurrent enrollment cancellation and skips its charge", async () => {
+    const fixture = await createFixture();
+    let signalLocked: (() => void) | undefined;
+    let releaseCancellation: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => {
+      signalLocked = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      releaseCancellation = resolve;
+    });
+    const cancellation = prisma.$transaction(
+      async (tx) => {
+        await tx.enrollment.update({
+          where: { id: fixture.enrollment.id },
+          data: { status: EnrollmentStatus.CANCELLED },
+        });
+        signalLocked?.();
+        await released;
+      },
+      { timeout: 10_000 },
+    );
+    await locked;
+    const recorder = queueRecorder();
+    const reconciliation = new ScheduledTasksService(
+      prisma,
+      recorder.queue,
+      {
+        now: () => new Date("2026-07-01T12:00:00.000Z"),
+        lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+      },
+    ).reconcile();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    releaseCancellation?.();
+    await Promise.all([cancellation, reconciliation]);
+
+    assert.equal(
+      await prisma.charge.count({
         where: { organizationId: fixture.organization.id },
       }),
       0,
