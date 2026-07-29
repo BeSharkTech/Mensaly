@@ -121,6 +121,14 @@ enum WebhookAttemptStatus {
   FAILED_PERMANENT
 }
 
+enum StoredFileStatus {
+  UPLOADING
+  ACTIVE
+  DELETING
+  DELETED
+  FAILED
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -136,6 +144,7 @@ model User {
   accounts     Account[]
   organization Organization?
   auditLogs    AuditLog[]    @relation("AuditActor")
+  uploadedFiles StoredFile[]
 
   @@index([role, status])
   @@map("user")
@@ -221,9 +230,32 @@ model Organization {
   messageSchedules MessageSchedule[]
   messageRecipientBlocks MessageRecipientBlock[]
   webhookEvents WebhookEvent[]
+  files StoredFile[]
 
   @@index([status])
   @@map("organization")
+}
+
+model StoredFile {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  uploadedByUserId String @db.Uuid
+  storageProvider String @default("LOCAL") @db.VarChar(40)
+  storageKey String @unique @db.VarChar(255)
+  originalName String @db.VarChar(255)
+  contentType String @db.VarChar(100)
+  sizeBytes Int
+  checksumSha256 String @db.VarChar(64)
+  status StoredFileStatus @default(UPLOADING)
+  deletedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  uploadedBy User @relation(fields:[uploadedByUserId],references:[id],onDelete:Restrict)
+  @@unique([organizationId,id])
+  @@index([organizationId,status,createdAt])
+  @@index([uploadedByUserId,createdAt])
+  @@map("stored_file")
 }
 
 model WebhookEvent {
