@@ -78,6 +78,11 @@ const configurationBodySchema = {
             enum: ["BEFORE_DUE", "ON_DUE", "AFTER_DUE"] as string[],
           },
           dayOffset: { type: "integer", minimum: 0, maximum: 60 },
+          templateId: {
+            type: "string",
+            format: "uuid",
+            nullable: true,
+          },
           enabled: { type: "boolean", default: true },
         },
       },

@@ -10,7 +10,10 @@ const validEnvironment = {
   REDIS_URL: "redis://localhost:6379",
 };
 
-function createDependencies(options?: { queueStartupError?: Error }) {
+function createDependencies(options?: {
+  queueStartupError?: Error;
+  recoveryError?: Error;
+}) {
   const events: string[] = [];
   let queueOptions: MessageQueueRuntimeOptions | undefined;
 
@@ -35,6 +38,12 @@ function createDependencies(options?: { queueStartupError?: Error }) {
           throw options.queueStartupError;
         }
         return {
+          async enqueue() {
+            throw new Error("not used");
+          },
+          async remove() {
+            return false;
+          },
           async stop() {
             events.push("queues-stop");
           },
@@ -42,6 +51,16 @@ function createDependencies(options?: { queueStartupError?: Error }) {
       },
       createMessageHandler() {
         return async () => {};
+      },
+      createScheduledTasks() {
+        return {
+          async reconcile() {
+            events.push("scheduled-tasks-reconcile");
+            if (options?.recoveryError) {
+              throw options.recoveryError;
+            }
+          },
+        };
       },
       logger: {
         info(_attributes: Record<string, unknown>, message: string) {
@@ -69,12 +88,14 @@ describe("worker lifecycle", () => {
     assert.deepEqual(context.events, [
       "database-connect",
       "queues-start",
+      "scheduled-tasks-reconcile",
       "info:Mensaly worker started",
     ]);
     assert.equal(context.queueOptions?.prefix, "mensaly");
     assert.equal(context.queueOptions?.concurrency, 5);
     assert.equal(context.queueOptions?.attempts, 4);
     assert.equal(context.queueOptions?.backoffMs, 1000);
+    assert.equal(context.queueOptions?.schedulerIntervalMs, 60_000);
 
     await runtime.stop();
     await runtime.stop();
@@ -82,6 +103,7 @@ describe("worker lifecycle", () => {
     assert.deepEqual(context.events, [
       "database-connect",
       "queues-start",
+      "scheduled-tasks-reconcile",
       "info:Mensaly worker started",
       "queues-stop",
       "database-disconnect",
@@ -108,6 +130,24 @@ describe("worker lifecycle", () => {
     assert.deepEqual(context.events, [
       "database-connect",
       "queues-start",
+      "database-disconnect",
+    ]);
+  });
+
+  it("stops queues and disconnects when startup recovery fails", async () => {
+    const context = createDependencies({
+      recoveryError: new Error("Recovery failed"),
+    });
+
+    await assert.rejects(
+      startWorker(validEnvironment, context.dependencies),
+      /Recovery failed/,
+    );
+    assert.deepEqual(context.events, [
+      "database-connect",
+      "queues-start",
+      "scheduled-tasks-reconcile",
+      "queues-stop",
       "database-disconnect",
     ]);
   });

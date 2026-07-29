@@ -27,6 +27,18 @@ const metricsIntervalMsSchema = z.coerce
   .min(1000)
   .max(60 * 60 * 1000)
   .default(30_000);
+const schedulerIntervalMsSchema = z.coerce
+  .number()
+  .int()
+  .min(1000)
+  .max(24 * 60 * 60 * 1000)
+  .default(60_000);
+const schedulerLookaheadMsSchema = z.coerce
+  .number()
+  .int()
+  .min(1000)
+  .max(90 * 24 * 60 * 60 * 1000)
+  .default(24 * 60 * 60 * 1000);
 const bullmqPrefixSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
@@ -135,6 +147,8 @@ export const workerEnvironmentSchema = baseEnvironmentSchema.extend({
   BULLMQ_JOB_ATTEMPTS: jobAttemptsSchema,
   BULLMQ_BACKOFF_MS: jobBackoffMsSchema,
   BULLMQ_METRICS_INTERVAL_MS: metricsIntervalMsSchema,
+  SCHEDULER_INTERVAL_MS: schedulerIntervalMsSchema,
+  SCHEDULER_LOOKAHEAD_MS: schedulerLookaheadMsSchema,
   FAKE_MESSAGE_ADAPTER_OUTCOME: fakeMessageAdapterOutcomeSchema,
 });
 

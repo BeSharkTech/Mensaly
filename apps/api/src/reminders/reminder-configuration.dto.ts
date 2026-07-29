@@ -8,6 +8,7 @@ const reminderRuleSchema = z
   .object({
     timing: z.enum(["BEFORE_DUE", "ON_DUE", "AFTER_DUE"]),
     dayOffset: z.number().int().min(0).max(60),
+    templateId: z.string().uuid().nullable().optional(),
     enabled: z.boolean().default(true),
   })
   .strict();
@@ -44,6 +45,14 @@ export const updateReminderConfigurationSchema = z
 
     const keys = new Set<string>();
     input.rules.forEach((rule, index) => {
+      if (rule.enabled && !rule.templateId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["rules", index, "templateId"],
+          message: "An enabled reminder rule requires a template",
+        });
+      }
+
       const validOffset =
         (rule.timing === "ON_DUE" && rule.dayOffset === 0) ||
         (rule.timing !== "ON_DUE" &&

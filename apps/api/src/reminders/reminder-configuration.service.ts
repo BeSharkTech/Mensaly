@@ -68,6 +68,7 @@ function present(configuration: ConfigurationWithRules, timezone: string) {
       timing: rule.timing,
       dayOffset: rule.dayOffset,
       enabled: rule.enabled,
+      templateId: rule.templateId,
     })),
     createdAt: configuration.createdAt.toISOString(),
     updatedAt: configuration.updatedAt.toISOString(),
@@ -81,9 +82,10 @@ function snapshot(configuration: ConfigurationWithRules, timezone: string) {
     timezone: value.timezone,
     allowedHours: value.allowedHours,
     dailyLimit: value.dailyLimit,
-    rules: value.rules.map(({ timing, dayOffset, enabled }) => ({
+    rules: value.rules.map(({ timing, dayOffset, templateId, enabled }) => ({
       timing,
       dayOffset,
+      templateId,
       enabled,
     })),
   };
@@ -144,6 +146,45 @@ export class ReminderConfigurationService {
         });
       }
 
+      const requestedTemplateIds = [
+        ...new Set(
+          input.rules
+            .filter((rule) => rule.templateId)
+            .map((rule) => rule.templateId as string),
+        ),
+      ];
+      const enabledTemplateIds = [
+        ...new Set(
+          input.rules
+            .filter((rule) => rule.enabled && rule.templateId)
+            .map((rule) => rule.templateId as string),
+        ),
+      ];
+      const [ownedTemplates, activeTemplates] = await Promise.all([
+        tx.messageTemplate.count({
+          where: {
+            organizationId: orgId,
+            id: { in: requestedTemplateIds },
+          },
+        }),
+        tx.messageTemplate.count({
+          where: {
+            organizationId: orgId,
+            id: { in: enabledTemplateIds },
+            active: true,
+          },
+        }),
+      ]);
+      if (
+        ownedTemplates !== requestedTemplateIds.length ||
+        activeTemplates !== enabledTemplateIds.length
+      ) {
+        throw new NotFoundException({
+          code: "MESSAGE_TEMPLATE_NOT_FOUND",
+          message: "Reminder rules require templates from this organization",
+        });
+      }
+
       const current = await tx.reminderConfiguration.findUnique({
         where: { organizationId: orgId },
         include: {
@@ -177,6 +218,7 @@ export class ReminderConfigurationService {
             configurationId: configuration.id,
             timing: rule.timing,
             dayOffset: rule.dayOffset,
+            templateId: rule.templateId ?? null,
             enabled: rule.enabled,
           })),
         });

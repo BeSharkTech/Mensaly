@@ -161,6 +161,42 @@ export class MessageDispatchProcessor {
     }
 
     const configuration = schedule.organization.reminderConfiguration;
+    if (schedule.automationKey) {
+      const [timing, offsetText] = schedule.automationKey.split(":");
+      const activeRule =
+        configuration?.enabled &&
+        ["BEFORE_DUE", "ON_DUE", "AFTER_DUE"].includes(timing ?? "")
+          ? await tx.reminderRule.findFirst({
+              where: {
+                organizationId: schedule.organizationId,
+                timing: timing as "BEFORE_DUE" | "ON_DUE" | "AFTER_DUE",
+                dayOffset: Number(offsetText),
+                templateId: schedule.templateId,
+                enabled: true,
+                template: { active: true },
+              },
+              select: { id: true },
+            })
+          : null;
+      if (!activeRule) {
+        await tx.messageSchedule.update({
+          where: { id: schedule.id },
+          data: {
+            status: MessageScheduleStatus.CANCELLED,
+            cancelledAt: instant,
+            cancellationReason: "REMINDER_RULE_DISABLED",
+            history: {
+              create: {
+                fromStatus: schedule.status,
+                toStatus: MessageScheduleStatus.CANCELLED,
+                reason: "REMINDER_RULE_DISABLED",
+              },
+            },
+          },
+        });
+        return { kind: "completed" };
+      }
+    }
     let failure: ValidationFailure | undefined;
     if (schedule.organization.status !== OrganizationStatus.ACTIVE) {
       failure = {

@@ -295,12 +295,15 @@ model ReminderRule {
   configurationId String @db.Uuid
   timing ReminderTiming
   dayOffset Int
+  templateId String? @db.Uuid
   enabled Boolean @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   configuration ReminderConfiguration @relation(fields:[organizationId,configurationId],references:[organizationId,id],onDelete:Restrict)
+  template MessageTemplate? @relation(fields:[organizationId,templateId],references:[organizationId,id],onDelete:Restrict)
   @@unique([organizationId,timing,dayOffset])
   @@index([configurationId,enabled])
+  @@index([organizationId,templateId])
   @@map("reminder_rule")
 }
 
@@ -314,6 +317,7 @@ model MessageTemplate {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
   schedules MessageSchedule[]
+  reminderRules ReminderRule[]
   @@unique([organizationId,name])
   @@unique([organizationId,id])
   @@index([organizationId,active,name])
@@ -328,6 +332,7 @@ model MessageSchedule {
   status MessageScheduleStatus @default(SCHEDULED)
   scheduledFor DateTime @db.Timestamptz(3)
   deduplicationKey String @db.VarChar(64)
+  automationKey String? @db.VarChar(80)
   templateBodySnapshot String @db.VarChar(4000)
   recipientNameSnapshot String @db.VarChar(120)
   recipientPhoneSnapshot String @db.VarChar(20)
@@ -342,6 +347,8 @@ model MessageSchedule {
   providerMessageId String? @db.VarChar(255)
   lastErrorCode String? @db.VarChar(120)
   lastErrorMessage String? @db.VarChar(1000)
+  queuedAt DateTime? @db.Timestamptz(3)
+  enqueuedFor DateTime? @db.Timestamptz(3)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Restrict)
@@ -350,6 +357,7 @@ model MessageSchedule {
   history MessageScheduleHistory[]
   deliveryAttempts MessageDeliveryAttempt[]
   @@unique([organizationId,deduplicationKey])
+  @@unique([organizationId,chargeId,automationKey])
   @@unique([organizationId,id])
   @@index([organizationId,status,scheduledFor])
   @@index([chargeId,status])

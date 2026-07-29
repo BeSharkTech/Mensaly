@@ -74,13 +74,22 @@ async function cleanupQueues(prefix: string): Promise<void> {
     connection,
     prefix,
   });
+  const schedulerQueue = new Queue(QUEUE_NAMES.SCHEDULED_TASKS, {
+    connection,
+    prefix,
+  });
   try {
     await Promise.all([
       messageQueue.obliterate({ force: true }),
       deadLetterQueue.obliterate({ force: true }),
+      schedulerQueue.obliterate({ force: true }),
     ]);
   } finally {
-    await Promise.all([messageQueue.close(), deadLetterQueue.close()]);
+    await Promise.all([
+      messageQueue.close(),
+      deadLetterQueue.close(),
+      schedulerQueue.close(),
+    ]);
   }
 }
 
@@ -88,6 +97,9 @@ function runtimeOptions(
   prefix: string,
   handler: Parameters<typeof createMessageQueueRuntime>[0]["handler"],
   logger: QueueLogger,
+  schedulerHandler: Parameters<
+    typeof createMessageQueueRuntime
+  >[0]["schedulerHandler"] = async () => {},
 ) {
   assert.ok(redisUrl, "REDIS_URL is required for BullMQ integration tests");
   return {
@@ -97,7 +109,9 @@ function runtimeOptions(
     attempts: 3,
     backoffMs: 10,
     metricsIntervalMs: 0,
+    schedulerIntervalMs: 60_000,
     handler,
+    schedulerHandler,
     logger,
   };
 }
@@ -114,10 +128,12 @@ describe("BullMQ contracts", () => {
   it("uses stable queue names and idempotent job IDs", () => {
     assert.deepEqual(QUEUE_NAMES, {
       MESSAGE_DISPATCH: "message-dispatch",
+      SCHEDULED_TASKS: "scheduled-tasks",
       DEAD_LETTER: "dead-letter",
     });
     assert.deepEqual(JOB_NAMES, {
       MESSAGE_DISPATCH: "dispatch-message",
+      SCHEDULER_TICK: "scheduler-tick",
       DEAD_LETTER: "dead-letter",
     });
     assert.equal(
@@ -257,6 +273,7 @@ describe("BullMQ runtime integration", () => {
       const metrics = await runtime.metrics();
       assert.equal(metrics.messages.completed, 2);
       assert.equal(metrics.messages.failed, 2);
+      assert.ok(metrics.scheduler.delayed >= 1);
       assert.equal(metrics.deadLetters.waiting, 2);
       assert.equal(
         events.some((event) => event.message === "BullMQ job completed"),
@@ -313,5 +330,40 @@ describe("BullMQ runtime integration", () => {
     await Promise.all([firstStop, secondStop]);
     assert.equal(stopped, true);
     await cleanupQueues(prefix);
+  });
+
+  it("runs recurring scheduler ticks and supports delayed message recovery", async () => {
+    const prefix = `mensaly-test-${randomUUID()}`;
+    const { logger } = createTestLogger();
+    let ticks = 0;
+    const runtime = await createMessageQueueRuntime({
+      ...runtimeOptions(prefix, async () => {}, logger, async () => {
+        ticks += 1;
+      }),
+      schedulerIntervalMs: 1000,
+    });
+
+    try {
+      await eventually(
+        () => Promise.resolve(ticks),
+        (value) => value >= 1,
+        4000,
+      );
+      const delayed = await runtime.enqueue(
+        {
+          organizationId,
+          scheduleId: slowScheduleId,
+        },
+        { delayMs: 60_000 },
+      );
+      assert.equal(await delayed.getState(), "delayed");
+      assert.equal(await runtime.remove(slowScheduleId), true);
+      assert.equal(
+        await runtime.messageQueue.getJob(messageDispatchJobId(slowScheduleId)),
+        undefined,
+      );
+    } finally {
+      await stopAndClean(runtime, prefix);
+    }
   });
 });

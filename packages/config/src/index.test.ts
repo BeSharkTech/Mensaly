@@ -87,6 +87,8 @@ describe("environment configuration", () => {
     assert.equal(environment.BULLMQ_JOB_ATTEMPTS, 4);
     assert.equal(environment.BULLMQ_BACKOFF_MS, 1000);
     assert.equal(environment.BULLMQ_METRICS_INTERVAL_MS, 30_000);
+    assert.equal(environment.SCHEDULER_INTERVAL_MS, 60_000);
+    assert.equal(environment.SCHEDULER_LOOKAHEAD_MS, 86_400_000);
     assert.equal(environment.FAKE_MESSAGE_ADAPTER_OUTCOME, "READ");
   });
 
@@ -116,6 +118,8 @@ describe("environment configuration", () => {
           BULLMQ_JOB_ATTEMPTS: "0",
           BULLMQ_BACKOFF_MS: "1",
           BULLMQ_METRICS_INTERVAL_MS: "1",
+          SCHEDULER_INTERVAL_MS: "1",
+          SCHEDULER_LOOKAHEAD_MS: "1",
         }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
@@ -124,6 +128,8 @@ describe("environment configuration", () => {
         assert.match(error.message, /BULLMQ_JOB_ATTEMPTS/);
         assert.match(error.message, /BULLMQ_BACKOFF_MS/);
         assert.match(error.message, /BULLMQ_METRICS_INTERVAL_MS/);
+        assert.match(error.message, /SCHEDULER_INTERVAL_MS/);
+        assert.match(error.message, /SCHEDULER_LOOKAHEAD_MS/);
         return true;
       },
     );
