@@ -312,6 +312,7 @@ model Plan {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
   enrollments Enrollment[]
+  @@unique([organizationId,id])
   @@index([organizationId, status])
   @@map("plan")
 }
@@ -516,6 +517,7 @@ model Student {
   organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
   guardianLinks StudentGuardian[]
   enrollments Enrollment[]
+  @@unique([organizationId,id])
   @@index([organizationId, status, name])
   @@map("student")
 }
@@ -533,6 +535,7 @@ model Guardian {
   organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
   studentLinks StudentGuardian[]
   enrollments Enrollment[]
+  @@unique([organizationId,id])
   @@index([organizationId, status, name])
   @@unique([organizationId, taxId])
   @@map("guardian")
@@ -547,8 +550,9 @@ model StudentGuardian {
   active Boolean @default(true)
   startedAt DateTime @default(now()) @db.Timestamptz(3)
   endedAt DateTime? @db.Timestamptz(3)
-  student Student @relation(fields:[studentId], references:[id], onDelete: Restrict)
-  guardian Guardian @relation(fields:[guardianId], references:[id], onDelete: Restrict)
+  student Student @relation(fields:[organizationId,studentId], references:[organizationId,id], onDelete: Restrict)
+  guardian Guardian @relation(fields:[organizationId,guardianId], references:[organizationId,id], onDelete: Restrict)
+  @@unique([organizationId,studentId,guardianId])
   @@index([organizationId, studentId, active])
   @@index([organizationId, guardianId, active])
   @@map("student_guardian")
@@ -570,9 +574,9 @@ model Enrollment {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
-  student Student @relation(fields:[studentId], references:[id], onDelete: Restrict)
-  guardian Guardian @relation(fields:[guardianId], references:[id], onDelete: Restrict)
-  plan Plan @relation(fields:[planId], references:[id], onDelete: Restrict)
+  student Student @relation(fields:[organizationId,studentId], references:[organizationId,id], onDelete: Restrict)
+  guardian Guardian @relation(fields:[organizationId,guardianId], references:[organizationId,id], onDelete: Restrict)
+  plan Plan @relation(fields:[organizationId,planId], references:[organizationId,id], onDelete: Restrict)
   charges Charge[]
   @@unique([organizationId,id])
   @@index([organizationId, status])

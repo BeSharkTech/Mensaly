@@ -15,6 +15,7 @@ import { verifyPassword } from "@mensaly/auth";
 import { createApiApplication } from "./app";
 import { LocalEmailDeliveryService } from "./auth/local-email-delivery.service";
 import { FinancialService } from "./financial/financial.service";
+import { OperationalService } from "./operational/operational.service";
 
 const databaseUrl = process.env.DATABASE_URL;
 const redisUrl = process.env.REDIS_URL;
@@ -63,6 +64,10 @@ describe("HTTP API foundation", () => {
         live.headers["x-correlation-id"] as string,
         /^[0-9a-f-]{36}$/i,
       );
+      assert.equal(live.headers["cache-control"], "no-store");
+      assert.equal(live.headers["x-content-type-options"], "nosniff");
+      assert.equal(live.headers["x-frame-options"], "DENY");
+      assert.equal(live.headers["referrer-policy"], "no-referrer");
 
       const suppliedCorrelationId = "c0a80121-7ac0-4b60-a98f-9c639336a001";
       const correlated = await fastify.inject({
@@ -109,6 +114,27 @@ describe("HTTP API foundation", () => {
         url: "/api/v1/health/live",
       });
       assert.equal(denied.headers["access-control-allow-origin"], undefined);
+
+      const csrfRejected = await fastify.inject({
+        headers: {
+          cookie: "mensaly_session=browser-session",
+          origin: "https://denied.example",
+        },
+        method: "POST",
+        url: "/api/v1/auth/logout",
+      });
+      assert.equal(csrfRejected.statusCode, 403);
+      assert.equal(csrfRejected.json().error.code, "CSRF_ORIGIN_REJECTED");
+
+      const csrfAllowed = await fastify.inject({
+        headers: {
+          cookie: "mensaly_session=browser-session",
+          origin: "https://allowed.example",
+        },
+        method: "POST",
+        url: "/api/v1/auth/logout",
+      });
+      assert.equal(csrfAllowed.statusCode, 204);
 
       const openApi = await fastify.inject({
         method: "GET",
@@ -392,6 +418,12 @@ describe("HTTP API foundation", () => {
       });
       assert.equal(expired.statusCode, 401);
       assert.equal(expired.json().error.code, "SESSION_INVALID");
+      assert.equal(
+        await getPrismaClient().session.count({
+          where: { user: { email } },
+        }),
+        0,
+      );
     } finally {
       await app.close();
     }
@@ -599,6 +631,12 @@ describe("HTTP API foundation", () => {
       const adminSession = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/admin/session" });
       assert.equal(adminSession.statusCode, 200);
       assert.deepEqual(adminSession.json().data, { id: adminSession.json().data.id, email: emailB, role: "PLATFORM_ADMIN", organizationId: null });
+      const statusUpdate = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "PATCH", url: `/api/v1/admin/organizations/${accountA.organizationId}/status`, payload: { status: "ACTIVE" } });
+      assert.equal(statusUpdate.statusCode, 200);
+      assert.equal(statusUpdate.json().data.status, "ACTIVE");
+      assert.equal((await fastify.inject({ headers: { cookie: accountB.cookie }, method: "PATCH", url: "/api/v1/admin/organizations/not-a-uuid/status", payload: { status: "ACTIVE" } })).statusCode, 400);
+      const statusAudit = await getPrismaClient().auditLog.findFirstOrThrow({ where: { organizationId: accountA.organizationId, action: "organization.status.updated" } });
+      assert.notEqual(statusAudit.correlationId, null);
       const adminUsingCompanyRoute = await fastify.inject({ headers: { cookie: accountB.cookie }, method: "GET", url: "/api/v1/organization" });
       assert.equal(adminUsingCompanyRoute.statusCode, 403);
       assert.equal(adminUsingCompanyRoute.json().error.code, "COMPANY_ACCOUNT_REQUIRED");
@@ -622,10 +660,20 @@ describe("HTTP API foundation", () => {
       const organization=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/organization",payload:{name:"Operational School",taxId:"33333333333",phone:"11999999999"}}); assert.equal(organization.statusCode,201);
       const organizationId = organization.json().data.id as string;
       const plan=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/plans",payload:{name:"Mensal",amountCents:15000,dueDay:10}}); assert.equal(plan.statusCode,201);
+      const operationalService=app.get(OperationalService);
+      await assert.rejects(operationalService.updatePlan({userId:randomUUID(),email:"missing@example.test",role:"COMPANY_ACCOUNT",organizationId},plan.json().id,{name:"Must Roll Back"}));
+      assert.equal((await getPrismaClient().plan.findUniqueOrThrow({where:{id:plan.json().id}})).name,"Mensal");
       const student=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/students",payload:{name:"Ana Student",phone:"(11) 98888-7777"}}); assert.equal(student.statusCode,201);
       const guardian=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Maria Guardian",phone:"11999998888",taxId:"44444444444"}}); assert.equal(guardian.statusCode,201);
-      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,payload:{relationship:"Mae"}})).statusCode,201);
+      const guardianLink=await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,payload:{relationship:"Mae"}}); assert.equal(guardianLink.statusCode,201);
+      const repeatedGuardianLink=await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,payload:{relationship:"Responsavel"}}); assert.equal(repeatedGuardianLink.statusCode,201); assert.equal(repeatedGuardianLink.json().id,guardianLink.json().id);
+      assert.equal(await getPrismaClient().studentGuardian.count({where:{organizationId,studentId:student.json().id,guardianId:guardian.json().id}}),1);
       const enrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-01-01"}}); assert.equal(enrollment.statusCode,201); assert.equal(enrollment.json().amountCents,15000);
+      const invalidPhone=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Invalid Phone",phone:"--------"}}); assert.equal(invalidPhone.statusCode,400); assert.equal(invalidPhone.json().error.code,"PHONE_INVALID");
+      const invalidTax=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Invalid Tax",phone:"11999990000",taxId:"..........."}}); assert.equal(invalidTax.statusCode,400); assert.equal(invalidTax.json().error.code,"TAX_ID_INVALID");
+      const invalidDateRange=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-02-01",endDate:"2026-01-31"}}); assert.equal(invalidDateRange.statusCode,400);
+      const fullDiscount=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,amountCents:15000,discountCents:15000,startDate:"2026-02-01"}}); assert.equal(fullDiscount.statusCode,400);
+      const malformedUuid=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/students/not-a-uuid"}); assert.equal(malformedUuid.statusCode,400);
       const [firstGeneration, repeatedGeneration] = await Promise.all([
         fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-02"} }),
         fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-02"} }),
@@ -672,6 +720,14 @@ describe("HTTP API foundation", () => {
       const otherCookie=firstHeader(otherLogin.headers["set-cookie"])?.split(";")[0]; assert.ok(otherCookie);
       const otherOrganization=await fastify.inject({headers:{cookie:otherCookie},method:"POST",url:"/api/v1/organization",payload:{name:"Financial Scope B",taxId:"55555555555",phone:"11999999998"}}); assert.equal(otherOrganization.statusCode,201);
       const otherOrganizationId=otherOrganization.json().data.id as string;
+      await assert.rejects(
+        getPrismaClient().studentGuardian.create({data:{organizationId:otherOrganizationId,studentId:student.json().id,guardianId:guardian.json().id}}),
+        (error:unknown)=>typeof error==="object"&&error!==null&&"code" in error&&error.code==="P2003",
+      );
+      await assert.rejects(
+        getPrismaClient().enrollment.create({data:{organizationId:otherOrganizationId,studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,amountCents:15000,dueDay:10,startDate:new Date("2026-01-01"),planNameSnapshot:"Cross tenant"}}),
+        (error:unknown)=>typeof error==="object"&&error!==null&&"code" in error&&error.code==="P2003",
+      );
       assert.equal((await fastify.inject({headers:{cookie:otherCookie},method:"GET",url:`/api/v1/charges/${chargeId}`})).statusCode,404);
       assert.equal((await fastify.inject({headers:{cookie:otherCookie},method:"POST",url:`/api/v1/charges/${chargeId}/cancel`})).statusCode,404);
       assert.equal((await fastify.inject({headers:{cookie:otherCookie,"idempotency-key":"cross-tenant-payment"},method:"POST",url:`/api/v1/charges/${chargeId}/payments`,payload:paymentPayload})).statusCode,404);
@@ -711,8 +767,17 @@ describe("HTTP API foundation", () => {
 
       const invalidMonth = await fastify.inject({ headers:{cookie}, method:"POST", url:"/api/v1/charges/generate", payload:{referenceMonth:"2026-13"} });
       assert.equal(invalidMonth.statusCode,400);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/charges/generate",payload:{referenceMonth:"0001-01"}})).statusCode,400);
+      assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/charges/not-a-uuid"})).statusCode,400);
+      assert.equal((await fastify.inject({headers:{cookie,"idempotency-key":"manual:overflow:test"},method:"POST",url:`/api/v1/charges/${aprilCharge.id}/payments`,payload:{amountCents:3000000000,method:"PIX",paidAt:"2026-04-10T12:00:00.000Z"}})).statusCode,400);
       const listed=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/students?search=Ana&page=1&pageSize=10"}); assert.equal(listed.statusCode,200); assert.equal(listed.json().total,1);
+      assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/plans?search=Mensal"})).json().total,1);
+      assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/guardians?search=Maria"})).json().total,1);
+      assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/enrollments?search=Ana"})).json().total,1);
       assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/enrollments/${enrollment.json().id}`,payload:{status:"ENDED",endDate:"2026-12-31"}})).statusCode,200);
+      const operationalAudit=await getPrismaClient().auditLog.findMany({where:{organizationId,action:{in:["plan.created","student.created","guardian.created","student_guardian.linked","enrollment.created","enrollment.updated"]}}});
+      assert.equal(operationalAudit.length>=7,true);
+      assert.equal(operationalAudit.every((entry)=>entry.correlationId!==null),true);
     } finally { await app.close(); }
   });
 

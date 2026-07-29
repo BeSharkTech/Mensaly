@@ -48,8 +48,12 @@ function auditMetadata(metadata: MessagingAuditMetadata) {
     ...(metadata.correlationId
       ? { correlationId: metadata.correlationId }
       : {}),
-    ...(metadata.ipAddress ? { ipAddress: metadata.ipAddress } : {}),
-    ...(metadata.userAgent ? { userAgent: metadata.userAgent } : {}),
+    ...(metadata.ipAddress
+      ? { ipAddress: metadata.ipAddress.slice(0, 64) }
+      : {}),
+    ...(metadata.userAgent
+      ? { userAgent: metadata.userAgent.slice(0, 1_024) }
+      : {}),
   };
 }
 

@@ -176,6 +176,19 @@ export class ScheduledTasksService {
         });
 
         for (const organization of organizations) {
+          const lockedOrganization = await tx.$queryRaw<
+            Array<{ status: OrganizationStatus }>
+          >(Prisma.sql`
+            SELECT "status"
+            FROM "organization"
+            WHERE "id" = ${organization.id}::uuid
+            FOR SHARE
+          `);
+          if (
+            lockedOrganization[0]?.status !== OrganizationStatus.ACTIVE
+          ) {
+            continue;
+          }
           const current = localDate(now, organization.timezone);
           const referenceMonth = calendarDate(
             current.year,
@@ -188,20 +201,22 @@ export class ScheduledTasksService {
           await tx.$executeRaw(
             Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`charge-generation:${organization.id}:${current.year}-${String(current.month).padStart(2, "0")}`}))`,
           );
-          const enrollments = await tx.enrollment.findMany({
-            where: {
-              organizationId: organization.id,
-              status: EnrollmentStatus.ACTIVE,
-              startDate: { lte: monthEnd },
-              OR: [{ endDate: null }, { endDate: { gte: referenceMonth } }],
-            },
-            select: {
-              id: true,
-              amountCents: true,
-              discountCents: true,
-              dueDay: true,
-            },
-          });
+          const enrollments = await tx.$queryRaw<
+            Array<{
+              id: string;
+              amountCents: number;
+              discountCents: number;
+              dueDay: number;
+            }>
+          >(Prisma.sql`
+            SELECT "id", "amountCents", "discountCents", "dueDay"
+            FROM "enrollment"
+            WHERE "organizationId" = ${organization.id}::uuid
+              AND "status" = ${EnrollmentStatus.ACTIVE}::"EnrollmentStatus"
+              AND "startDate" <= ${monthEnd}
+              AND ("endDate" IS NULL OR "endDate" >= ${referenceMonth})
+            FOR SHARE
+          `);
           const createdCharges =
             enrollments.length > 0
               ? await tx.charge.createMany({
@@ -362,6 +377,36 @@ export class ScheduledTasksService {
                       create: {
                         toStatus: MessageScheduleStatus.SCHEDULED,
                         reason: "SCHEDULER_CREATED",
+                        metadata: { automationKey },
+                      },
+                    },
+                  },
+                });
+                result.schedulesCreated += 1;
+                continue;
+              }
+              if (
+                existing.status === MessageScheduleStatus.CANCELLED &&
+                existing.cancellationReason === "CHARGE_PAID"
+              ) {
+                await tx.messageSchedule.update({
+                  where: { id: existing.id },
+                  data: {
+                    status: MessageScheduleStatus.SCHEDULED,
+                    scheduledFor,
+                    templateId: rule.templateId,
+                    templateBodySnapshot: rule.template.body,
+                    recipientNameSnapshot: charge.enrollment.guardian.name,
+                    recipientPhoneSnapshot: charge.enrollment.guardian.phone,
+                    cancelledAt: null,
+                    cancellationReason: null,
+                    queuedAt: null,
+                    enqueuedFor: null,
+                    history: {
+                      create: {
+                        fromStatus: MessageScheduleStatus.CANCELLED,
+                        toStatus: MessageScheduleStatus.SCHEDULED,
+                        reason: "PAYMENT_REVERSED_RESCHEDULED",
                         metadata: { automationKey },
                       },
                     },

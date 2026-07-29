@@ -17,6 +17,7 @@ import {
 import {
   ApiBody,
   ApiConsumes,
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
@@ -34,11 +35,25 @@ import {
   CompanyAccountGuard,
   SessionAuthGuard,
 } from "../authorization/authorization.guards";
+import { getCorrelationId } from "../common/correlation";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { type FileList, fileListSchema } from "./files.dto";
-import { FilesService } from "./files.service";
+import {
+  type FileAuditMetadata,
+  FilesService,
+} from "./files.service";
+
+function requestMetadata(request: FastifyRequest): FileAuditMetadata {
+  const userAgent = request.headers["user-agent"];
+  return {
+    correlationId: getCorrelationId(request),
+    ipAddress: request.ip,
+    ...(typeof userAgent === "string" ? { userAgent } : {}),
+  };
+}
 
 @ApiTags("Files")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "files", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class FilesController {
@@ -74,11 +89,15 @@ export class FilesController {
     try {
       const body = await part.toBuffer();
       return {
-        data: await this.files.upload(auth, {
-          filename: part.filename,
-          contentType: part.mimetype,
-          body,
-        }),
+        data: await this.files.upload(
+          auth,
+          {
+            filename: part.filename,
+            contentType: part.mimetype,
+            body,
+          },
+          requestMetadata(request),
+        ),
       };
     } catch (error) {
       if (
@@ -121,8 +140,9 @@ export class FilesController {
   @ApiOkResponse({ description: "Cleanup summary, limited to 100 objects" })
   async cleanup(
     @CurrentAuth() auth: AuthenticatedContext,
+    @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
-    return { data: await this.files.cleanup(auth) };
+    return { data: await this.files.cleanup(auth, requestMetadata(request)) };
   }
 
   @Get(":id")
@@ -167,7 +187,8 @@ export class FilesController {
   async delete(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id", ParseUUIDPipe) id: string,
+    @Req() request: FastifyRequest,
   ): Promise<void> {
-    await this.files.delete(auth, id);
+    await this.files.delete(auth, id, requestMetadata(request));
   }
 }

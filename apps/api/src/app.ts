@@ -14,6 +14,7 @@ import {
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
 import { AppModule } from "./app.module";
+import { registerApiSecurity } from "./common/api-security";
 import { GlobalExceptionFilter } from "./common/global-exception.filter";
 import { registerRequestContext } from "./common/correlation";
 import { registerLocalRateLimit } from "./common/local-rate-limit";
@@ -67,7 +68,10 @@ export async function createApiApplication(
   configureFiles(environment);
   const adapter = new FastifyAdapter({
     bodyLimit: Math.max(1_048_576, environment.FILE_MAX_SIZE_BYTES + 65_536),
-    trustProxy: false,
+    trustProxy:
+      environment.TRUST_PROXY_HOPS > 0
+        ? environment.TRUST_PROXY_HOPS
+        : false,
   });
   await adapter.getInstance().register(multipart, {
     limits: {
@@ -78,6 +82,7 @@ export async function createApiApplication(
     },
   });
   registerRequestContext(adapter.getInstance());
+  registerApiSecurity(adapter.getInstance(), environment.CORS_ORIGINS);
   registerLocalRateLimit(adapter.getInstance());
 
   const app = await NestFactory.create<NestFastifyApplication>(

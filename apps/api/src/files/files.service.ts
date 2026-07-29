@@ -31,6 +31,22 @@ const SUPPORTED_TYPES = new Set([
 ]);
 const CLEANUP_LEASE_MS = 5 * 60 * 1000;
 
+export type FileAuditMetadata = {
+  correlationId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+};
+
+function auditMetadata(value: FileAuditMetadata): FileAuditMetadata {
+  return {
+    ...(value.correlationId ? { correlationId: value.correlationId } : {}),
+    ...(value.ipAddress ? { ipAddress: value.ipAddress.slice(0, 64) } : {}),
+    ...(value.userAgent
+      ? { userAgent: value.userAgent.slice(0, 1_024) }
+      : {}),
+  };
+}
+
 function organizationId(auth: AuthenticatedContext): string {
   if (!auth.organizationId) {
     throw new NotFoundException({
@@ -86,6 +102,7 @@ export class FilesService {
   async upload(
     auth: AuthenticatedContext,
     input: { filename: string; contentType: string; body: Buffer },
+    auditContext: FileAuditMetadata = {},
   ) {
     const orgId = organizationId(auth);
     const originalName = basename(input.filename.trim());
@@ -123,7 +140,7 @@ export class FilesService {
     const checksumSha256 = createHash("sha256")
       .update(input.body)
       .digest("hex");
-    const metadata = await this.prisma.client.storedFile.create({
+    const fileMetadata = await this.prisma.client.storedFile.create({
       data: {
         id,
         organizationId: orgId,
@@ -160,6 +177,7 @@ export class FilesService {
               sizeBytes: input.body.length,
               checksumSha256,
             },
+            ...auditMetadata(auditContext),
           },
         });
         return file;
@@ -169,7 +187,7 @@ export class FilesService {
       await Promise.allSettled([
         this.storage.delete(storageKey),
         this.prisma.client.storedFile.update({
-          where: { id: metadata.id },
+          where: { id: fileMetadata.id },
           data: { status: StoredFileStatus.FAILED },
         }),
       ]);
@@ -224,7 +242,11 @@ export class FilesService {
     return { metadata: view(file), body: object.body };
   }
 
-  async delete(auth: AuthenticatedContext, id: string): Promise<void> {
+  async delete(
+    auth: AuthenticatedContext,
+    id: string,
+    metadata: FileAuditMetadata = {},
+  ): Promise<void> {
     const orgId = organizationId(auth);
     const now = new Date();
     const claim = await this.prisma.client.$transaction(async (tx) => {
@@ -279,6 +301,7 @@ export class FilesService {
             entityId: id,
             before: { status: file.status },
             after: { status: StoredFileStatus.DELETED },
+            ...auditMetadata(metadata),
           },
         }),
       ]);
@@ -290,7 +313,10 @@ export class FilesService {
     }
   }
 
-  async cleanup(auth: AuthenticatedContext) {
+  async cleanup(
+    auth: AuthenticatedContext,
+    metadata: FileAuditMetadata = {},
+  ) {
     const orgId = organizationId(auth);
     const cutoff = new Date(Date.now() - CLEANUP_LEASE_MS);
     const candidates = await this.prisma.client.storedFile.findMany({
@@ -355,6 +381,7 @@ export class FilesService {
           action: "file.cleanup_completed",
           entityType: "StoredFile",
           after: { cleaned },
+          ...auditMetadata(metadata),
         },
       });
     }

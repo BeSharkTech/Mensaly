@@ -129,6 +129,23 @@ describe("generic webhook inbox", () => {
       assert.equal(conflict.statusCode, 409);
       assert.equal(conflict.json().error.code, "WEBHOOK_EVENT_CONFLICT");
 
+      let nestedPayload: Record<string, unknown> = {};
+      for (let depth = 0; depth < 33; depth += 1) {
+        nestedPayload = { nested: nestedPayload };
+      }
+      const tooDeep = await fastify.inject({
+        headers: { cookie },
+        method: "POST",
+        url: "/api/v1/admin/webhook-events",
+        payload: {
+          ...body,
+          externalEventId: `deep-${randomUUID()}`,
+          payload: nestedPayload,
+        },
+      });
+      assert.equal(tooDeep.statusCode, 400);
+      assert.equal(tooDeep.json().error.code, "VALIDATION_ERROR");
+
       const processed = await fastify.inject({
         headers: { cookie },
         method: "POST",
@@ -225,6 +242,27 @@ describe("generic webhook inbox", () => {
         (await service.process(permanentEvent.event.id)).attemptCount,
         1,
       );
+
+      const oversizedErrorEvent = await service.receive({
+        provider: "test",
+        externalEventId: `oversized-${randomUUID()}`,
+        eventType: "oversized-error",
+        payload: {},
+      });
+      eventIds.add(oversizedErrorEvent.event.id);
+      const oversized = await service.process(
+        oversizedErrorEvent.event.id,
+        async () => {
+          throw new WebhookProcessingError(
+            "C".repeat(200),
+            "M".repeat(2_000),
+            false,
+          );
+        },
+        now,
+      );
+      assert.equal(oversized.lastErrorCode?.length, 120);
+      assert.equal(oversized.lastErrorMessage?.length, 1_000);
 
       const concurrentEvent = await service.receive({
         provider: "test",

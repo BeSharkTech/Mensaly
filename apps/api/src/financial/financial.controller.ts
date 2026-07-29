@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -17,6 +18,7 @@ import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConflictResponse,
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiHeader,
   ApiNotFoundResponse,
@@ -84,7 +86,12 @@ const paymentBodySchema = {
   additionalProperties: false,
   required: ["amountCents", "method", "paidAt"] as string[],
   properties: {
-    amountCents: { type: "integer", minimum: 1, example: 15000 },
+    amountCents: {
+      type: "integer",
+      minimum: 1,
+      maximum: 2_000_000_000,
+      example: 15000,
+    },
     method: {
       type: "string",
       enum: ["CASH", "PIX", "BANK_TRANSFER", "CARD", "OTHER"] as string[],
@@ -100,6 +107,7 @@ const paymentBodySchema = {
 } as const;
 
 @ApiTags("Financial")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class FinancialController {
@@ -118,7 +126,7 @@ export class FinancialController {
       properties: {
         referenceMonth: {
           type: "string",
-          pattern: "^\\d{4}-(0[1-9]|1[0-2])$",
+          pattern: "^(?:20\\d{2}|[3-9]\\d{3})-(0[1-9]|1[0-2])$",
           example: "2026-02",
         },
       },
@@ -186,7 +194,7 @@ export class FinancialController {
   @ApiNotFoundResponse({ description: "Charge not found in this organization" })
   async charge(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ): Promise<{ data: unknown }> {
     return { data: await this.financial.charge(auth, id) };
   }
@@ -198,7 +206,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Charge state or payment conflict" })
   async cancel(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -218,7 +226,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Charge state or payment conflict" })
   async waive(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -238,7 +246,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Charge state conflict" })
   async reopen(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -272,7 +280,7 @@ export class FinancialController {
   @ApiNotFoundResponse({ description: "Charge not found in this organization" })
   async createPayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Headers("idempotency-key") header: string | undefined,
     @Body(new ZodValidationPipe(createManualPaymentSchema))
     input: CreateManualPaymentDto,
@@ -298,7 +306,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Payment state conflict" })
   async confirmPayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -318,7 +326,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Payment state conflict" })
   async cancelPayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -338,7 +346,7 @@ export class FinancialController {
   @ApiConflictResponse({ description: "Payment state conflict" })
   async reversePayment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {

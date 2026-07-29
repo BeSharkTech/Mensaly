@@ -7,6 +7,7 @@ export const baseEnvironmentSchema = z.object({
 });
 
 const portSchema = z.coerce.number().int().min(1).max(65_535).default(3001);
+const trustProxyHopsSchema = z.coerce.number().int().min(0).max(10).default(0);
 const sessionTtlHoursSchema = z
   .coerce.number()
   .int()
@@ -112,6 +113,7 @@ const corsOriginsSchema = z
 export const apiEnvironmentSchema = baseEnvironmentSchema
   .extend({
     API_PORT: portSchema,
+    TRUST_PROXY_HOPS: trustProxyHopsSchema,
     DATABASE_URL: databaseUrlSchema,
     REDIS_URL: redisUrlSchema,
     CORS_ORIGINS: corsOriginsSchema,

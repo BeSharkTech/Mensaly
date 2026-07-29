@@ -1,5 +1,5 @@
 import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
-import { ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 
 import {
   CurrentAuth,
@@ -14,6 +14,7 @@ import { type AuditList, auditListSchema } from "./audit.dto";
 import { AuditService } from "./audit.service";
 
 @ApiTags("Audit")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "audit-logs", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class AuditController {

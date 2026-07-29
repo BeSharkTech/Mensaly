@@ -4,12 +4,15 @@ import {
   Get,
   Inject,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from "@nestjs/common";
-import { ApiBody, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBody, ApiCookieAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import type { FastifyRequest } from "fastify";
 
 import {
   CurrentAuth,
@@ -19,6 +22,7 @@ import {
   CompanyAccountGuard,
   SessionAuthGuard,
 } from "../authorization/authorization.guards";
+import { getCorrelationId } from "../common/correlation";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import {
   CreateEnrollmentDto,
@@ -52,7 +56,19 @@ import {
   updatePlanSchema,
   updateStudentSchema,
 } from "./operational.dto";
-import { OperationalService } from "./operational.service";
+import {
+  type OperationalAuditMetadata,
+  OperationalService,
+} from "./operational.service";
+
+function requestMetadata(request: FastifyRequest): OperationalAuditMetadata {
+  const userAgent = request.headers["user-agent"];
+  return {
+    correlationId: getCorrelationId(request),
+    ipAddress: request.ip,
+    ...(typeof userAgent === "string" ? { userAgent } : {}),
+  };
+}
 
 const statusSchema = { type: "string", enum: ["ACTIVE", "INACTIVE"] };
 const planBodySchema = {
@@ -60,7 +76,7 @@ const planBodySchema = {
   properties: {
     name: { type: "string", minLength: 2, maxLength: 120 },
     description: { type: "string", maxLength: 1000 },
-    amountCents: { type: "integer", minimum: 1 },
+    amountCents: { type: "integer", minimum: 1, maximum: 2_000_000_000 },
     dueDay: { type: "integer", minimum: 1, maximum: 31 },
     frequency: { type: "string", enum: ["MONTHLY"], default: "MONTHLY" },
   },
@@ -89,15 +105,21 @@ const enrollmentBodySchema = {
     studentId: { type: "string", format: "uuid" },
     guardianId: { type: "string", format: "uuid" },
     planId: { type: "string", format: "uuid" },
-    amountCents: { type: "integer", minimum: 1 },
+    amountCents: { type: "integer", minimum: 1, maximum: 2_000_000_000 },
     dueDay: { type: "integer", minimum: 1, maximum: 31 },
-    discountCents: { type: "integer", minimum: 0, default: 0 },
+    discountCents: {
+      type: "integer",
+      minimum: 0,
+      maximum: 2_000_000_000,
+      default: 0,
+    },
     startDate: { type: "string", format: "date" },
     endDate: { type: "string", format: "date" },
   },
 };
 
 @ApiTags("Operational CRUD")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class OperationalController {
@@ -126,16 +148,18 @@ export class OperationalController {
   createPlan(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createPlanSchema)) input: CreatePlanDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.createPlan(
       auth,
       input as unknown as CreatePlanInput,
+      requestMetadata(request),
     );
   }
 
   @Get("plans/:id")
   @ApiOperation({ summary: "Gets an organization plan" })
-  plan(@CurrentAuth() auth: AuthenticatedContext, @Param("id") id: string) {
+  plan(@CurrentAuth() auth: AuthenticatedContext, @Param("id", ParseUUIDPipe) id: string) {
     return this.service.plan(auth, id);
   }
 
@@ -144,13 +168,15 @@ export class OperationalController {
   @ApiBody({ schema: { ...planBodySchema, minProperties: 1 } })
   updatePlan(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updatePlanSchema)) input: UpdatePlanDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.updatePlan(
       auth,
       id,
       input as unknown as UpdatePlanInput,
+      requestMetadata(request),
     );
   }
 
@@ -172,16 +198,18 @@ export class OperationalController {
   createStudent(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createStudentSchema)) input: CreateStudentDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.createStudent(
       auth,
       input as unknown as CreateStudentInput,
+      requestMetadata(request),
     );
   }
 
   @Get("students/:id")
   @ApiOperation({ summary: "Gets an organization student" })
-  student(@CurrentAuth() auth: AuthenticatedContext, @Param("id") id: string) {
+  student(@CurrentAuth() auth: AuthenticatedContext, @Param("id", ParseUUIDPipe) id: string) {
     return this.service.student(auth, id);
   }
 
@@ -196,13 +224,15 @@ export class OperationalController {
   })
   updateStudent(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateStudentSchema)) input: UpdateStudentDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.updateStudent(
       auth,
       id,
       input as unknown as UpdateStudentInput,
+      requestMetadata(request),
     );
   }
 
@@ -219,15 +249,17 @@ export class OperationalController {
   })
   link(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("studentId") studentId: string,
-    @Param("guardianId") guardianId: string,
+    @Param("studentId", ParseUUIDPipe) studentId: string,
+    @Param("guardianId", ParseUUIDPipe) guardianId: string,
     @Body(new ZodValidationPipe(linkGuardianSchema)) input: LinkGuardianInput,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.linkGuardian(
       auth,
       studentId,
       guardianId,
       input.relationship,
+      requestMetadata(request),
     );
   }
 
@@ -249,16 +281,18 @@ export class OperationalController {
   createGuardian(
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createGuardianSchema)) input: CreateGuardianDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.createGuardian(
       auth,
       input as unknown as CreateGuardianInput,
+      requestMetadata(request),
     );
   }
 
   @Get("guardians/:id")
   @ApiOperation({ summary: "Gets an organization guardian" })
-  guardian(@CurrentAuth() auth: AuthenticatedContext, @Param("id") id: string) {
+  guardian(@CurrentAuth() auth: AuthenticatedContext, @Param("id", ParseUUIDPipe) id: string) {
     return this.service.guardian(auth, id);
   }
 
@@ -273,14 +307,16 @@ export class OperationalController {
   })
   updateGuardian(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateGuardianSchema))
     input: UpdateGuardianDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.updateGuardian(
       auth,
       id,
       input as unknown as UpdateGuardianInput,
+      requestMetadata(request),
     );
   }
 
@@ -306,10 +342,12 @@ export class OperationalController {
     @CurrentAuth() auth: AuthenticatedContext,
     @Body(new ZodValidationPipe(createEnrollmentSchema))
     input: CreateEnrollmentDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.createEnrollment(
       auth,
       input as unknown as CreateEnrollmentInput,
+      requestMetadata(request),
     );
   }
 
@@ -317,7 +355,7 @@ export class OperationalController {
   @ApiOperation({ summary: "Gets an organization enrollment" })
   enrollment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ) {
     return this.service.enrollment(auth, id);
   }
@@ -342,14 +380,16 @@ export class OperationalController {
   })
   updateEnrollment(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateEnrollmentSchema))
     input: UpdateEnrollmentDto,
+    @Req() request: FastifyRequest,
   ) {
     return this.service.updateEnrollment(
       auth,
       id,
       input as unknown as UpdateEnrollmentInput,
+      requestMetadata(request),
     );
   }
 }

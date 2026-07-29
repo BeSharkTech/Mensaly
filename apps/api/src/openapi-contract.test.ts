@@ -34,9 +34,18 @@ type Operation = {
   operationId?: string;
   requestBody?: unknown;
   responses?: Record<string, unknown>;
+  security?: Array<Record<string, string[]>>;
   summary?: string;
   tags?: string[];
 };
+type InjectMethod =
+  | "DELETE"
+  | "GET"
+  | "HEAD"
+  | "OPTIONS"
+  | "PATCH"
+  | "POST"
+  | "PUT";
 
 const bodyRequiredOperations = new Set([
   "PATCH /api/v1/admin/organizations/{id}/status",
@@ -49,6 +58,18 @@ const bodyRequiredOperations = new Set([
   "PATCH /api/v1/guardians/{id}",
   "POST /api/v1/enrollments",
   "PATCH /api/v1/enrollments/{id}",
+]);
+
+const publicOperations = new Set([
+  "GET /api/v1/health/live",
+  "GET /api/v1/health/ready",
+  "POST /api/v1/auth/register",
+  "POST /api/v1/auth/verify-email/request",
+  "POST /api/v1/auth/verify-email/confirm",
+  "POST /api/v1/auth/password-reset/request",
+  "POST /api/v1/auth/password-reset/confirm",
+  "POST /api/v1/auth/login",
+  "POST /api/v1/auth/logout",
 ]);
 
 describe("frozen OpenAPI v1 contract", () => {
@@ -99,6 +120,33 @@ describe("frozen OpenAPI v1 contract", () => {
           assert.ok(operation.operationId, `${method} ${path} operationId`);
           if (bodyRequiredOperations.has(`${method.toUpperCase()} ${path}`)) {
             assert.ok(operation.requestBody, `${method} ${path} request body`);
+          }
+          const operationKey = `${method.toUpperCase()} ${path}`;
+          if (publicOperations.has(operationKey)) {
+            assert.equal(
+              operation.security,
+              undefined,
+              `${operationKey} must remain public`,
+            );
+          } else {
+            assert.deepEqual(
+              operation.security,
+              [{ sessionCookie: [] }],
+              `${operationKey} must declare session authentication`,
+            );
+            const protectedResponse = await app
+              .getHttpAdapter()
+              .getInstance()
+              .inject({
+                method: method.toUpperCase() as InjectMethod,
+                url: path.replaceAll(/\{[^}]+\}/g, "00000000-0000-4000-8000-000000000001"),
+                ...(operation.requestBody ? { payload: {} } : {}),
+              });
+            assert.equal(
+              protectedResponse.statusCode,
+              401,
+              `${operationKey} must reject a missing session before input processing`,
+            );
           }
           assert.equal(
             operationIds.has(operation.operationId ?? ""),

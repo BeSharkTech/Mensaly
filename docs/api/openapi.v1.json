@@ -282,6 +282,11 @@
             "description": "Session is missing, expired, or revoked"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets the current authenticated session",
         "tags": [
           "Authentication"
@@ -361,6 +366,11 @@
             "description": "The account already has an organization or tax ID is in use"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates the authenticated owner's organization",
         "tags": [
           "Organization"
@@ -377,6 +387,11 @@
             "description": "A valid session is required"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets the authenticated owner's organization",
         "tags": [
           "Organization"
@@ -430,6 +445,11 @@
             "description": "Tax ID is already in use"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates the authenticated owner's organization",
         "tags": [
           "Organization"
@@ -448,6 +468,11 @@
             "description": "A valid platform administrator session is required"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets the platform administrator session",
         "tags": [
           "Platform administration"
@@ -486,6 +511,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates an organization status",
         "tags": [
           "Platform administration"
@@ -501,6 +531,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists organization plans",
         "tags": [
           "Operational CRUD"
@@ -527,7 +562,8 @@
                   },
                   "amountCents": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 2000000000
                   },
                   "dueDay": {
                     "type": "integer",
@@ -556,6 +592,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates an organization plan",
         "tags": [
           "Operational CRUD"
@@ -571,6 +612,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets an organization plan",
         "tags": [
           "Operational CRUD"
@@ -597,7 +643,8 @@
                   },
                   "amountCents": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 2000000000
                   },
                   "dueDay": {
                     "type": "integer",
@@ -622,6 +669,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates an organization plan",
         "tags": [
           "Operational CRUD"
@@ -637,6 +689,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists organization students",
         "tags": [
           "Operational CRUD"
@@ -683,6 +740,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates an organization student",
         "tags": [
           "Operational CRUD"
@@ -698,6 +760,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets an organization student",
         "tags": [
           "Operational CRUD"
@@ -749,6 +816,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates an organization student",
         "tags": [
           "Operational CRUD"
@@ -784,6 +856,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Links a guardian to a student",
         "tags": [
           "Operational CRUD"
@@ -799,6 +876,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists organization guardians",
         "tags": [
           "Operational CRUD"
@@ -848,6 +930,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates an organization guardian",
         "tags": [
           "Operational CRUD"
@@ -863,6 +950,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets an organization guardian",
         "tags": [
           "Operational CRUD"
@@ -916,6 +1008,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates an organization guardian",
         "tags": [
           "Operational CRUD"
@@ -931,6 +1028,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists organization enrollments",
         "tags": [
           "Operational CRUD"
@@ -960,7 +1062,8 @@
                   },
                   "amountCents": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 2000000000
                   },
                   "dueDay": {
                     "type": "integer",
@@ -970,6 +1073,7 @@
                   "discountCents": {
                     "type": "integer",
                     "minimum": 0,
+                    "maximum": 2000000000,
                     "default": 0
                   },
                   "startDate": {
@@ -996,6 +1100,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates an organization enrollment",
         "tags": [
           "Operational CRUD"
@@ -1011,6 +1120,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets an organization enrollment",
         "tags": [
           "Operational CRUD"
@@ -1028,7 +1142,8 @@
                 "properties": {
                   "amountCents": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "maximum": 2000000000
                   },
                   "dueDay": {
                     "type": "integer",
@@ -1038,6 +1153,7 @@
                   "discountCents": {
                     "type": "integer",
                     "minimum": 0,
+                    "maximum": 2000000000,
                     "default": 0
                   },
                   "endDate": {
@@ -1063,6 +1179,11 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates an organization enrollment",
         "tags": [
           "Operational CRUD"
@@ -1086,7 +1207,7 @@
                 "properties": {
                   "referenceMonth": {
                     "type": "string",
-                    "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                    "pattern": "^(?:20\\d{2}|[3-9]\\d{3})-(0[1-9]|1[0-2])$",
                     "example": "2026-02"
                   }
                 }
@@ -1105,6 +1226,11 @@
             "description": "A valid company session is required"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Generates idempotent monthly charges",
         "tags": [
           "Financial"
@@ -1162,6 +1288,11 @@
             "description": "Paginated organization charges"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists charges in the authenticated organization",
         "tags": [
           "Financial"
@@ -1189,6 +1320,11 @@
             "description": "Charge not found in this organization"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets one organization-scoped charge",
         "tags": [
           "Financial"
@@ -1207,6 +1343,11 @@
             "description": "Charge state or payment conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Cancels a pending charge",
         "tags": [
           "Financial"
@@ -1225,6 +1366,11 @@
             "description": "Charge state or payment conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Waives a pending charge",
         "tags": [
           "Financial"
@@ -1243,6 +1389,11 @@
             "description": "Charge state conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Reopens a cancelled or waived charge",
         "tags": [
           "Financial"
@@ -1281,6 +1432,7 @@
                   "amountCents": {
                     "type": "integer",
                     "minimum": 1,
+                    "maximum": 2000000000,
                     "example": 15000
                   },
                   "method": {
@@ -1325,6 +1477,11 @@
             "description": "Active payment, charge state, or idempotency conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates one idempotent manual payment",
         "tags": [
           "Financial"
@@ -1343,6 +1500,11 @@
             "description": "Payment state conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Confirms a reconciled payment",
         "tags": [
           "Financial"
@@ -1361,6 +1523,11 @@
             "description": "Payment state conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Cancels a payment pending reconciliation",
         "tags": [
           "Financial"
@@ -1379,6 +1546,11 @@
             "description": "Payment state conflict"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Reverses a confirmed payment",
         "tags": [
           "Financial"
@@ -1400,6 +1572,11 @@
             "description": "Configuration does not exist yet"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets the authenticated organization reminder configuration",
         "tags": [
           "Reminder configuration"
@@ -1500,6 +1677,11 @@
             "description": "A valid company session is required"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates or replaces the organization reminder configuration",
         "tags": [
           "Reminder configuration"
@@ -1543,6 +1725,11 @@
             "description": "Paginated organization templates"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists internal message templates",
         "tags": [
           "Messaging"
@@ -1596,6 +1783,11 @@
             "description": "Template name already exists"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Creates an internal message template",
         "tags": [
           "Messaging"
@@ -1623,6 +1815,11 @@
             "description": "Template not found"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets one organization-scoped message template",
         "tags": [
           "Messaging"
@@ -1682,6 +1879,11 @@
             "description": "Template name already exists"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Updates or deactivates a message template",
         "tags": [
           "Messaging"
@@ -1744,6 +1946,11 @@
             "description": "Paginated organization schedules"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists persisted message schedules",
         "tags": [
           "Messaging"
@@ -1796,6 +2003,11 @@
             "description": "Charge state does not allow scheduling"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Persists an idempotent message schedule",
         "tags": [
           "Messaging"
@@ -1823,6 +2035,11 @@
             "description": "Schedule not found"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets one organization-scoped message schedule",
         "tags": [
           "Messaging"
@@ -1853,6 +2070,11 @@
             "description": "Schedule state does not allow cancellation"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Cancels a scheduled message",
         "tags": [
           "Messaging"
@@ -1880,6 +2102,11 @@
             "description": "Schedule not found"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists the persisted schedule status history",
         "tags": [
           "Messaging"
@@ -1907,6 +2134,11 @@
             "description": "Schedule not found"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists persisted message delivery attempts",
         "tags": [
           "Messaging"
@@ -1961,6 +2193,11 @@
             "description": "Event persisted idempotently"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Receives a provider-neutral webhook event",
         "tags": [
           "Webhook inbox"
@@ -1974,6 +2211,11 @@
             "description": "Paginated webhook events"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists webhook inbox events",
         "tags": [
           "Webhook inbox"
@@ -1998,6 +2240,11 @@
             "description": "Webhook event details"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets a webhook event and its attempts",
         "tags": [
           "Webhook inbox"
@@ -2022,6 +2269,11 @@
             "description": "Current processing state"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Processes or resumes one webhook event",
         "tags": [
           "Webhook inbox"
@@ -2057,6 +2309,11 @@
             "description": "File persisted with integrity metadata"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Uploads a validated organization file",
         "tags": [
           "Files"
@@ -2070,6 +2327,11 @@
             "description": "Paginated file metadata"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists active files from the current organization",
         "tags": [
           "Files"
@@ -2085,6 +2347,11 @@
             "description": "Cleanup summary, limited to 100 objects"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Retries controlled cleanup of incomplete files",
         "tags": [
           "Files"
@@ -2109,6 +2376,11 @@
             "description": "File metadata"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets organization-scoped file metadata",
         "tags": [
           "Files"
@@ -2131,6 +2403,11 @@
             "description": "File deleted or already deleted"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Deletes a file through a retry-safe cleanup flow",
         "tags": [
           "Files"
@@ -2155,6 +2432,11 @@
             "description": "Original file bytes"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Downloads an integrity-checked organization file",
         "tags": [
           "Files"
@@ -2170,6 +2452,11 @@
             "description": "Dashboard overview"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets organization financial and student totals",
         "tags": [
           "Dashboard"
@@ -2185,6 +2472,11 @@
             "description": "Upcoming charges with student and guardian"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists upcoming pending charges",
         "tags": [
           "Dashboard"
@@ -2200,6 +2492,11 @@
             "description": "Recent payments"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists the latest confirmed payments",
         "tags": [
           "Dashboard"
@@ -2215,6 +2512,11 @@
             "description": "Message failures without cross-tenant data"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists recent message delivery failures",
         "tags": [
           "Dashboard"
@@ -2230,6 +2532,11 @@
             "description": "Continuous monthly time series"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets monthly financial evolution",
         "tags": [
           "Dashboard"
@@ -2245,6 +2552,11 @@
             "description": "Platform overview"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets platform-wide totals and internal usage",
         "tags": [
           "Platform administration"
@@ -2260,6 +2572,11 @@
             "description": "Paginated organization administration"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists organizations with consumption totals",
         "tags": [
           "Platform administration"
@@ -2284,6 +2601,11 @@
             "description": "Paginated audit history"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets one organization's administrative history",
         "tags": [
           "Platform administration"
@@ -2299,6 +2621,11 @@
             "description": "Recent operational failures"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Gets message and webhook failures",
         "tags": [
           "Platform administration"
@@ -2314,6 +2641,11 @@
             "description": "Immutable and paginated audit records"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "summary": "Lists the current organization's audit trail",
         "tags": [
           "Audit"

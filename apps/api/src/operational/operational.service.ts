@@ -1,33 +1,682 @@
 import { AuditActorType, Prisma } from "@mensaly/database";
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../infrastructure/database/prisma.service";
-import type { AuthenticatedContext } from "../authorization/authorization-context";
-import type { CreateEnrollmentInput, CreateGuardianInput, CreatePlanInput, CreateStudentInput, EnrollmentListInput, OperationalListInput, UpdateEnrollmentInput, UpdateGuardianInput, UpdatePlanInput, UpdateStudentInput } from "./operational.dto";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 
-function org(auth: AuthenticatedContext): string { if (!auth.organizationId) throw new NotFoundException({ code: "ORGANIZATION_NOT_FOUND", message: "Organization context is required" }); return auth.organizationId; }
-function missing(): never { throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Resource was not found" }); }
-function phone(value: string | undefined) { return value?.replace(/\D/g, ""); }
-function tax(value: string | undefined) { return value?.replace(/\D/g, ""); }
+import type { AuthenticatedContext } from "../authorization/authorization-context";
+import { PrismaService } from "../infrastructure/database/prisma.service";
+import type {
+  CreateEnrollmentInput,
+  CreateGuardianInput,
+  CreatePlanInput,
+  CreateStudentInput,
+  EnrollmentListInput,
+  OperationalListInput,
+  UpdateEnrollmentInput,
+  UpdateGuardianInput,
+  UpdatePlanInput,
+  UpdateStudentInput,
+} from "./operational.dto";
+
+export type OperationalAuditMetadata = {
+  correlationId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+};
+
+function organizationId(auth: AuthenticatedContext): string {
+  if (!auth.organizationId) {
+    throw new NotFoundException({
+      code: "ORGANIZATION_NOT_FOUND",
+      message: "Organization context is required",
+    });
+  }
+  return auth.organizationId;
+}
+
+function missing(): never {
+  throw new NotFoundException({
+    code: "RESOURCE_NOT_FOUND",
+    message: "Resource was not found",
+  });
+}
+
+function normalizedPhone(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.replace(/\D/g, "");
+  if (normalized.length < 10 || normalized.length > 15) {
+    throw new BadRequestException({
+      code: "PHONE_INVALID",
+      message: "Phone must contain between 10 and 15 digits",
+    });
+  }
+  return normalized;
+}
+
+function normalizedTaxId(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.replace(/\D/g, "");
+  if (normalized.length !== 11 && normalized.length !== 14) {
+    throw new BadRequestException({
+      code: "TAX_ID_INVALID",
+      message: "Tax identifier must contain 11 or 14 digits",
+    });
+  }
+  return normalized;
+}
+
+function metadata(value: OperationalAuditMetadata): OperationalAuditMetadata {
+  return {
+    ...(value.correlationId ? { correlationId: value.correlationId } : {}),
+    ...(value.ipAddress ? { ipAddress: value.ipAddress.slice(0, 64) } : {}),
+    ...(value.userAgent
+      ? { userAgent: value.userAgent.slice(0, 1_024) }
+      : {}),
+  };
+}
+
+function validateEnrollmentValues(
+  amountCents: number,
+  discountCents: number,
+  startDate: Date,
+  endDate?: Date | null,
+): void {
+  if (discountCents >= amountCents) {
+    throw new BadRequestException({
+      code: "ENROLLMENT_DISCOUNT_INVALID",
+      message: "Discount must be lower than the enrollment amount",
+    });
+  }
+  if (endDate && endDate < startDate) {
+    throw new BadRequestException({
+      code: "ENROLLMENT_DATE_RANGE_INVALID",
+      message: "End date cannot precede start date",
+    });
+  }
+}
 
 @Injectable()
 export class OperationalService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
-  private async audit(auth: AuthenticatedContext, action: string, entityType: string, entityId: string, organizationId: string): Promise<void> { await this.prisma.client.auditLog.create({ data: { organizationId, actorUserId: auth.userId, actorType: AuditActorType.USER, action, entityType, entityId } }); }
-  async plans(auth: AuthenticatedContext, query: OperationalListInput) { const organizationId=org(auth); const where={organizationId,...(query.status==="ACTIVE"||query.status==="INACTIVE"?{status:query.status}: {})} as Prisma.PlanWhereInput; const [items,total]=await Promise.all([this.prisma.client.plan.findMany({where,skip:(query.page-1)*query.pageSize,take:query.pageSize,orderBy:{createdAt:"desc"}}),this.prisma.client.plan.count({where})]); return {items,page:query.page,pageSize:query.pageSize,total}; }
-  async plan(auth: AuthenticatedContext,id:string){const item=await this.prisma.client.plan.findFirst({where:{id,organizationId:org(auth)}}); return item??missing();}
-  async createPlan(auth: AuthenticatedContext,input:CreatePlanInput){const organizationId=org(auth); const item=await this.prisma.client.plan.create({data:{...input,organizationId}});await this.audit(auth,"plan.created","Plan",item.id,organizationId);return item}
-  async updatePlan(auth: AuthenticatedContext,id:string,input:UpdatePlanInput){await this.plan(auth,id); const item=await this.prisma.client.plan.update({where:{id},data:input});await this.audit(auth,"plan.updated","Plan",id,org(auth));return item}
-  async students(auth: AuthenticatedContext,query:OperationalListInput){const organizationId=org(auth);const where={organizationId,...(query.status==="ACTIVE"||query.status==="INACTIVE"?{status:query.status}:{}),...(query.search?{name:{contains:query.search,mode:"insensitive" as const}}:{})} as Prisma.StudentWhereInput;const [items,total]=await Promise.all([this.prisma.client.student.findMany({where,skip:(query.page-1)*query.pageSize,take:query.pageSize,orderBy:{createdAt:"desc"}}),this.prisma.client.student.count({where})]);return{items,page:query.page,pageSize:query.pageSize,total};}
-  async student(auth:AuthenticatedContext,id:string){const item=await this.prisma.client.student.findFirst({where:{id,organizationId:org(auth)},include:{guardianLinks:{where:{active:true},include:{guardian:true}},enrollments:true}});return item??missing();}
-  async createStudent(auth:AuthenticatedContext,input:CreateStudentInput){const organizationId=org(auth);const item=await this.prisma.client.student.create({data:{...input,organizationId,phone:phone(input.phone)}});await this.audit(auth,"student.created","Student",item.id,organizationId);return item}
-  async updateStudent(auth:AuthenticatedContext,id:string,input:UpdateStudentInput){await this.student(auth,id);const item=await this.prisma.client.student.update({where:{id},data:{...input,phone:input.phone===undefined?undefined:phone(input.phone)}});await this.audit(auth,"student.updated","Student",id,org(auth));return item}
-  async guardians(auth:AuthenticatedContext,query:OperationalListInput){const organizationId=org(auth);const where={organizationId,...(query.status==="ACTIVE"||query.status==="INACTIVE"?{status:query.status}:{})} as Prisma.GuardianWhereInput;const [items,total]=await Promise.all([this.prisma.client.guardian.findMany({where,skip:(query.page-1)*query.pageSize,take:query.pageSize,orderBy:{createdAt:"desc"}}),this.prisma.client.guardian.count({where})]);return{items,page:query.page,pageSize:query.pageSize,total};}
-  async guardian(auth:AuthenticatedContext,id:string){const item=await this.prisma.client.guardian.findFirst({where:{id,organizationId:org(auth)},include:{studentLinks:{include:{student:true}}}});return item??missing();}
-  async createGuardian(auth:AuthenticatedContext,input:CreateGuardianInput){const organizationId=org(auth);const item=await this.prisma.client.guardian.create({data:{...input,organizationId,phone:phone(input.phone)!,taxId:tax(input.taxId)}});await this.audit(auth,"guardian.created","Guardian",item.id,organizationId);return item}
-  async updateGuardian(auth:AuthenticatedContext,id:string,input:UpdateGuardianInput){await this.guardian(auth,id);const item=await this.prisma.client.guardian.update({where:{id},data:{...input,phone:input.phone===undefined?undefined:phone(input.phone),taxId:input.taxId===undefined?undefined:tax(input.taxId)}});await this.audit(auth,"guardian.updated","Guardian",id,org(auth));return item}
-  async linkGuardian(auth:AuthenticatedContext,studentId:string,guardianId:string,relationship?:string){const organizationId=org(auth);const [student,guardian]=await Promise.all([this.prisma.client.student.findFirst({where:{id:studentId,organizationId}}),this.prisma.client.guardian.findFirst({where:{id:guardianId,organizationId}})]);if(!student||!guardian) return missing();const item=await this.prisma.client.studentGuardian.create({data:{organizationId,studentId,guardianId,relationship}});await this.audit(auth,"student_guardian.created","StudentGuardian",item.id,organizationId);return item}
-  async enrollments(auth:AuthenticatedContext,query:EnrollmentListInput){const organizationId=org(auth);const where={organizationId,...(query.status?{status:query.status}: {})} as Prisma.EnrollmentWhereInput;const [items,total]=await Promise.all([this.prisma.client.enrollment.findMany({where,include:{student:true,guardian:true,plan:true},skip:(query.page-1)*query.pageSize,take:query.pageSize,orderBy:{createdAt:"desc"}}),this.prisma.client.enrollment.count({where})]);return{items,page:query.page,pageSize:query.pageSize,total};}
-  async enrollment(auth:AuthenticatedContext,id:string){const item=await this.prisma.client.enrollment.findFirst({where:{id,organizationId:org(auth)},include:{student:true,guardian:true,plan:true}});return item??missing();}
-  async createEnrollment(auth:AuthenticatedContext,input:CreateEnrollmentInput){const organizationId=org(auth);const [student,guardian,plan]=await Promise.all([this.prisma.client.student.findFirst({where:{id:input.studentId,organizationId,status:"ACTIVE"}}),this.prisma.client.guardian.findFirst({where:{id:input.guardianId,organizationId,status:"ACTIVE"}}),this.prisma.client.plan.findFirst({where:{id:input.planId,organizationId,status:"ACTIVE"}})]);if(!student||!guardian||!plan) return missing();const linked=await this.prisma.client.studentGuardian.findFirst({where:{organizationId,studentId:student.id,guardianId:guardian.id,active:true}});if(!linked)throw new BadRequestException({code:"GUARDIAN_LINK_REQUIRED",message:"Guardian must be linked to the student"});const item=await this.prisma.client.enrollment.create({data:{...input,organizationId,amountCents:input.amountCents??plan.amountCents,dueDay:input.dueDay??plan.dueDay,planNameSnapshot:plan.name,startDate:new Date(input.startDate),...(input.endDate?{endDate:new Date(input.endDate)}:{})}});await this.audit(auth,"enrollment.created","Enrollment",item.id,organizationId);return item}
-  async updateEnrollment(auth:AuthenticatedContext,id:string,input:UpdateEnrollmentInput){await this.enrollment(auth,id);const item=await this.prisma.client.enrollment.update({where:{id},data:{...input,...(input.endDate?{endDate:new Date(input.endDate)}:{})}});await this.audit(auth,"enrollment.updated","Enrollment",id,org(auth));return item}
+
+  private audit(
+    transaction: Prisma.TransactionClient,
+    auth: AuthenticatedContext,
+    action: string,
+    entityType: string,
+    entityId: string,
+    orgId: string,
+    auditMetadata: OperationalAuditMetadata,
+  ) {
+    return transaction.auditLog.create({
+      data: {
+        organizationId: orgId,
+        actorUserId: auth.userId,
+        actorType: AuditActorType.USER,
+        action,
+        entityType,
+        entityId,
+        ...metadata(auditMetadata),
+      },
+    });
+  }
+
+  async plans(auth: AuthenticatedContext, query: OperationalListInput) {
+    const orgId = organizationId(auth);
+    const where: Prisma.PlanWhereInput = {
+      organizationId: orgId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: "insensitive" } },
+              { description: { contains: query.search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.client.plan.findMany({
+        where,
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.client.plan.count({ where }),
+    ]);
+    return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
+  async plan(auth: AuthenticatedContext, id: string) {
+    const item = await this.prisma.client.plan.findUnique({
+      where: {
+        organizationId_id: { organizationId: organizationId(auth), id },
+      },
+    });
+    return item ?? missing();
+  }
+
+  async createPlan(
+    auth: AuthenticatedContext,
+    input: CreatePlanInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const item = await transaction.plan.create({
+        data: { ...input, organizationId: orgId },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "plan.created",
+        "Plan",
+        item.id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
+
+  async updatePlan(
+    auth: AuthenticatedContext,
+    id: string,
+    input: UpdatePlanInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const exists = await transaction.plan.findUnique({
+        where: { organizationId_id: { organizationId: orgId, id } },
+        select: { id: true },
+      });
+      if (!exists) {
+        return missing();
+      }
+      const item = await transaction.plan.update({
+        where: { organizationId_id: { organizationId: orgId, id } },
+        data: input,
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "plan.updated",
+        "Plan",
+        id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
+
+  async students(auth: AuthenticatedContext, query: OperationalListInput) {
+    const orgId = organizationId(auth);
+    const where: Prisma.StudentWhereInput = {
+      organizationId: orgId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: "insensitive" } },
+              { email: { contains: query.search, mode: "insensitive" } },
+              { phone: { contains: query.search } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.client.student.findMany({
+        where,
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.client.student.count({ where }),
+    ]);
+    return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
+  async student(auth: AuthenticatedContext, id: string) {
+    const item = await this.prisma.client.student.findUnique({
+      where: {
+        organizationId_id: { organizationId: organizationId(auth), id },
+      },
+      include: {
+        guardianLinks: { where: { active: true }, include: { guardian: true } },
+        enrollments: true,
+      },
+    });
+    return item ?? missing();
+  }
+
+  async createStudent(
+    auth: AuthenticatedContext,
+    input: CreateStudentInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    const studentPhone = normalizedPhone(input.phone);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const item = await transaction.student.create({
+        data: { ...input, organizationId: orgId, phone: studentPhone },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "student.created",
+        "Student",
+        item.id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
+
+  async updateStudent(
+    auth: AuthenticatedContext,
+    id: string,
+    input: UpdateStudentInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    const studentPhone =
+      input.phone === undefined ? undefined : normalizedPhone(input.phone);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const exists = await transaction.student.findUnique({
+        where: { organizationId_id: { organizationId: orgId, id } },
+        select: { id: true },
+      });
+      if (!exists) {
+        return missing();
+      }
+      const item = await transaction.student.update({
+        where: { organizationId_id: { organizationId: orgId, id } },
+        data: { ...input, phone: studentPhone },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "student.updated",
+        "Student",
+        id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
+
+  async guardians(auth: AuthenticatedContext, query: OperationalListInput) {
+    const orgId = organizationId(auth);
+    const where: Prisma.GuardianWhereInput = {
+      organizationId: orgId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: "insensitive" } },
+              { email: { contains: query.search, mode: "insensitive" } },
+              { phone: { contains: query.search } },
+              { taxId: { contains: query.search } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.client.guardian.findMany({
+        where,
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.client.guardian.count({ where }),
+    ]);
+    return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
+  async guardian(auth: AuthenticatedContext, id: string) {
+    const item = await this.prisma.client.guardian.findUnique({
+      where: {
+        organizationId_id: { organizationId: organizationId(auth), id },
+      },
+      include: { studentLinks: { include: { student: true } } },
+    });
+    return item ?? missing();
+  }
+
+  async createGuardian(
+    auth: AuthenticatedContext,
+    input: CreateGuardianInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    const guardianPhone = normalizedPhone(input.phone);
+    const guardianTaxId = normalizedTaxId(input.taxId);
+    try {
+      return await this.prisma.client.$transaction(async (transaction) => {
+        const item = await transaction.guardian.create({
+          data: {
+            ...input,
+            organizationId: orgId,
+            phone: guardianPhone!,
+            taxId: guardianTaxId,
+          },
+        });
+        await this.audit(
+          transaction,
+          auth,
+          "guardian.created",
+          "Guardian",
+          item.id,
+          orgId,
+          auditMetadata,
+        );
+        return item;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException({
+          code: "GUARDIAN_TAX_ID_CONFLICT",
+          message: "A guardian with this tax identifier already exists",
+        });
+      }
+      throw error;
+    }
+  }
+
+  async updateGuardian(
+    auth: AuthenticatedContext,
+    id: string,
+    input: UpdateGuardianInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    const guardianPhone =
+      input.phone === undefined ? undefined : normalizedPhone(input.phone);
+    const guardianTaxId =
+      input.taxId === undefined ? undefined : normalizedTaxId(input.taxId);
+    try {
+      return await this.prisma.client.$transaction(async (transaction) => {
+        const exists = await transaction.guardian.findUnique({
+          where: { organizationId_id: { organizationId: orgId, id } },
+          select: { id: true },
+        });
+        if (!exists) {
+          return missing();
+        }
+        const item = await transaction.guardian.update({
+          where: { organizationId_id: { organizationId: orgId, id } },
+          data: {
+            ...input,
+            phone: guardianPhone,
+            taxId: guardianTaxId,
+          },
+        });
+        await this.audit(
+          transaction,
+          auth,
+          "guardian.updated",
+          "Guardian",
+          id,
+          orgId,
+          auditMetadata,
+        );
+        return item;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException({
+          code: "GUARDIAN_TAX_ID_CONFLICT",
+          message: "A guardian with this tax identifier already exists",
+        });
+      }
+      throw error;
+    }
+  }
+
+  async linkGuardian(
+    auth: AuthenticatedContext,
+    studentId: string,
+    guardianId: string,
+    relationship?: string,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const [student, guardian] = await Promise.all([
+        transaction.student.findUnique({
+          where: { organizationId_id: { organizationId: orgId, id: studentId } },
+          select: { id: true },
+        }),
+        transaction.guardian.findUnique({
+          where: {
+            organizationId_id: { organizationId: orgId, id: guardianId },
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (!student || !guardian) {
+        return missing();
+      }
+      const item = await transaction.studentGuardian.upsert({
+        where: {
+          organizationId_studentId_guardianId: {
+            organizationId: orgId,
+            studentId,
+            guardianId,
+          },
+        },
+        create: { organizationId: orgId, studentId, guardianId, relationship },
+        update: {
+          active: true,
+          endedAt: null,
+          relationship,
+          startedAt: new Date(),
+        },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "student_guardian.linked",
+        "StudentGuardian",
+        item.id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
+
+  async enrollments(auth: AuthenticatedContext, query: EnrollmentListInput) {
+    const orgId = organizationId(auth);
+    const where: Prisma.EnrollmentWhereInput = {
+      organizationId: orgId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { student: { name: { contains: query.search, mode: "insensitive" } } },
+              {
+                guardian: {
+                  name: { contains: query.search, mode: "insensitive" },
+                },
+              },
+              { plan: { name: { contains: query.search, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.client.enrollment.findMany({
+        where,
+        include: { student: true, guardian: true, plan: true },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.client.enrollment.count({ where }),
+    ]);
+    return { items, page: query.page, pageSize: query.pageSize, total };
+  }
+
+  async enrollment(auth: AuthenticatedContext, id: string) {
+    const item = await this.prisma.client.enrollment.findUnique({
+      where: {
+        organizationId_id: { organizationId: organizationId(auth), id },
+      },
+      include: { student: true, guardian: true, plan: true },
+    });
+    return item ?? missing();
+  }
+
+  async createEnrollment(
+    auth: AuthenticatedContext,
+    input: CreateEnrollmentInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const [student, guardian, plan] = await Promise.all([
+        transaction.student.findUnique({
+          where: {
+            organizationId_id: { organizationId: orgId, id: input.studentId },
+          },
+        }),
+        transaction.guardian.findUnique({
+          where: {
+            organizationId_id: { organizationId: orgId, id: input.guardianId },
+          },
+        }),
+        transaction.plan.findUnique({
+          where: {
+            organizationId_id: { organizationId: orgId, id: input.planId },
+          },
+        }),
+      ]);
+      if (
+        !student ||
+        student.status !== "ACTIVE" ||
+        !guardian ||
+        guardian.status !== "ACTIVE" ||
+        !plan ||
+        plan.status !== "ACTIVE"
+      ) {
+        return missing();
+      }
+      const linked = await transaction.studentGuardian.findUnique({
+        where: {
+          organizationId_studentId_guardianId: {
+            organizationId: orgId,
+            studentId: student.id,
+            guardianId: guardian.id,
+          },
+        },
+      });
+      if (!linked?.active) {
+        throw new BadRequestException({
+          code: "GUARDIAN_LINK_REQUIRED",
+          message: "Guardian must be linked to the student",
+        });
+      }
+
+      const amountCents = input.amountCents ?? plan.amountCents;
+      const startDate = new Date(`${input.startDate}T00:00:00.000Z`);
+      const endDate = input.endDate
+        ? new Date(`${input.endDate}T00:00:00.000Z`)
+        : undefined;
+      validateEnrollmentValues(
+        amountCents,
+        input.discountCents,
+        startDate,
+        endDate,
+      );
+      const item = await transaction.enrollment.create({
+        data: {
+          organizationId: orgId,
+          studentId: input.studentId,
+          guardianId: input.guardianId,
+          planId: input.planId,
+          amountCents,
+          dueDay: input.dueDay ?? plan.dueDay,
+          discountCents: input.discountCents,
+          planNameSnapshot: plan.name,
+          startDate,
+          ...(endDate ? { endDate } : {}),
+        },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "enrollment.created",
+        "Enrollment",
+        item.id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
+
+  async updateEnrollment(
+    auth: AuthenticatedContext,
+    id: string,
+    input: UpdateEnrollmentInput,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const current = await transaction.enrollment.findUnique({
+        where: { organizationId_id: { organizationId: orgId, id } },
+      });
+      if (!current) {
+        return missing();
+      }
+      const endDate = input.endDate
+        ? new Date(`${input.endDate}T00:00:00.000Z`)
+        : current.endDate;
+      validateEnrollmentValues(
+        input.amountCents ?? current.amountCents,
+        input.discountCents ?? current.discountCents,
+        current.startDate,
+        endDate,
+      );
+      const item = await transaction.enrollment.update({
+        where: { organizationId_id: { organizationId: orgId, id } },
+        data: {
+          amountCents: input.amountCents,
+          dueDay: input.dueDay,
+          discountCents: input.discountCents,
+          endDate,
+          status: input.status,
+        },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "enrollment.updated",
+        "Enrollment",
+        id,
+        orgId,
+        auditMetadata,
+      );
+      return item;
+    });
+  }
 }

@@ -14,6 +14,7 @@ import {
 import {
   ApiBody,
   ApiCreatedResponse,
+  ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -48,6 +49,7 @@ const receiveSchema = {
 } as const;
 
 @ApiTags("Webhook inbox")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "admin/webhook-events", version: "1" })
 @UseGuards(SessionAuthGuard, PlatformAdminGuard)
 export class WebhookInboxController {

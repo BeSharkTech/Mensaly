@@ -310,6 +310,8 @@ export class WebhookInboxService {
     error: WebhookProcessingError,
     now: Date,
   ) {
+    const errorCode = error.code.slice(0, 120);
+    const errorMessage = error.message.slice(0, 1_000);
     const retryable = error.retryable && attemptNumber < MAX_ATTEMPTS;
     const status = retryable
       ? WebhookEventStatus.FAILED_RETRYABLE
@@ -343,8 +345,8 @@ export class WebhookInboxService {
         where: { id: attemptId },
         data: {
           status: attemptStatus,
-          errorCode: error.code,
-          errorMessage: error.message,
+          errorCode,
+          errorMessage,
           finishedAt: now,
         },
       });
@@ -357,8 +359,8 @@ export class WebhookInboxService {
           nextAttemptAt: retryable
             ? new Date(now.getTime() + 2 ** (attemptNumber - 1) * 1000)
             : null,
-          lastErrorCode: error.code,
-          lastErrorMessage: error.message,
+          lastErrorCode: errorCode,
+          lastErrorMessage: errorMessage,
         },
       });
     });

@@ -1,10 +1,13 @@
 import { z } from "zod";
 
+const maxMoneyCents = 2_000_000_000;
+const referenceMonth = z
+  .string()
+  .regex(/^(?:20\d{2}|[3-9]\d{3})-(0[1-9]|1[0-2])$/, "Use YYYY-MM with year 2000 or later");
+
 export const generateChargesSchema = z
   .object({
-    referenceMonth: z
-      .string()
-      .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM"),
+    referenceMonth,
   })
   .strict();
 
@@ -19,10 +22,7 @@ export const chargeListQuerySchema = z
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
     status: z.enum(["PENDING", "PAID", "CANCELLED", "WAIVED"]).optional(),
-    referenceMonth: z
-      .string()
-      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
-      .optional(),
+    referenceMonth: referenceMonth.optional(),
   })
   .strict();
 
@@ -30,7 +30,7 @@ export type ChargeListQuery = z.infer<typeof chargeListQuerySchema>;
 
 export const createManualPaymentSchema = z
   .object({
-    amountCents: z.number().int().positive(),
+    amountCents: z.number().int().positive().max(maxMoneyCents),
     method: z.enum(["CASH", "PIX", "BANK_TRANSFER", "CARD", "OTHER"]),
     paidAt: z.string().datetime(),
     externalReference: z.string().trim().min(1).max(255).optional(),

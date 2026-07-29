@@ -7,7 +7,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { ApiOkResponse, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
 import type { z } from "zod";
 
 import {
@@ -23,6 +23,7 @@ import {
 } from "./insights.dto";
 
 @ApiTags("Platform administration")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "admin", version: "1" })
 @UseGuards(SessionAuthGuard, PlatformAdminGuard)
 export class AdminInsightsController {

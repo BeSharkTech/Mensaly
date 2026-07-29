@@ -13,6 +13,7 @@ import {
   ApiBody,
   ApiAcceptedResponse,
   ApiConflictResponse,
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiOkResponse,
@@ -168,6 +169,7 @@ export class AuthController {
   }
 
   @Get("session")
+  @ApiCookieAuth("sessionCookie")
   @ApiOperation({ summary: "Gets the current authenticated session" })
   @ApiOkResponse({ description: "Current authenticated session" })
   @ApiUnauthorizedResponse({ description: "Session is missing, expired, or revoked" })

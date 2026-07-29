@@ -37,7 +37,7 @@ function organizationId(auth: AuthenticatedContext): string {
 }
 
 function monthStart(referenceMonth: string): Date {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(referenceMonth)) {
+  if (!/^(?:20\d{2}|[3-9]\d{3})-(0[1-9]|1[0-2])$/.test(referenceMonth)) {
     throw new BadRequestException({
       code: "VALIDATION_ERROR",
       message: "referenceMonth must use YYYY-MM",
@@ -86,8 +86,12 @@ function auditMetadata(
     ...(metadata.correlationId
       ? { correlationId: metadata.correlationId }
       : {}),
-    ...(metadata.ipAddress ? { ipAddress: metadata.ipAddress } : {}),
-    ...(metadata.userAgent ? { userAgent: metadata.userAgent } : {}),
+    ...(metadata.ipAddress
+      ? { ipAddress: metadata.ipAddress.slice(0, 64) }
+      : {}),
+    ...(metadata.userAgent
+      ? { userAgent: metadata.userAgent.slice(0, 1_024) }
+      : {}),
   };
 }
 
@@ -104,25 +108,26 @@ export class FinancialService {
   ) {
     const orgId = organizationId(auth);
     const referenceMonth = monthStart(input.referenceMonth);
-    const enrollments = await this.prisma.client.enrollment.findMany({
-      where: {
-        organizationId: orgId,
-        status: EnrollmentStatus.ACTIVE,
-        startDate: { lte: monthEnd(referenceMonth) },
-        OR: [{ endDate: null }, { endDate: { gte: referenceMonth } }],
-      },
-      select: {
-        id: true,
-        amountCents: true,
-        discountCents: true,
-        dueDay: true,
-      },
-    });
-
-    const charges = await this.prisma.client.$transaction(async (tx) => {
+    const result = await this.prisma.client.$transaction(async (tx) => {
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`charge-generation:${orgId}:${input.referenceMonth}`}))`,
       );
+      const enrollments = await tx.$queryRaw<
+        Array<{
+          id: string;
+          amountCents: number;
+          discountCents: number;
+          dueDay: number;
+        }>
+      >(Prisma.sql`
+        SELECT "id", "amountCents", "discountCents", "dueDay"
+        FROM "enrollment"
+        WHERE "organizationId" = ${orgId}::uuid
+          AND "status" = ${EnrollmentStatus.ACTIVE}::"EnrollmentStatus"
+          AND "startDate" <= ${monthEnd(referenceMonth)}
+          AND ("endDate" IS NULL OR "endDate" >= ${referenceMonth})
+        FOR SHARE
+      `);
       const generated = [];
       for (const enrollment of enrollments) {
         generated.push(
@@ -164,13 +169,13 @@ export class FinancialService {
         },
       });
 
-      return generated;
+      return { charges: generated, processed: enrollments.length };
     });
 
     return {
       referenceMonth: input.referenceMonth,
-      processed: enrollments.length,
-      charges,
+      processed: result.processed,
+      charges: result.charges,
     };
   }
 

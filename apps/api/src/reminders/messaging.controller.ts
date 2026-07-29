@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Inject,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -16,6 +17,7 @@ import {
   ApiBadRequestResponse,
   ApiBody,
   ApiConflictResponse,
+  ApiCookieAuth,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -89,6 +91,7 @@ const scheduleBodySchema = {
 } as const;
 
 @ApiTags("Messaging")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class MessagingController {
@@ -158,7 +161,7 @@ export class MessagingController {
   @ApiNotFoundResponse({ description: "Template not found" })
   async template(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ) {
     return { data: await this.messaging.template(auth, id) };
   }
@@ -178,7 +181,7 @@ export class MessagingController {
   @ApiNotFoundResponse({ description: "Template not found" })
   async updateTemplate(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateMessageTemplateSchema))
     input: UpdateMessageTemplateDto,
     @Req() request: FastifyRequest,
@@ -271,7 +274,7 @@ export class MessagingController {
   @ApiNotFoundResponse({ description: "Schedule not found" })
   async schedule(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ) {
     return { data: await this.messaging.schedule(auth, id) };
   }
@@ -285,7 +288,7 @@ export class MessagingController {
   @ApiNotFoundResponse({ description: "Schedule not found" })
   async cancelSchedule(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: FastifyRequest,
   ) {
     return {
@@ -304,7 +307,7 @@ export class MessagingController {
   @ApiNotFoundResponse({ description: "Schedule not found" })
   async history(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ): Promise<{ data: unknown[] }> {
     return { data: await this.messaging.scheduleHistory(auth, id) };
   }
@@ -316,7 +319,7 @@ export class MessagingController {
   @ApiNotFoundResponse({ description: "Schedule not found" })
   async attempts(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
   ): Promise<{ data: unknown[] }> {
     return { data: await this.messaging.scheduleAttempts(auth, id) };
   }

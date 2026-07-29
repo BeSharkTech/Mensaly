@@ -5,7 +5,7 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { z } from "zod";
 
 import {
@@ -26,6 +26,7 @@ import {
 } from "./insights.dto";
 
 @ApiTags("Dashboard")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "dashboard", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class DashboardController {

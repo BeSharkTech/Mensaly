@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { ApiBody, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
+import { ApiBody, ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger";
 import type { FastifyRequest } from "fastify";
 
 import { CurrentAuth, type AuthenticatedContext } from "../authorization/authorization-context";
@@ -16,6 +16,7 @@ function requestMetadata(request: FastifyRequest): { ipAddress?: string; userAge
 }
 
 @ApiTags("Organization")
+@ApiCookieAuth("sessionCookie")
 @Controller({ path: "organization", version: "1" })
 @UseGuards(SessionAuthGuard, CompanyAccountGuard)
 export class OrganizationController {

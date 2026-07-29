@@ -27,6 +27,7 @@ aplicação web ainda não possui variáveis públicas próprias.
 | -------------------- | ----------------------- | --------------------- | -------------------------------------------------------------------------- |
 | `NODE_ENV`           | API e worker            | Não                   | Seleciona `development`, `test` ou `production`; o padrão é `development`. |
 | `API_PORT`           | API                     | Não                   | Porta HTTP da API; o padrão é `3001`.                                      |
+| `TRUST_PROXY_HOPS`   | API                     | Não                   | Proxies reversos confiáveis entre cliente e API; padrão `0`, máximo `10`.   |
 | `POSTGRES_DB`        | Docker Compose          | Sim no ambiente local | Nome do banco PostgreSQL local.                                            |
 | `POSTGRES_USER`      | Docker Compose          | Sim no ambiente local | Usuário do PostgreSQL local.                                               |
 | `POSTGRES_PASSWORD`  | Docker Compose          | Sim no ambiente local | Senha exclusiva do desenvolvimento local.                                  |
