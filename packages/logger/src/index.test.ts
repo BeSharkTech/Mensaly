@@ -20,9 +20,18 @@ describe("logger package foundation", () => {
       authorization: "Bearer secret",
       password: "secret-password",
       token: "secret-token",
+      payload: { card: "4111111111111111" },
+      customer: {
+        email: "owner@example.test",
+        phone: "5511999999999",
+        taxId: "12345678901",
+      },
     });
 
-    assert.doesNotMatch(output, /secret-password|secret-token|Bearer secret/);
+    assert.doesNotMatch(
+      output,
+      /secret-password|secret-token|Bearer secret|4111111111111111|owner@example|5511999999999|12345678901/,
+    );
     assert.match(output, /\[REDACTED\]/);
   });
 });

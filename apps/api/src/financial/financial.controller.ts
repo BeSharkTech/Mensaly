@@ -38,6 +38,7 @@ import {
   SessionAuthGuard,
 } from "../authorization/authorization.guards";
 import { getCorrelationId } from "../common/correlation";
+import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import {
   chargeListQuerySchema,
   CreateManualPaymentDto,
@@ -45,7 +46,9 @@ import {
   type CreateManualPaymentInput,
   GenerateChargesDto,
   type GenerateChargesInput,
+  generateChargesSchema,
   idempotencyKeySchema,
+  createManualPaymentSchema,
 } from "./financial.dto";
 import {
   type FinancialAuditMetadata,
@@ -126,7 +129,8 @@ export class FinancialController {
   @ApiUnauthorizedResponse({ description: "A valid company session is required" })
   async generateCharges(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Body() input: GenerateChargesDto,
+    @Body(new ZodValidationPipe(generateChargesSchema))
+    input: GenerateChargesDto,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return {
@@ -157,11 +161,12 @@ export class FinancialController {
   @ApiOkResponse({ description: "Paginated organization charges" })
   async charges(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Query() query: Record<string, string | undefined>,
+    @Query(new ZodValidationPipe(chargeListQuerySchema))
+    query: ChargeListQuery,
   ): Promise<{ data: unknown[]; meta: Record<string, number> }> {
     const result = await this.financial.charges(
       auth,
-      chargeListQuerySchema.parse(query) as ChargeListQuery,
+      query,
     );
     return {
       data: result.items,
@@ -269,7 +274,8 @@ export class FinancialController {
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id") id: string,
     @Headers("idempotency-key") header: string | undefined,
-    @Body() input: CreateManualPaymentDto,
+    @Body(new ZodValidationPipe(createManualPaymentSchema))
+    input: CreateManualPaymentDto,
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown; meta: { idempotentReplay: boolean } }> {
     const result = await this.financial.createManualPayment(

@@ -338,6 +338,7 @@ model Charge {
   @@unique([organizationId,enrollmentId,referenceMonth])
   @@unique([organizationId,id])
   @@index([organizationId,status,dueDate])
+  @@index([organizationId,referenceMonth,status])
   @@map("charge")
 }
 

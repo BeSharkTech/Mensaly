@@ -5,7 +5,11 @@ import { ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from "@nestjs/swagger
 import { CurrentAuth, type AuthenticatedContext } from "../authorization/authorization-context";
 import { PlatformAdminGuard, SessionAuthGuard } from "../authorization/authorization.guards";
 import { PrismaService } from "../infrastructure/database/prisma.service";
-import { OrganizationStatusDto } from "./organization-status.dto";
+import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import {
+  OrganizationStatusDto,
+  organizationStatusSchema,
+} from "./organization-status.dto";
 
 @ApiTags("Platform administration")
 @Controller({ path: "admin", version: "1" })
@@ -20,7 +24,7 @@ export class AdminController {
   }
 
   @Patch("organizations/:id/status")
-  async updateOrganizationStatus(@CurrentAuth() auth: AuthenticatedContext, @Param("id") id: string, @Body() input: OrganizationStatusDto): Promise<{ data: unknown }> {
+  async updateOrganizationStatus(@CurrentAuth() auth: AuthenticatedContext, @Param("id") id: string, @Body(new ZodValidationPipe(organizationStatusSchema)) input: OrganizationStatusDto): Promise<{ data: unknown }> {
     const value = input as unknown as { status: OrganizationStatus };
     const current = await this.prisma.client.organization.findUnique({ where: { id } });
     if (!current) throw new NotFoundException({ code: "RESOURCE_NOT_FOUND", message: "Resource was not found" });

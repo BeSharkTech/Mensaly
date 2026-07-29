@@ -24,9 +24,12 @@ import {
   PlatformAdminGuard,
   SessionAuthGuard,
 } from "../authorization/authorization.guards";
+import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import {
   ReceiveWebhookEventDto,
   type ReceiveWebhookEventInput,
+  receiveWebhookEventSchema,
+  type WebhookEventList,
   webhookEventListSchema,
 } from "./webhook-inbox.dto";
 import { WebhookInboxService } from "./webhook-inbox.service";
@@ -58,7 +61,8 @@ export class WebhookInboxController {
   @ApiBody({ schema: receiveSchema })
   @ApiCreatedResponse({ description: "Event persisted idempotently" })
   async receive(
-    @Body() input: ReceiveWebhookEventDto,
+    @Body(new ZodValidationPipe(receiveWebhookEventSchema))
+    input: ReceiveWebhookEventDto,
   ): Promise<{ data: unknown; meta: { duplicate: boolean } }> {
     const result = await this.inbox.receive(
       input as unknown as ReceiveWebhookEventInput,
@@ -70,9 +74,10 @@ export class WebhookInboxController {
   @ApiOperation({ summary: "Lists webhook inbox events" })
   @ApiOkResponse({ description: "Paginated webhook events" })
   async list(
-    @Query() query: Record<string, string | undefined>,
+    @Query(new ZodValidationPipe(webhookEventListSchema))
+    query: WebhookEventList,
   ): Promise<{ data: unknown[]; meta: Record<string, number> }> {
-    const result = await this.inbox.list(webhookEventListSchema.parse(query));
+    const result = await this.inbox.list(query);
     return {
       data: result.items,
       meta: {

@@ -13,9 +13,10 @@ import { RemindersModule } from "./reminders/reminders.module";
 import { WebhookInboxModule } from "./webhook-inbox/webhook-inbox.module";
 import { FilesModule } from "./files/files.module";
 import { InsightsModule } from "./insights/insights.module";
+import { SecurityModule } from "./security/security.module";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule, WebhookInboxModule, FilesModule, InsightsModule],
+  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule, WebhookInboxModule, FilesModule, InsightsModule, SecurityModule],
   controllers: [HealthController],
   providers: [HealthService, RedisHealthService],
 })

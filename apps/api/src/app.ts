@@ -16,6 +16,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { GlobalExceptionFilter } from "./common/global-exception.filter";
 import { registerRequestContext } from "./common/correlation";
+import { registerLocalRateLimit } from "./common/local-rate-limit";
 import { StructuredNestLogger } from "./common/structured-nest-logger";
 import { ZodValidationPipe } from "./common/zod-validation.pipe";
 import { configureFiles } from "./files/files.configuration";
@@ -70,6 +71,7 @@ export async function createApiApplication(
     },
   });
   registerRequestContext(adapter.getInstance());
+  registerLocalRateLimit(adapter.getInstance());
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
