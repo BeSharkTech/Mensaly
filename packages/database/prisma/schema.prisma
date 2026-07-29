@@ -106,6 +106,21 @@ enum MessageDeliveryAttemptStatus {
   FAILED_PERMANENT
 }
 
+enum WebhookEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+}
+
+enum WebhookAttemptStatus {
+  STARTED
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -205,9 +220,51 @@ model Organization {
   messageTemplates MessageTemplate[]
   messageSchedules MessageSchedule[]
   messageRecipientBlocks MessageRecipientBlock[]
+  webhookEvents WebhookEvent[]
 
   @@index([status])
   @@map("organization")
+}
+
+model WebhookEvent {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String? @db.Uuid
+  provider String @db.VarChar(80)
+  externalEventId String @db.VarChar(255)
+  eventType String @db.VarChar(160)
+  payload Json
+  status WebhookEventStatus @default(PENDING)
+  attemptCount Int @default(0)
+  lastErrorCode String? @db.VarChar(120)
+  lastErrorMessage String? @db.VarChar(1000)
+  receivedAt DateTime @default(now()) @db.Timestamptz(3)
+  processingStartedAt DateTime? @db.Timestamptz(3)
+  processedAt DateTime? @db.Timestamptz(3)
+  failedAt DateTime? @db.Timestamptz(3)
+  nextAttemptAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization? @relation(fields:[organizationId],references:[id],onDelete:Restrict)
+  attempts WebhookEventAttempt[]
+  @@unique([provider,externalEventId])
+  @@index([status,nextAttemptAt,receivedAt])
+  @@index([organizationId,status,receivedAt])
+  @@map("webhook_event")
+}
+
+model WebhookEventAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  attemptNumber Int
+  status WebhookAttemptStatus @default(STARTED)
+  errorCode String? @db.VarChar(120)
+  errorMessage String? @db.VarChar(1000)
+  startedAt DateTime @default(now()) @db.Timestamptz(3)
+  finishedAt DateTime? @db.Timestamptz(3)
+  event WebhookEvent @relation(fields:[eventId],references:[id],onDelete:Restrict)
+  @@unique([eventId,attemptNumber])
+  @@index([eventId,startedAt])
+  @@map("webhook_event_attempt")
 }
 
 model Plan {
