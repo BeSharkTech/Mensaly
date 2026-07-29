@@ -14,6 +14,7 @@ import {
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
 import { AppModule } from "./app.module";
+import { registerApiSecurity } from "./common/api-security";
 import { GlobalExceptionFilter } from "./common/global-exception.filter";
 import { registerRequestContext } from "./common/correlation";
 import { registerLocalRateLimit } from "./common/local-rate-limit";
@@ -78,6 +79,7 @@ export async function createApiApplication(
     },
   });
   registerRequestContext(adapter.getInstance());
+  registerApiSecurity(adapter.getInstance(), environment.CORS_ORIGINS);
   registerLocalRateLimit(adapter.getInstance());
 
   const app = await NestFactory.create<NestFastifyApplication>(

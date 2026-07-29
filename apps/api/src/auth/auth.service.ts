@@ -582,8 +582,9 @@ export class AuthService {
       });
     }
 
+    const tokenHash = hashSessionToken(token);
     const session = await this.prisma.client.session.findUnique({
-      where: { tokenHash: hashSessionToken(token) },
+      where: { tokenHash },
       include: { user: true },
     });
 
@@ -593,6 +594,11 @@ export class AuthService {
       session.user.status !== UserStatus.ACTIVE ||
       !session.user.emailVerified
     ) {
+      if (session) {
+        await this.prisma.client.session.deleteMany({
+          where: { tokenHash },
+        });
+      }
       throw new UnauthorizedException({
         code: "SESSION_INVALID",
         message: "The session is invalid or expired",

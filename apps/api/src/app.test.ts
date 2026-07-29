@@ -63,6 +63,10 @@ describe("HTTP API foundation", () => {
         live.headers["x-correlation-id"] as string,
         /^[0-9a-f-]{36}$/i,
       );
+      assert.equal(live.headers["cache-control"], "no-store");
+      assert.equal(live.headers["x-content-type-options"], "nosniff");
+      assert.equal(live.headers["x-frame-options"], "DENY");
+      assert.equal(live.headers["referrer-policy"], "no-referrer");
 
       const suppliedCorrelationId = "c0a80121-7ac0-4b60-a98f-9c639336a001";
       const correlated = await fastify.inject({
@@ -109,6 +113,27 @@ describe("HTTP API foundation", () => {
         url: "/api/v1/health/live",
       });
       assert.equal(denied.headers["access-control-allow-origin"], undefined);
+
+      const csrfRejected = await fastify.inject({
+        headers: {
+          cookie: "mensaly_session=browser-session",
+          origin: "https://denied.example",
+        },
+        method: "POST",
+        url: "/api/v1/auth/logout",
+      });
+      assert.equal(csrfRejected.statusCode, 403);
+      assert.equal(csrfRejected.json().error.code, "CSRF_ORIGIN_REJECTED");
+
+      const csrfAllowed = await fastify.inject({
+        headers: {
+          cookie: "mensaly_session=browser-session",
+          origin: "https://allowed.example",
+        },
+        method: "POST",
+        url: "/api/v1/auth/logout",
+      });
+      assert.equal(csrfAllowed.statusCode, 204);
 
       const openApi = await fastify.inject({
         method: "GET",
@@ -392,6 +417,12 @@ describe("HTTP API foundation", () => {
       });
       assert.equal(expired.statusCode, 401);
       assert.equal(expired.json().error.code, "SESSION_INVALID");
+      assert.equal(
+        await getPrismaClient().session.count({
+          where: { user: { email } },
+        }),
+        0,
+      );
     } finally {
       await app.close();
     }
