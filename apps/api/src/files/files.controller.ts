@@ -34,7 +34,8 @@ import {
   CompanyAccountGuard,
   SessionAuthGuard,
 } from "../authorization/authorization.guards";
-import { fileListSchema } from "./files.dto";
+import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { type FileList, fileListSchema } from "./files.dto";
 import { FilesService } from "./files.service";
 
 @ApiTags("Files")
@@ -100,9 +101,9 @@ export class FilesController {
   @ApiOkResponse({ description: "Paginated file metadata" })
   async list(
     @CurrentAuth() auth: AuthenticatedContext,
-    @Query() query: Record<string, string | undefined>,
+    @Query(new ZodValidationPipe(fileListSchema)) query: FileList,
   ): Promise<{ data: unknown[]; meta: Record<string, number> }> {
-    const result = await this.files.list(auth, fileListSchema.parse(query));
+    const result = await this.files.list(auth, query);
     return {
       data: result.items,
       meta: {
