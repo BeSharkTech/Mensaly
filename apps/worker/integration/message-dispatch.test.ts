@@ -245,6 +245,34 @@ describe("message dispatch processor integration", () => {
     assert.equal(adapter.calls, 1);
   });
 
+  it("bounds unexpected provider errors before persisting them", async () => {
+    const fixture = await createFixture(prisma);
+    const processor = new MessageDispatchProcessor(
+      prisma,
+      {
+        async send() {
+          throw new Error("P".repeat(2_000));
+        },
+      },
+      () => now,
+    );
+
+    await assert.rejects(
+      processor.process({
+        organizationId: fixture.organization.id,
+        scheduleId: fixture.schedule.id,
+      }),
+      TransientJobError,
+    );
+
+    const schedule = await prisma.messageSchedule.findUniqueOrThrow({
+      where: { id: fixture.schedule.id },
+      include: { deliveryAttempts: true },
+    });
+    assert.equal(schedule.lastErrorMessage?.length, 1_000);
+    assert.equal(schedule.deliveryAttempts[0]?.errorMessage?.length, 1_000);
+  });
+
   it("cancels instead of sending when the charge was paid", async () => {
     const fixture = await createFixture(prisma);
     await prisma.charge.update({

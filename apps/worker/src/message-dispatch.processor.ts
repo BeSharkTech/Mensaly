@@ -401,6 +401,8 @@ export class MessageDispatchProcessor {
     failure: ValidationFailure,
     instant: Date,
   ): Promise<DispatchResult> {
+    const errorCode = failure.code.slice(0, 120);
+    const errorMessage = failure.message.slice(0, 1_000);
     const status = failure.retryable
       ? MessageScheduleStatus.FAILED_RETRYABLE
       : MessageScheduleStatus.FAILED_PERMANENT;
@@ -411,8 +413,8 @@ export class MessageDispatchProcessor {
       where: { id: scheduleId },
       data: {
         status,
-        lastErrorCode: failure.code,
-        lastErrorMessage: failure.message,
+        lastErrorCode: errorCode,
+        lastErrorMessage: errorMessage,
       },
       select: { organizationId: true },
     });
@@ -421,8 +423,8 @@ export class MessageDispatchProcessor {
         where: { id: attemptId },
         data: {
           status: attemptStatus,
-          errorCode: failure.code,
-          errorMessage: failure.message,
+          errorCode,
+          errorMessage,
           finishedAt: instant,
         },
       }),
@@ -432,7 +434,7 @@ export class MessageDispatchProcessor {
           scheduleId,
           fromStatus: MessageScheduleStatus.PROCESSING,
           toStatus: status,
-          reason: failure.code.toLowerCase(),
+          reason: errorCode.toLowerCase(),
           metadata: { retryable: failure.retryable },
         },
       }),
