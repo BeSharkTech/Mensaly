@@ -4,15 +4,16 @@
 **Data da auditoria:** 28 de julho de 2026
 **Repositório:** `BeSharkTech/Mensaly`
 **Ponto de partida auditado:** `main` em `67a93cc`
-**Estado atual verificado:** Gates F4 e F5, incluindo MEN-BE-018 a MEN-BE-022,
-integrados na `main` pelos PRs `#41`, `#42`, `#44`, `#46`, `#48` e `#50`
+**Estado atual verificado:** Gate F6 concluído; back-end completo, API v1
+congelada e MEN-BE-023 a MEN-BE-028 integrados na `main` pelos PRs `#52` a
+`#56`
 **Modelo de trabalho:** sequencial, em um único computador
 
-## Atualização de execução — Fase 5
+## Atualização de execução — Fase 6
 
-**Situação em 29 de julho de 2026:** Fases 0 a 5, incluindo MEN-BE-018 a
-MEN-BE-022, estão integradas na `main`. Os PRs `#42`, `#44`, `#46`, `#48` e
-`#50` passaram pelo CI e foram mesclados por squash.
+**Situação em 29 de julho de 2026:** Fases 0 a 6 estão integradas na `main`.
+MEN-BE-023 a MEN-BE-028 passaram por revisão local, CI e teste integral em
+ambiente isolado recriado do zero.
 
 As entregas abaixo foram concluídas na ordem backend-first:
 
@@ -28,6 +29,11 @@ As entregas abaixo foram concluídas na ordem backend-first:
 | F5.3 | BullMQ com filas nomeadas, jobs idempotentes, retry, DLQ, métricas e shutdown seguro integrado na `main`. |
 | F5.4 | Worker com adaptador falso, revalidação antes do envio, tentativas persistidas e estados `SENT`, `DELIVERED` e `READ` integrado na `main`. |
 | F5.5 | Scheduler recorrente de mensalidades e lembretes, jobs atrasados, recuperação após reinício, concorrência e relógio controlado integrados na `main`. |
+| F6.1 | Inbox genérico de webhooks com idempotência, leasing, retry e fencing integrado pelo PR `#52`. |
+| F6.2 | Arquivos locais por abstração, validação de conteúdo e isolamento por empresa integrados pelo PR `#53`. |
+| F6.3 | Consultas de dashboard e administração da plataforma integradas pelo PR `#54`. |
+| F6.4 | Auditoria, rate limit, redaction, limites e hardening multiempresa integrados pelo PR `#55`. |
+| F6.5 | API v1 congelada, OpenAPI, contratos, documentação, cobertura e seed controlado integrados pelo PR `#56`. |
 
 O Gate F4 foi integrado pelo PR `#41`. MEN-BE-018 foi integrado pelo PR `#42`
 com migration aplicada do zero em PostgreSQL isolado, rotas autenticadas,
@@ -55,9 +61,9 @@ limpa, PostgreSQL, Redis, BullMQ, build, testes com relógio controlado e
 runtimes compilados, sem token ou chamada Meta. Com isso, o Gate F5 foi
 concluído.
 
-O próximo trabalho funcional é MEN-BE-023: webhook inbox genérico. Nenhuma
-tela funcional nem integração externa deve iniciar antes do gate de conclusão
-do back-end.
+O próximo trabalho funcional é a Fase 7: front-end sobre a API v1 congelada.
+Integrações externas continuam bloqueadas até o gate de conclusão do
+front-end.
 
 ## 1. Objetivo deste documento
 
@@ -796,6 +802,8 @@ integração Meta Cloud será adicionada somente na fase final.
 
 ### MEN-BE-023 — Webhook inbox genérico
 
+**Estado:** integrado na `main` pelo PR `#52`.
+
 Criar a infraestrutura interna:
 
 - `provider`;
@@ -813,6 +821,8 @@ Ainda não criar endpoints específicos de Stripe, Meta, Chatwoot ou Resend.
 
 ### MEN-BE-024 — Arquivos por abstração
 
+**Estado:** integrado na `main` pelo PR `#53`.
+
 Criar:
 
 - metadados de arquivo;
@@ -825,6 +835,8 @@ Criar:
 Não conectar Cloudflare R2 nesta fase.
 
 ### MEN-BE-025 — Consultas de dashboard
+
+**Estado:** integrado na `main` pelo PR `#54`.
 
 Criar endpoints agregados para:
 
@@ -842,6 +854,8 @@ Criar endpoints agregados para:
 
 ### MEN-BE-026 — Painel administrativo
 
+**Estado:** integrado na `main` pelo PR `#54`.
+
 Criar endpoints exclusivos de `PLATFORM_ADMIN` para:
 
 - empresas;
@@ -854,6 +868,8 @@ Criar endpoints exclusivos de `PLATFORM_ADMIN` para:
 
 ### MEN-BE-027 — Auditoria e segurança
 
+**Estado:** integrado na `main` pelo PR `#55`.
+
 - trilha de auditoria;
 - redaction de segredos e dados sensíveis em logs;
 - rate limits locais;
@@ -865,6 +881,8 @@ Criar endpoints exclusivos de `PLATFORM_ADMIN` para:
 - testes de autorização.
 
 ### MEN-BE-028 — Congelamento da API
+
+**Estado:** integrado na `main` pelo PR `#56`.
 
 Entregáveis:
 
@@ -879,6 +897,12 @@ Entregáveis:
 - backup e restore local documentados.
 
 ### Gate de conclusão do back-end
+
+**Estado:** concluído em 29 de julho de 2026. O gate integral recriou os
+serviços isolados, aplicou 16 migrations do zero e aprovou build, testes de
+integração, typecheck, lint, suíte funcional, runtimes compilados, cobertura,
+OpenAPI sem divergência, seed idempotente com login real e restauração de
+backup em banco descartável. Evidências: `docs/quality/f6-gate-report.md`.
 
 O front-end só será liberado quando:
 
@@ -1045,14 +1069,12 @@ Comandos exatos que devem passar.
 
 A continuidade correta é:
 
-1. iniciar MEN-BE-023 em uma nova branch;
-2. implementar, revisar, validar, publicar e integrar uma tarefa por vez;
-3. seguir o fluxo até MEN-BE-028;
-4. congelar e aprovar a API;
-5. iniciar e concluir o front-end;
+1. dividir a Fase 7 em módulos de front-end;
+2. gerar o cliente HTTP a partir do contrato v1 congelado;
+3. implementar, revisar e validar os fluxos sobre a API local real;
+4. concluir acessibilidade, responsividade e testes no navegador;
+5. aprovar o gate do front-end;
 6. conectar as integrações externas na ordem definida.
 
-MEN-BE-023 está desbloqueado após a conclusão do Gate F5.
-Nenhuma tela funcional deverá ser iniciada antes do gate de conclusão do
-back-end. Nenhum provedor externo deverá ser conectado antes do gate de
-conclusão do front-end.
+A Fase 7 está desbloqueada após a conclusão do Gate F6. Nenhum provedor
+externo deverá ser conectado antes do gate de conclusão do front-end.
