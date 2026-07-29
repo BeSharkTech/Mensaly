@@ -15,9 +15,9 @@ and restore behavior have separate tests.
 
 | Metric | Result |
 | --- | ---: |
-| Statements | 94.24% |
+| Lines | 94.15% |
 | Branches | 84.47% |
-| Functions | 94.58% |
+| Functions | 94.31% |
 
 The run completed with 23/23 API tests. The report includes application source
 and the workspace packages loaded by the API process.
