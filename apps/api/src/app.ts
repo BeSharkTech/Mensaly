@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import multipart from "@fastify/multipart";
 import {
   apiEnvironmentSchema,
   parseEnvironment,
@@ -17,6 +18,7 @@ import { GlobalExceptionFilter } from "./common/global-exception.filter";
 import { registerRequestContext } from "./common/correlation";
 import { StructuredNestLogger } from "./common/structured-nest-logger";
 import { ZodValidationPipe } from "./common/zod-validation.pipe";
+import { configureFiles } from "./files/files.configuration";
 
 function configureCors(
   app: NestFastifyApplication,
@@ -54,9 +56,18 @@ export async function createApiApplication(
     process.env,
   ),
 ): Promise<NestFastifyApplication> {
+  configureFiles(environment);
   const adapter = new FastifyAdapter({
-    bodyLimit: 1_048_576,
+    bodyLimit: Math.max(1_048_576, environment.FILE_MAX_SIZE_BYTES + 65_536),
     trustProxy: false,
+  });
+  await adapter.getInstance().register(multipart, {
+    limits: {
+      fileSize: environment.FILE_MAX_SIZE_BYTES,
+      files: 1,
+      fields: 0,
+      parts: 1,
+    },
   });
   registerRequestContext(adapter.getInstance());
 

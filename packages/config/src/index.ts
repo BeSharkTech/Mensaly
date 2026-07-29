@@ -13,6 +13,12 @@ const sessionTtlHoursSchema = z
   .min(1)
   .max(24 * 30)
   .default(24 * 7);
+const fileMaxSizeBytesSchema = z.coerce
+  .number()
+  .int()
+  .min(1024)
+  .max(25 * 1024 * 1024)
+  .default(5 * 1024 * 1024);
 const workerConcurrencySchema = z.coerce.number().int().min(1).max(100).default(5);
 const jobAttemptsSchema = z.coerce.number().int().min(1).max(20).default(4);
 const jobBackoffMsSchema = z.coerce
@@ -110,6 +116,8 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     REDIS_URL: redisUrlSchema,
     CORS_ORIGINS: corsOriginsSchema,
     AUTH_SESSION_TTL_HOURS: sessionTtlHoursSchema,
+    LOCAL_STORAGE_PATH: z.string().trim().min(1).default(".local-storage"),
+    FILE_MAX_SIZE_BYTES: fileMaxSizeBytesSchema,
   })
   .superRefine((environment, context) => {
     if (

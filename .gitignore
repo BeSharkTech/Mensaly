@@ -134,6 +134,7 @@ packages/database/prisma/dev.db
 
 # Local infrastructure volumes
 infra/docker/volumes/
+.local-storage/
 
 # yarn v3
 .pnp.*

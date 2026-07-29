@@ -14,6 +14,8 @@
         "API_PORT",
         "DATABASE_URL",
         "REDIS_URL",
+        "LOCAL_STORAGE_PATH",
+        "FILE_MAX_SIZE_BYTES",
         "BULLMQ_PREFIX",
         "BULLMQ_WORKER_CONCURRENCY",
         "BULLMQ_JOB_ATTEMPTS",
@@ -38,6 +40,8 @@
       "env": [
         "DATABASE_URL",
         "REDIS_URL",
+        "LOCAL_STORAGE_PATH",
+        "FILE_MAX_SIZE_BYTES",
         "BULLMQ_PREFIX",
         "BULLMQ_WORKER_CONCURRENCY",
         "BULLMQ_JOB_ATTEMPTS",
