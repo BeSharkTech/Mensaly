@@ -158,7 +158,6 @@ export class StripeSdkGateway implements StripeGateway {
         email: input.email,
         capabilities: {
           card_payments: { requested: true },
-          pix_payments: { requested: true },
           transfers: { requested: true },
         },
         business_profile: {
@@ -178,6 +177,16 @@ export class StripeSdkGateway implements StripeGateway {
   }
 
   async requestPixPaymentsCapability(accountId: string): Promise<ConnectedAccountSnapshot> {
+    const existing = await this.client.accounts.retrieve(accountId);
+
+    // Stripe rejects explicit pix_payments capability requests for Brazilian
+    // connected accounts. Pix availability is configured by Stripe for those
+    // accounts, so retain the provider snapshot and let the checkout offer
+    // Pix only once the capability is reported as active.
+    if (existing.country === "BR") {
+      return accountSnapshot(existing);
+    }
+
     return accountSnapshot(
       await this.client.accounts.update(accountId, {
         capabilities: { pix_payments: { requested: true } },
