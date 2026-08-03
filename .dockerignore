@@ -1,0 +1,19 @@
+.git
+.github
+.logs
+.runtime*
+**/.next*
+**/dist
+**/node_modules
+**/.turbo
+*.log
+.env
+.env.*
+!.env.example
+coverage
+docs
+infra
+.local-storage
+AGENTS.md
+README.md
+Mensaly - Logo.jpeg

@@ -129,8 +129,8 @@ export class OrganizationService {
     const user: CurrentUser = { id: auth.userId, role: auth.role };
     this.assertCompanyAccount(user);
     const input = validatedCreate(rawInput);
-    const taxId = normalizeTaxId(input.taxId);
-    const phone = normalizePhone(input.phone);
+    const taxId = input.taxId ? normalizeTaxId(input.taxId) : undefined;
+    const phone = input.phone ? normalizePhone(input.phone) : undefined;
     const timezone = validTimezone(input.timezone ?? "America/Sao_Paulo");
 
     try {
@@ -154,8 +154,8 @@ export class OrganizationService {
             ownerUserId: user.id,
             name: input.name,
             ...(input.legalName ? { legalName: input.legalName } : {}),
-            taxId,
-            phone,
+            ...(taxId ? { taxId } : {}),
+            ...(phone ? { phone } : {}),
             timezone,
             ...(input.address ? { address: input.address } : {}),
             ...(input.brand ? { brand: input.brand } : {}),

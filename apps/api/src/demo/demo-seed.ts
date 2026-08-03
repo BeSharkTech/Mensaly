@@ -38,8 +38,8 @@ export function validateDemoSeedEnvironment(environment: DemoSeedEnvironment): {
     throw new Error("Demo seed only accepts a local database host");
   }
   const password = environment.DEMO_SEED_PASSWORD;
-  if (!password || password.length < 12 || password.length > 128) {
-    throw new Error("DEMO_SEED_PASSWORD must contain 12 to 128 characters");
+  if (!password || password.length < 6 || password.length > 128) {
+    throw new Error("DEMO_SEED_PASSWORD must contain 6 to 128 characters");
   }
   return {
     email: normalizeEmail(

@@ -9,6 +9,7 @@ import {
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { getCorrelationId } from "./correlation";
+import { reportUnhandledException } from "./observability";
 
 type ErrorPayload = {
   code?: unknown;
@@ -53,6 +54,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         { correlationId, err: exception, method: request.method, path: request.url },
         "request failed",
       );
+      reportUnhandledException(exception, {
+        correlationId,
+        method: request.method,
+        path: request.url,
+      });
     }
 
     void reply.status(status).send({

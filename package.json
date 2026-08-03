@@ -20,6 +20,8 @@
     "lint": "turbo run lint",
     "api:openapi": "pnpm --filter @mensaly/api openapi:export",
     "postinstall": "pnpm db:generate",
+    "production:check:staging": "tsx --env-file-if-exists=.env scripts/production-preflight.ts --target=staging",
+    "production:check:live": "tsx --env-file-if-exists=.env scripts/production-preflight.ts --target=production",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
     "test:runtime": "pnpm --filter @mensaly/api test:runtime && pnpm --filter @mensaly/worker test:runtime"

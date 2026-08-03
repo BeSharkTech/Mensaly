@@ -4,6 +4,10 @@ const id = z.string().uuid();
 export const MAX_MONEY_CENTS = 2_000_000_000;
 const amount = z.number().int().positive().max(MAX_MONEY_CENTS);
 const dueDay = z.number().int().min(1).max(31);
+const chargeOpenTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, {
+  message: "Charge opening time must use HH:mm (24-hour clock)",
+});
+const cpf = z.string().trim().min(11).max(14);
 const date = z
   .string()
   .date()
@@ -30,11 +34,18 @@ export const linkGuardianSchema = z
   })
   .strict();
 
-export const createPlanSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000).optional(), amountCents: amount, dueDay, frequency: z.literal("MONTHLY").default("MONTHLY") }).strict();
-export const updatePlanSchema = createPlanSchema.partial().refine((value) => Object.keys(value).length > 0);
-export const createStudentSchema = z.object({ name: z.string().trim().min(2).max(120), email: z.string().trim().email().max(255).optional(), phone: z.string().trim().max(32).optional(), notes: z.string().trim().max(2000).optional() }).strict();
+const planFieldsSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000).optional(), amountCents: amount, chargeOpenDay: dueDay.default(1), chargeOpenTime: chargeOpenTime.default("00:00"), dueDay, frequency: z.literal("MONTHLY").default("MONTHLY") }).strict();
+const validChargeWindow = (value: { chargeOpenDay?: number; dueDay?: number }) =>
+  value.chargeOpenDay === undefined || value.dueDay === undefined || value.chargeOpenDay <= value.dueDay;
+export const createPlanSchema = planFieldsSchema.refine(validChargeWindow, { path: ["chargeOpenDay"], message: "Charge opening day cannot be after due day" });
+export const updatePlanSchema = planFieldsSchema
+  .partial()
+  .extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() })
+  .refine((value) => Object.keys(value).length > 0)
+  .refine(validChargeWindow, { path: ["chargeOpenDay"], message: "Charge opening day cannot be after due day" });
+export const createStudentSchema = z.object({ name: z.string().trim().min(2).max(120), cpf, birthDate: z.string().date().optional(), email: z.string().trim().email().max(255).optional(), phone: z.string().trim().max(32).optional(), notes: z.string().trim().max(2000).optional() }).strict();
 export const updateStudentSchema = createStudentSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() }).refine((value) => Object.keys(value).length > 0);
-export const createGuardianSchema = z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(8).max(32), email: z.string().trim().email().max(255).optional(), taxId: z.string().trim().min(11).max(18).optional() }).strict();
+export const createGuardianSchema = z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(8).max(32), email: z.string().trim().email().max(255).optional(), taxId: cpf }).strict();
 export const updateGuardianSchema = createGuardianSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() }).refine((value) => Object.keys(value).length > 0);
 export const createEnrollmentSchema = z
   .object({
@@ -42,12 +53,18 @@ export const createEnrollmentSchema = z
     guardianId: id,
     planId: id,
     amountCents: amount.optional(),
+    chargeOpenDay: dueDay.optional(),
+    chargeOpenTime: chargeOpenTime.optional(),
     dueDay: dueDay.optional(),
     discountCents: z.number().int().nonnegative().max(MAX_MONEY_CENTS).default(0),
     startDate: date,
     endDate: date.optional(),
   })
   .strict()
+  .refine(validChargeWindow, {
+    path: ["chargeOpenDay"],
+    message: "Charge opening day cannot be after due day",
+  })
   .refine(
     (value) =>
       !value.endDate ||
@@ -64,13 +81,16 @@ export const createEnrollmentSchema = z
 export const updateEnrollmentSchema = z
   .object({
     amountCents: amount.optional(),
+    chargeOpenDay: dueDay.optional(),
+    chargeOpenTime: chargeOpenTime.optional(),
     dueDay: dueDay.optional(),
     discountCents: z.number().int().nonnegative().max(MAX_MONEY_CENTS).optional(),
     endDate: date.optional(),
     status: z.enum(["ACTIVE", "ENDED", "CANCELLED"]).optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0);
+  .refine((value) => Object.keys(value).length > 0)
+  .refine(validChargeWindow, { path: ["chargeOpenDay"], message: "Charge opening day cannot be after due day" });
 
 export class CreatePlanDto { static readonly schema = createPlanSchema; }
 export class UpdatePlanDto { static readonly schema = updatePlanSchema; }

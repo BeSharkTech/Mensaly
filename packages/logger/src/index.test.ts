@@ -24,13 +24,14 @@ describe("logger package foundation", () => {
       customer: {
         email: "owner@example.test",
         phone: "5511999999999",
+        cpf: "52998224725",
         taxId: "12345678901",
       },
     });
 
     assert.doesNotMatch(
       output,
-      /secret-password|secret-token|Bearer secret|4111111111111111|owner@example|5511999999999|12345678901/,
+      /secret-password|secret-token|Bearer secret|4111111111111111|owner@example|5511999999999|52998224725|12345678901/,
     );
     assert.match(output, /\[REDACTED\]/);
   });

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -34,6 +35,29 @@ enum VerificationType {
   PASSWORD_RESET
 }
 
+enum TransactionalEmailKind {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  WELCOME
+}
+
+enum TransactionalEmailStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+}
+
+enum TransactionalEmailDeliveryStatus {
+  UNKNOWN
+  DELIVERED
+  DELIVERY_DELAYED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  SUPPRESSED
+}
 enum PlanFrequency {
   MONTHLY
 }
@@ -79,6 +103,32 @@ enum PaymentMethod {
   BANK_TRANSFER
   CARD
   OTHER
+}
+
+enum StripeConnectionStatus {
+  PENDING_CREATION
+  ONBOARDING
+  REQUIREMENTS_DUE
+  UNDER_REVIEW
+  ENABLED
+  RESTRICTED
+  DISCONNECTED
+}
+
+enum StripeConnectAccountType {
+  STANDARD
+  EXPRESS
+}
+
+enum StripeCheckoutStatus {
+  CREATING
+  OPEN
+  PROCESSING
+  PAID
+  EXPIRED
+  FAILED
+  REFUNDED
+  DISPUTED
 }
 
 enum ReminderTiming {
@@ -145,6 +195,7 @@ model User {
   organization Organization?
   auditLogs    AuditLog[]    @relation("AuditActor")
   uploadedFiles StoredFile[]
+  transactionalEmails TransactionalEmail[]
 
   @@index([role, status])
   @@map("user")
@@ -231,6 +282,15 @@ model Organization {
   messageRecipientBlocks MessageRecipientBlock[]
   webhookEvents WebhookEvent[]
   files StoredFile[]
+  customFields CustomField[]
+  studentFieldValues StudentFieldValue[]
+  products Product[]
+  events Event[]
+  broadcastMessages BroadcastMessage[]
+  broadcastSends BroadcastSend[]
+  stripeConnection StripeConnection?
+  stripeCustomers StripeCustomer[]
+  stripeCheckouts StripeCheckout[]
 
   @@index([status])
   @@map("organization")
@@ -305,6 +365,8 @@ model Plan {
   name String @db.VarChar(120)
   description String? @db.VarChar(1000)
   amountCents Int
+  chargeOpenDay Int @default(1)
+  chargeOpenTime String @default("00:00") @db.VarChar(5)
   dueDay Int
   frequency PlanFrequency @default(MONTHLY)
   status PlanStatus @default(ACTIVE)
@@ -336,6 +398,7 @@ model Charge {
   enrollment Enrollment @relation(fields:[organizationId,enrollmentId],references:[organizationId,id],onDelete:Restrict)
   payments Payment[]
   messageSchedules MessageSchedule[]
+  stripeCheckouts StripeCheckout[]
   @@unique([organizationId,enrollmentId,referenceMonth])
   @@unique([organizationId,id])
   @@index([organizationId,status,dueDate])
@@ -508,6 +571,8 @@ model Student {
   id String @id @default(uuid()) @db.Uuid
   organizationId String @db.Uuid
   name String @db.VarChar(120)
+  cpf String? @db.VarChar(11)
+  birthDate DateTime? @db.Date
   email String? @db.Citext
   phone String? @db.VarChar(20)
   notes String? @db.VarChar(2000)
@@ -517,7 +582,9 @@ model Student {
   organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
   guardianLinks StudentGuardian[]
   enrollments Enrollment[]
+  fieldValues StudentFieldValue[]
   @@unique([organizationId,id])
+  @@unique([organizationId,cpf])
   @@index([organizationId, status, name])
   @@map("student")
 }
@@ -535,6 +602,7 @@ model Guardian {
   organization Organization @relation(fields:[organizationId], references:[id], onDelete: Restrict)
   studentLinks StudentGuardian[]
   enrollments Enrollment[]
+  stripeCustomers StripeCustomer[]
   @@unique([organizationId,id])
   @@index([organizationId, status, name])
   @@unique([organizationId, taxId])
@@ -565,6 +633,8 @@ model Enrollment {
   guardianId String @db.Uuid
   planId String @db.Uuid
   amountCents Int
+  chargeOpenDay Int @default(1)
+  chargeOpenTime String @default("00:00") @db.VarChar(5)
   dueDay Int
   discountCents Int @default(0)
   startDate DateTime @db.Date
@@ -582,6 +652,87 @@ model Enrollment {
   @@index([organizationId, status])
   @@index([organizationId, studentId])
   @@map("enrollment")
+}
+
+model StripeConnection {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  organizationId       String                  @unique @db.Uuid
+  stripeAccountId      String?                 @unique @db.VarChar(255)
+  accountType          StripeConnectAccountType @default(STANDARD)
+  status               StripeConnectionStatus @default(PENDING_CREATION)
+  chargesEnabled       Boolean                 @default(false)
+  payoutsEnabled       Boolean                 @default(false)
+  detailsSubmitted     Boolean                 @default(false)
+  capabilities         Json?
+  requirements         Json?
+  creationAttemptCount Int                     @default(0)
+  creationLeaseUntil   DateTime?               @db.Timestamptz(3)
+  lastErrorCode        String?                 @db.VarChar(120)
+  lastErrorMessage     String?                 @db.VarChar(1000)
+  lastSyncedAt         DateTime?               @db.Timestamptz(3)
+  disconnectedAt       DateTime?               @db.Timestamptz(3)
+  createdAt            DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "stripe_connection_organizationId_fkey")
+  customers    StripeCustomer[]
+  checkouts    StripeCheckout[]
+
+  @@unique([organizationId, id])
+  @@index([status, updatedAt])
+  @@map("stripe_connection")
+}
+
+model StripeCustomer {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @db.Uuid
+  guardianId       String   @db.Uuid
+  stripeCustomerId String   @unique @db.VarChar(255)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "stripe_customer_organizationId_fkey")
+  connection   StripeConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Restrict, map: "stripe_customer_connection_fkey")
+  guardian     Guardian         @relation(fields: [organizationId, guardianId], references: [organizationId, id], onDelete: Restrict, map: "stripe_customer_guardian_fkey")
+  checkouts    StripeCheckout[]
+
+  @@unique([organizationId, guardianId])
+  @@unique([organizationId, id])
+  @@index([organizationId, createdAt])
+  @@map("stripe_customer")
+}
+
+model StripeCheckout {
+  id                      String               @id @default(uuid()) @db.Uuid
+  organizationId          String               @db.Uuid
+  chargeId                String               @db.Uuid
+  customerRecordId        String?              @db.Uuid
+  stripeAccountId         String               @db.VarChar(255)
+  stripeCheckoutSessionId String?              @unique @db.VarChar(255)
+  stripePaymentIntentId   String?              @unique @db.VarChar(255)
+  publicTokenHash         String               @unique @db.VarChar(64)
+  status                  StripeCheckoutStatus @default(OPEN)
+  providerSessionVersion  Int                  @default(0)
+  providerSessionLeaseUntil DateTime?          @db.Timestamptz(3)
+  amountCents             Int
+  currency                String               @default("brl") @db.VarChar(3)
+  expiresAt               DateTime             @db.Timestamptz(3)
+  providerExpiresAt       DateTime?            @db.Timestamptz(3)
+  lastProviderEventAt     DateTime?            @db.Timestamptz(3)
+  lastErrorCode           String?              @db.VarChar(120)
+  lastErrorMessage        String?              @db.VarChar(1000)
+  createdAt               DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime             @updatedAt @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict, map: "stripe_checkout_organizationId_fkey")
+  connection   StripeConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Restrict, map: "stripe_checkout_connection_fkey")
+  charge       Charge           @relation(fields: [organizationId, chargeId], references: [organizationId, id], onDelete: Restrict, map: "stripe_checkout_charge_fkey")
+  customer     StripeCustomer?  @relation(fields: [organizationId, customerRecordId], references: [organizationId, id], onDelete: Restrict, map: "stripe_checkout_customer_fkey")
+
+  @@unique([organizationId, id])
+  @@index([organizationId, chargeId, status])
+  @@index([organizationId, status, expiresAt])
+  @@map("stripe_checkout")
 }
 
 model AuditLog {
@@ -606,4 +757,150 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorUserId, createdAt])
   @@map("audit_log")
+}
+
+model TransactionalEmail {
+  id                String                   @id @default(uuid()) @db.Uuid
+  userId            String?                  @db.Uuid
+  recipient         String                   @db.Citext
+  kind              TransactionalEmailKind
+  encryptedPayload  Json
+  idempotencyKey    String                   @unique @db.VarChar(255)
+  status            TransactionalEmailStatus @default(PENDING)
+  attemptCount      Int                      @default(0)
+  maxAttempts       Int                      @default(4)
+  nextAttemptAt     DateTime                 @default(now()) @db.Timestamptz(3)
+  lockedAt          DateTime?                @db.Timestamptz(3)
+  providerMessageId String?                  @db.VarChar(255)
+  deliveryStatus    TransactionalEmailDeliveryStatus @default(UNKNOWN)
+  providerEventAt   DateTime?                @db.Timestamptz(3)
+  deliveryError     String?                  @db.VarChar(1000)
+  lastErrorCode     String?                  @db.VarChar(120)
+  lastErrorMessage  String?                  @db.VarChar(1000)
+  sentAt            DateTime?                @db.Timestamptz(3)
+  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
+  @@index([providerMessageId])
+  @@map("transactional_email")
+}
+
+
+
+model CustomField {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  label String @db.VarChar(60)
+  fieldType String @db.VarChar(20)
+  options Json
+  required Boolean @default(false)
+  sortOrder Int @default(0)
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  values StudentFieldValue[]
+  @@unique([organizationId, id])
+  @@index([organizationId, active, sortOrder])
+  @@map("custom_field")
+}
+
+model StudentFieldValue {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  studentId String @db.Uuid
+  fieldId String @db.Uuid
+  value String @db.VarChar(500)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  student Student @relation(fields: [organizationId, studentId], references: [organizationId, id], onDelete: Restrict)
+  field CustomField @relation(fields: [organizationId, fieldId], references: [organizationId, id], onDelete: Restrict)
+  @@unique([organizationId, studentId, fieldId])
+  @@index([organizationId, fieldId])
+  @@map("student_field_value")
+}
+
+model Product {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.VarChar(120)
+  description String @db.VarChar(500)
+  priceCents Int
+  stockQuantity Int
+  imageDataUrl String? @db.Text
+  status String @default("ACTIVE") @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  @@unique([organizationId, id])
+  @@index([organizationId, status, createdAt])
+  @@map("product")
+}
+
+model Event {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.VarChar(120)
+  description String @db.VarChar(500)
+  location String @db.VarChar(160)
+  startsAt DateTime @db.Timestamptz(3)
+  endsAt DateTime? @db.Timestamptz(3)
+  priceCents Int
+  imageDataUrl String? @db.Text
+  status String @default("ACTIVE") @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  @@unique([organizationId, id])
+  @@index([organizationId, status, startsAt])
+  @@map("event")
+}
+
+model BroadcastMessage {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String @db.VarChar(120)
+  body String @db.VarChar(4000)
+  targetType String @db.VarChar(20)
+  planId String? @db.Uuid
+  productId String? @db.Uuid
+  eventId String? @db.Uuid
+  active Boolean @default(true)
+  scheduledFor DateTime? @db.Timestamptz(3)
+  scheduleType String @default("MANUAL") @db.VarChar(20)
+  dayOfMonth Int?
+  weekday Int?
+  sendTime String @default("09:00") @db.VarChar(5)
+  repeatUntil DateTime? @db.Date
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sends BroadcastSend[]
+  @@unique([organizationId, id])
+  @@index([organizationId, active, createdAt])
+  @@map("broadcast_message")
+}
+
+model BroadcastSend {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  messageId String @db.Uuid
+  studentId String? @db.Uuid
+  studentName String @db.VarChar(120)
+  recipient String @db.VarChar(20)
+  status String @default("QUEUED") @db.VarChar(40)
+  sentAt DateTime @default(now()) @db.Timestamptz(3)
+  scheduledFor DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  message BroadcastMessage @relation(fields: [organizationId, messageId], references: [organizationId, id], onDelete: Restrict)
+  @@unique([organizationId, id])
+  @@index([organizationId, messageId, status])
+  @@map("broadcast_send")
 }

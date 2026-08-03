@@ -9,7 +9,12 @@ export { PrismaClient } from "@prisma/client";
 export * from "@prisma/client";
 
 export function createPrismaClient(): PrismaClient {
-  return new PrismaClient();
+  return new PrismaClient({
+    transactionOptions: {
+      maxWait: 10_000,
+      timeout: 15_000,
+    },
+  });
 }
 
 export function getPrismaClient(): PrismaClient {

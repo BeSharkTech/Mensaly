@@ -14,6 +14,7 @@ import {
 } from "@mensaly/queue";
 
 import { FakeMessageAdapter } from "./fake-message.adapter";
+import { EmailOutboxProcessor } from "./email-outbox.processor";
 import { MessageDispatchProcessor } from "./message-dispatch.processor";
 import { ScheduledTasksService } from "./scheduled-tasks.service";
 
@@ -33,6 +34,7 @@ type WorkerDependencies = {
   createScheduledTasks: (
     queue: Pick<MessageQueueRuntime, "enqueue" | "remove">,
   ) => Pick<ScheduledTasksService, "reconcile">;
+  processEmailOutbox?: () => Promise<number>;
   logger: QueueLogger;
 };
 
@@ -49,9 +51,12 @@ export async function startWorker(
     (() => {
       const database = getPrismaClient();
       const adapter = new FakeMessageAdapter(
-        configuration.FAKE_MESSAGE_ADAPTER_OUTCOME,
+        configuration.MESSAGE_AUTOMATION_ENABLED
+          ? configuration.FAKE_MESSAGE_ADAPTER_OUTCOME
+          : "PERMANENT_FAILURE",
       );
       const processor = new MessageDispatchProcessor(database, adapter);
+      const emailOutbox = new EmailOutboxProcessor(database, configuration);
       return {
         database,
         disconnectDatabase: disconnectPrismaClient,
@@ -61,7 +66,9 @@ export async function startWorker(
           new ScheduledTasksService(database, queue, {
             lookaheadMs: configuration.SCHEDULER_LOOKAHEAD_MS,
             logger,
+            messageAutomationEnabled: configuration.MESSAGE_AUTOMATION_ENABLED,
           }),
+        processEmailOutbox: () => emailOutbox.processDue(),
         logger,
       };
     })();
@@ -71,6 +78,30 @@ export async function startWorker(
     | Pick<MessageQueueRuntime, "stop" | "enqueue" | "remove">
     | undefined;
   let scheduledTasks: Pick<ScheduledTasksService, "reconcile"> | undefined;
+  let emailOutboxTimer: NodeJS.Timeout | undefined;
+  let processingEmailOutbox = false;
+  const processEmailOutbox = async () => {
+    if (!resolvedDependencies.processEmailOutbox || processingEmailOutbox) {
+      return;
+    }
+    processingEmailOutbox = true;
+    try {
+      const processed = await resolvedDependencies.processEmailOutbox();
+      if (processed > 0) {
+        resolvedDependencies.logger.info(
+          { component: "transactional-email-outbox", processed },
+          "Transactional email outbox processed",
+        );
+      }
+    } catch (error) {
+      resolvedDependencies.logger.error(
+        { component: "transactional-email-outbox", error },
+        "Transactional email outbox processing failed",
+      );
+    } finally {
+      processingEmailOutbox = false;
+    }
+  };
   try {
     queues = await resolvedDependencies.createQueueRuntime({
       redisUrl: configuration.REDIS_URL,
@@ -84,10 +115,16 @@ export async function startWorker(
       handler: resolvedDependencies.createMessageHandler(),
       async schedulerHandler() {
         await scheduledTasks?.reconcile();
+        await processEmailOutbox();
       },
     });
     scheduledTasks = resolvedDependencies.createScheduledTasks(queues);
     await scheduledTasks.reconcile();
+    await processEmailOutbox();
+    emailOutboxTimer = setInterval(() => {
+      void processEmailOutbox();
+    }, configuration.SCHEDULER_INTERVAL_MS);
+    emailOutboxTimer.unref();
   } catch (error) {
     if (queues) {
       await Promise.allSettled([queues.stop()]);
@@ -98,7 +135,12 @@ export async function startWorker(
   resolvedDependencies.logger.info(
     {
       component: "worker",
-      queues: ["message-dispatch", "scheduled-tasks", "dead-letter"],
+      queues: [
+        "message-dispatch",
+        "scheduled-tasks",
+        "transactional-email-outbox",
+        "dead-letter",
+      ],
     },
     "Mensaly worker started",
   );
@@ -112,6 +154,10 @@ export async function startWorker(
       }
 
       stopPromise = (async () => {
+        if (emailOutboxTimer) {
+          clearInterval(emailOutboxTimer);
+          emailOutboxTimer = undefined;
+        }
         const queueResult = await Promise.allSettled([queues.stop()]);
         const databaseResult = await Promise.allSettled([
           resolvedDependencies.disconnectDatabase(),

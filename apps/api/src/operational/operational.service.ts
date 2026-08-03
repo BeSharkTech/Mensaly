@@ -59,15 +59,15 @@ function normalizedPhone(value: string | undefined): string | undefined {
   return normalized;
 }
 
-function normalizedTaxId(value: string | undefined): string | undefined {
+function normalizedCpf(value: string | undefined): string | undefined {
   if (value === undefined) {
     return undefined;
   }
   const normalized = value.replace(/\D/g, "");
-  if (normalized.length !== 11 && normalized.length !== 14) {
+  if (normalized.length !== 11) {
     throw new BadRequestException({
-      code: "TAX_ID_INVALID",
-      message: "Tax identifier must contain 11 or 14 digits",
+      code: "CPF_INVALID",
+      message: "CPF must contain 11 digits",
     });
   }
   return normalized;
@@ -99,6 +99,15 @@ function validateEnrollmentValues(
     throw new BadRequestException({
       code: "ENROLLMENT_DATE_RANGE_INVALID",
       message: "End date cannot precede start date",
+    });
+  }
+}
+
+function validateChargeWindow(chargeOpenDay: number, dueDay: number): void {
+  if (chargeOpenDay > dueDay) {
+    throw new BadRequestException({
+      code: "CHARGE_WINDOW_INVALID",
+      message: "Charge opening day cannot be after due day",
     });
   }
 }
@@ -170,6 +179,7 @@ export class OperationalService {
     auditMetadata: OperationalAuditMetadata = {},
   ) {
     const orgId = organizationId(auth);
+    validateChargeWindow(input.chargeOpenDay, input.dueDay);
     return this.prisma.client.$transaction(async (transaction) => {
       const item = await transaction.plan.create({
         data: { ...input, organizationId: orgId },
@@ -195,17 +205,30 @@ export class OperationalService {
   ) {
     const orgId = organizationId(auth);
     return this.prisma.client.$transaction(async (transaction) => {
-      const exists = await transaction.plan.findUnique({
+      const current = await transaction.plan.findUnique({
         where: { organizationId_id: { organizationId: orgId, id } },
-        select: { id: true },
       });
-      if (!exists) {
+      if (!current) {
         return missing();
       }
+      const chargeOpenDay = input.chargeOpenDay ?? current.chargeOpenDay;
+      const chargeOpenTime = input.chargeOpenTime ?? current.chargeOpenTime;
+      const dueDay = input.dueDay ?? current.dueDay;
+      validateChargeWindow(chargeOpenDay, dueDay);
       const item = await transaction.plan.update({
         where: { organizationId_id: { organizationId: orgId, id } },
         data: input,
       });
+      if (
+        chargeOpenDay !== current.chargeOpenDay ||
+        chargeOpenTime !== current.chargeOpenTime ||
+        dueDay !== current.dueDay
+      ) {
+        await transaction.enrollment.updateMany({
+          where: { organizationId: orgId, planId: id, status: "ACTIVE" },
+          data: { chargeOpenDay, chargeOpenTime, dueDay },
+        });
+      }
       await this.audit(
         transaction,
         auth,
@@ -228,6 +251,7 @@ export class OperationalService {
         ? {
             OR: [
               { name: { contains: query.search, mode: "insensitive" } },
+              { cpf: { contains: query.search } },
               { email: { contains: query.search, mode: "insensitive" } },
               { phone: { contains: query.search } },
             ],
@@ -266,21 +290,38 @@ export class OperationalService {
   ) {
     const orgId = organizationId(auth);
     const studentPhone = normalizedPhone(input.phone);
-    return this.prisma.client.$transaction(async (transaction) => {
-      const item = await transaction.student.create({
-        data: { ...input, organizationId: orgId, phone: studentPhone },
+    const studentCpf = normalizedCpf(input.cpf)!;
+    const birthDate = input.birthDate
+      ? new Date(`${input.birthDate}T00:00:00.000Z`)
+      : undefined;
+    try {
+      return await this.prisma.client.$transaction(async (transaction) => {
+        const item = await transaction.student.create({
+          data: { ...input, cpf: studentCpf, birthDate, organizationId: orgId, phone: studentPhone },
+        });
+        await this.audit(
+          transaction,
+          auth,
+          "student.created",
+          "Student",
+          item.id,
+          orgId,
+          auditMetadata,
+        );
+        return item;
       });
-      await this.audit(
-        transaction,
-        auth,
-        "student.created",
-        "Student",
-        item.id,
-        orgId,
-        auditMetadata,
-      );
-      return item;
-    });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException({
+          code: "STUDENT_CPF_CONFLICT",
+          message: "A student with this CPF already exists",
+        });
+      }
+      throw error;
+    }
   }
 
   async updateStudent(
@@ -292,6 +333,11 @@ export class OperationalService {
     const orgId = organizationId(auth);
     const studentPhone =
       input.phone === undefined ? undefined : normalizedPhone(input.phone);
+    const studentCpf = input.cpf === undefined ? undefined : normalizedCpf(input.cpf);
+    const birthDate =
+      input.birthDate === undefined
+        ? undefined
+        : new Date(`${input.birthDate}T00:00:00.000Z`);
     return this.prisma.client.$transaction(async (transaction) => {
       const exists = await transaction.student.findUnique({
         where: { organizationId_id: { organizationId: orgId, id } },
@@ -302,7 +348,7 @@ export class OperationalService {
       }
       const item = await transaction.student.update({
         where: { organizationId_id: { organizationId: orgId, id } },
-        data: { ...input, phone: studentPhone },
+        data: { ...input, cpf: studentCpf, birthDate, phone: studentPhone },
       });
       await this.audit(
         transaction,
@@ -362,7 +408,7 @@ export class OperationalService {
   ) {
     const orgId = organizationId(auth);
     const guardianPhone = normalizedPhone(input.phone);
-    const guardianTaxId = normalizedTaxId(input.taxId);
+    const guardianTaxId = normalizedCpf(input.taxId)!;
     try {
       return await this.prisma.client.$transaction(async (transaction) => {
         const item = await transaction.guardian.create({
@@ -408,7 +454,7 @@ export class OperationalService {
     const guardianPhone =
       input.phone === undefined ? undefined : normalizedPhone(input.phone);
     const guardianTaxId =
-      input.taxId === undefined ? undefined : normalizedTaxId(input.taxId);
+      input.taxId === undefined ? undefined : normalizedCpf(input.taxId);
     try {
       return await this.prisma.client.$transaction(async (transaction) => {
         const exists = await transaction.guardian.findUnique({
@@ -607,6 +653,10 @@ export class OperationalService {
         startDate,
         endDate,
       );
+      const chargeOpenDay = input.chargeOpenDay ?? plan.chargeOpenDay;
+      const chargeOpenTime = input.chargeOpenTime ?? plan.chargeOpenTime;
+      const dueDay = input.dueDay ?? plan.dueDay;
+      validateChargeWindow(chargeOpenDay, dueDay);
       const item = await transaction.enrollment.create({
         data: {
           organizationId: orgId,
@@ -614,7 +664,9 @@ export class OperationalService {
           guardianId: input.guardianId,
           planId: input.planId,
           amountCents,
-          dueDay: input.dueDay ?? plan.dueDay,
+          chargeOpenDay,
+          chargeOpenTime,
+          dueDay,
           discountCents: input.discountCents,
           planNameSnapshot: plan.name,
           startDate,
@@ -657,10 +709,16 @@ export class OperationalService {
         current.startDate,
         endDate,
       );
+      validateChargeWindow(
+        input.chargeOpenDay ?? current.chargeOpenDay,
+        input.dueDay ?? current.dueDay,
+      );
       const item = await transaction.enrollment.update({
         where: { organizationId_id: { organizationId: orgId, id } },
         data: {
           amountCents: input.amountCents,
+          chargeOpenDay: input.chargeOpenDay,
+          chargeOpenTime: input.chargeOpenTime,
           dueDay: input.dueDay,
           discountCents: input.discountCents,
           endDate,

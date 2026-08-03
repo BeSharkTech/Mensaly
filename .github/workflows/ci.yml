@@ -32,6 +32,23 @@ jobs:
         run: |
           docker compose --env-file .env.example -f infra/docker/compose.yaml config --quiet
           docker compose -f infra/docker/compose.test.yaml config --quiet
+          cat > .phase1.compose.env <<'EOF'
+          DATABASE_URL=postgresql://mensaly:mensaly_local@database.example:5432/mensaly
+          REDIS_URL=rediss://redis.example:6379
+          CORS_ORIGINS=https://app.example.com
+          PUBLIC_API_URL=https://api.example.com
+          PUBLIC_WEB_URL=https://app.example.com
+          S3_ENDPOINT=https://account.r2.cloudflarestorage.com
+          S3_BUCKET=mensaly-files
+          S3_ACCESS_KEY_ID=non-secret-ci-value
+          S3_SECRET_ACCESS_KEY=non-secret-ci-value
+          RESEND_API_KEY=re_non-secret-ci-value
+          RESEND_FROM_EMAIL=ci@example.com
+          RESEND_WEBHOOK_SECRET=whsec_non-secret-ci-value
+          EMAIL_ENCRYPTION_KEY=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+          EOF
+          docker compose --env-file .phase1.compose.env -f infra/docker/compose.app.yaml config --quiet
+          rm .phase1.compose.env
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -45,6 +62,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
 
       - name: Start isolated test services
         run: pnpm env:test:up

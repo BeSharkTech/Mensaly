@@ -77,14 +77,19 @@ const planBodySchema = {
     name: { type: "string", minLength: 2, maxLength: 120 },
     description: { type: "string", maxLength: 1000 },
     amountCents: { type: "integer", minimum: 1, maximum: 2_000_000_000 },
+    chargeOpenDay: { type: "integer", minimum: 1, maximum: 31, default: 1 },
+    chargeOpenTime: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$", default: "00:00" },
     dueDay: { type: "integer", minimum: 1, maximum: 31 },
     frequency: { type: "string", enum: ["MONTHLY"], default: "MONTHLY" },
   },
 };
 const studentBodySchema = {
   type: "object",
+  required: ["name", "cpf"],
   properties: {
     name: { type: "string", minLength: 2, maxLength: 120 },
+    cpf: { type: "string", minLength: 11, maxLength: 14, description: "Brazilian CPF" },
+    birthDate: { type: "string", format: "date" },
     email: { type: "string", format: "email", maxLength: 255 },
     phone: { type: "string", maxLength: 32 },
     notes: { type: "string", maxLength: 2000 },
@@ -92,11 +97,12 @@ const studentBodySchema = {
 };
 const guardianBodySchema = {
   type: "object",
+  required: ["name", "phone", "taxId"],
   properties: {
     name: { type: "string", minLength: 2, maxLength: 120 },
     phone: { type: "string", minLength: 8, maxLength: 32 },
     email: { type: "string", format: "email", maxLength: 255 },
-    taxId: { type: "string", minLength: 11, maxLength: 18 },
+    taxId: { type: "string", minLength: 11, maxLength: 14, description: "Brazilian CPF" },
   },
 };
 const enrollmentBodySchema = {
@@ -106,6 +112,8 @@ const enrollmentBodySchema = {
     guardianId: { type: "string", format: "uuid" },
     planId: { type: "string", format: "uuid" },
     amountCents: { type: "integer", minimum: 1, maximum: 2_000_000_000 },
+    chargeOpenDay: { type: "integer", minimum: 1, maximum: 31 },
+    chargeOpenTime: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
     dueDay: { type: "integer", minimum: 1, maximum: 31 },
     discountCents: {
       type: "integer",
@@ -368,6 +376,8 @@ export class OperationalController {
       minProperties: 1,
       properties: {
         amountCents: enrollmentBodySchema.properties.amountCents,
+        chargeOpenDay: enrollmentBodySchema.properties.chargeOpenDay,
+        chargeOpenTime: enrollmentBodySchema.properties.chargeOpenTime,
         dueDay: enrollmentBodySchema.properties.dueDay,
         discountCents: enrollmentBodySchema.properties.discountCents,
         endDate: enrollmentBodySchema.properties.endDate,
