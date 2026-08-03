@@ -67,6 +67,15 @@ envie um arquivo `.env` de produção ao repositório ou à imagem Docker.
 O ambiente de staging, o cofre de segredos e as credenciais das integrações
 serão configurados em tarefas posteriores, conforme o roadmap.
 
+Antes de qualquer deploy, use o modelo `infra/env/staging.env.example` ou
+`infra/env/production.env.example` e execute o preflight correspondente. Em V1,
+`MESSAGE_AUTOMATION_ENABLED=false` impede que o worker crie ou enfileire envios
+automáticos de WhatsApp sem afetar a geração mensal de cobranças. O deploy exige
+`MENSALY_IMAGE` apontando para uma tag imutável `sha-<commit>` publicada pelo CI.
+
+As variáveis de armazenamento S3/R2, Resend, Sentry, URLs públicas, criptografia,
+Stripe Connect e TLS estão detalhadas em `docs/operations/production-launch.md`.
+
 ## Segurança
 
 - mantenha somente valores locais não sensíveis no `.env.example`;

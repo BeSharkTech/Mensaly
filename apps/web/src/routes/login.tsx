@@ -38,6 +38,17 @@ function LoginPage() {
     try {
       await login({ email: email.trim(), password });
     } catch (signInError) {
+      if (
+        signInError instanceof Error &&
+        signInError.message ===
+          "Email verification is required before login"
+      ) {
+        setLoading(false);
+        navigate({
+          to: `/verificar-email?email=${encodeURIComponent(email.trim())}`,
+        });
+        return;
+      }
       setLoading(false);
       setError(
         signInError instanceof Error &&

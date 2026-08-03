@@ -9,7 +9,7 @@ export const tokenSchema = z.object({
 }).strict();
 
 export const passwordResetSchema = tokenSchema.extend({
-  password: z.string().min(12).max(128),
+  password: z.string().min(6).max(128),
 }).strict();
 
 export class EmailRequestDto {

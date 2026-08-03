@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { login, register } from "@/lib/auth";
+import { register } from "@/lib/auth";
 
 export const Route = createFileRoute("/cadastro")({
   head: () => ({
@@ -45,8 +45,19 @@ function RegisterPage() {
     }
     setLoading(true);
     try {
-      await register({ name: name.trim(), email: email.trim(), password });
-      await login({ email: email.trim(), password });
+      const registration = await register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+      if (registration?.devVerificationToken) {
+        navigate({
+          to: `/verificar-email?token=${encodeURIComponent(
+            registration.devVerificationToken,
+          )}`,
+        });
+        return;
+      }
     } catch (signUpError) {
       setLoading(false);
       setError(
@@ -61,7 +72,9 @@ function RegisterPage() {
       return;
     }
     setLoading(false);
-    navigate({ to: "/onboarding" });
+    navigate({
+      to: `/verificar-email?email=${encodeURIComponent(email.trim())}`,
+    });
   }
 
   return (

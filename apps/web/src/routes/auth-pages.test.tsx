@@ -1,22 +1,28 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createElement } from "react";
+import { createElement, StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
 const register = vi.fn();
 const login = vi.fn();
+const requestEmailVerification = vi.fn();
+const verifyEmail = vi.fn();
 const loadState = vi.fn();
+const getSearchParam = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/cadastro",
   useParams: () => ({}),
+  useSearchParams: () => ({ get: getSearchParam }),
 }));
 
 vi.mock("@/lib/auth", () => ({
   register,
   login,
+  requestEmailVerification,
+  verifyEmail,
 }));
 
 vi.mock("@/lib/store", () => ({
@@ -28,7 +34,32 @@ describe("authentication pages", () => {
     push.mockReset();
     register.mockReset();
     login.mockReset();
+    requestEmailVerification.mockReset();
+    verifyEmail.mockReset();
     loadState.mockReset();
+    getSearchParam.mockReset();
+  });
+
+  it("consumes a local verification token only once under React StrictMode", async () => {
+    const { Route } = await import("./verificar-email");
+    getSearchParam.mockImplementation((key: string) =>
+      key === "token" ? "local-token" : null,
+    );
+    verifyEmail.mockResolvedValue(undefined);
+
+    render(
+      createElement(
+        StrictMode,
+        null,
+        createElement(Route.component),
+      ),
+    );
+
+    await waitFor(() => expect(verifyEmail).toHaveBeenCalledTimes(1));
+    expect(verifyEmail).toHaveBeenCalledWith("local-token");
+    expect(
+      await screen.findByRole("heading", { name: "E-mail confirmado" }),
+    ).toBeInTheDocument();
   });
 
   it("accepts typing in every registration field and submits the account", async () => {
@@ -57,8 +88,10 @@ describe("authentication pages", () => {
         password: "Senha-Segura-2026!",
       }),
     );
-    expect(login).toHaveBeenCalled();
-    expect(push).toHaveBeenCalledWith("/onboarding");
+    expect(login).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith(
+      "/verificar-email?email=maria%40example.test",
+    );
   });
 
   it("accepts login credentials and routes an onboarded account", async () => {

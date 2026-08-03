@@ -1,9 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Trash2, WalletCards } from "lucide-react";
 
 import logo from "@/assets/mensaly-logo.png";
 import { BrandColorPicker } from "@/components/brand-color-picker";
+import {
+  StripeEmbeddedOnboarding,
+  type StripeOnboardingSession,
+} from "@/components/stripe-embedded-onboarding";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -17,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCents } from "@/lib/format";
+import { apiRequest } from "@/lib/api";
 import { saveOnboarding, segments, useAppState, type Plan } from "@/lib/store";
 
 export const Route = createFileRoute("/onboarding")({
@@ -38,10 +44,19 @@ export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
 
-const steps = ["Seu negócio", "Identidade visual", "Planos"];
+const steps = ["Seu negócio", "Identidade visual", "Planos", "Recebimentos"];
+
+type StripeConnection = {
+  status: string;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  accountType?: "STANDARD" | "EXPRESS";
+};
 
 function OnboardingPage() {
   const navigate = useNavigate();
+  const searchParams = useSearchParams();
+  const stripeReturn = searchParams.get("stripe");
   const { state, hydrated, refresh } = useAppState();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -53,8 +68,11 @@ function OnboardingPage() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [draft, setDraft] = useState({ name: "", description: "", amount: "", dueDay: "5" });
+  const [draft, setDraft] = useState({ name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" });
   const [error, setError] = useState("");
+  const [stripeConnection, setStripeConnection] = useState<StripeConnection | null>(null);
+  const [stripeSession, setStripeSession] = useState<StripeOnboardingSession | null>(null);
+  const [stripeSessionKey, setStripeSessionKey] = useState(0);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -73,6 +91,18 @@ function OnboardingPage() {
     if (state.plans.length) setPlans(state.plans);
   }, [hydrated, state.account, state.business, state.plans, navigate]);
 
+  useEffect(() => {
+    if (!hydrated || !stripeReturn) return;
+    setStep(3);
+    setSaving(true);
+    apiRequest<StripeConnection>("/payment-integrations/stripe/refresh", { method: "POST" })
+      .then(setStripeConnection)
+      .catch((reason: unknown) =>
+        setError(reason instanceof Error ? reason.message : "Não foi possível atualizar o Stripe."),
+      )
+      .finally(() => setSaving(false));
+  }, [hydrated, stripeReturn]);
+
   function handleLogo(file: File | undefined) {
     if (!file) return;
     const reader = new FileReader();
@@ -86,7 +116,12 @@ function OnboardingPage() {
       setError("Informe o nome do plano e um valor válido.");
       return;
     }
-    const day = Math.min(28, Math.max(1, Number(draft.dueDay) || 5));
+    const day = Math.min(31, Math.max(1, Number(draft.dueDay) || 5));
+    const chargeOpenDay = Math.min(day, Math.max(1, Number(draft.chargeOpenDay) || 1));
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.chargeOpenTime)) {
+      setError("Informe o horário de abertura no formato HH:mm.");
+      return;
+    }
     setPlans((current) => [
       ...current,
       {
@@ -94,11 +129,13 @@ function OnboardingPage() {
         name: draft.name.trim(),
         description: draft.description.trim(),
         amountCents: cents,
+        chargeOpenDay,
+        chargeOpenTime: draft.chargeOpenTime,
         dueDay: day,
         status: "ACTIVE",
       },
     ]);
-    setDraft({ name: "", description: "", amount: "", dueDay: "5" });
+    setDraft({ name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" });
     setError("");
   }
 
@@ -114,6 +151,99 @@ function OnboardingPage() {
   }
 
   const [saving, setSaving] = useState(false);
+
+  async function prepareStripeOnboarding() {
+    setSaving(true);
+    setError("");
+    try {
+      const session = await apiRequest<StripeOnboardingSession>(
+        "/payment-integrations/stripe/onboarding-session",
+        { method: "POST" },
+      );
+      if (!session.clientSecret || !session.publishableKey) {
+        throw new Error("A configuração segura de recebimentos está indisponível.");
+      }
+      setStripeSession(session);
+      setStripeSessionKey((current) => current + 1);
+    } catch (reason) {
+      setStripeSession(null);
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível abrir a configuração de recebimentos.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function refreshStripeAfterExit() {
+    setSaving(true);
+    setError("");
+    try {
+      const connection = await apiRequest<StripeConnection>(
+        "/payment-integrations/stripe/refresh",
+        { method: "POST" },
+      );
+      setStripeConnection(connection);
+      if (connection.status !== "ENABLED") {
+        setError(
+          "Ainda existem dados obrigatórios pendentes. Revise o formulário para liberar cobranças e repasses.",
+        );
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível confirmar o status dos recebimentos.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function connectStripe() {
+    if (!plans.length) {
+      setError("Cadastre pelo menos um plano para continuar.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await saveOnboarding({
+        business: { name: name.trim(), segment, phone, city, logoDataUrl, brandColor },
+        plans,
+        onboardingComplete: false,
+      });
+      const connection = await apiRequest<StripeConnection>(
+        stripeConnection?.accountType === "STANDARD"
+          ? "/payment-integrations/stripe/reconnect"
+          : "/payment-integrations/stripe/account",
+        { method: "POST" },
+      );
+      setStripeConnection(connection);
+      setStep(3);
+      if (connection.status !== "ENABLED") {
+        const session = await apiRequest<StripeOnboardingSession>(
+          "/payment-integrations/stripe/onboarding-session",
+          { method: "POST" },
+        );
+        if (!session.clientSecret || !session.publishableKey) {
+          throw new Error("A configuração segura de recebimentos está indisponível.");
+        }
+        setStripeSession(session);
+        setStripeSessionKey((current) => current + 1);
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível conectar os recebimentos.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function finish() {
     if (!plans.length) {
@@ -147,9 +277,9 @@ function OnboardingPage() {
           <ThemeToggle />
         </div>
 
-        <ol className="mb-6 flex items-center gap-2 text-xs font-medium">
+        <ol className="mb-6 flex items-start gap-2 text-xs font-medium">
           {steps.map((label, index) => (
-            <li key={label} className="flex flex-1 items-center gap-2">
+            <li key={label} className="flex min-w-0 flex-1 items-center gap-2">
               <span
                 className={
                   index <= step
@@ -159,7 +289,9 @@ function OnboardingPage() {
               >
                 {index < step ? <Check className="size-3" /> : index + 1}
               </span>
-              <span className={index <= step ? "text-foreground" : "text-muted-foreground"}>
+              <span
+                className={`${index <= step ? "text-foreground" : "text-muted-foreground"} min-w-0 break-words text-[11px] leading-tight sm:text-xs`}
+              >
                 {label}
               </span>
             </li>
@@ -265,7 +397,7 @@ function OnboardingPage() {
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Planos e cobrança</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Defina o valor mensal e o dia de vencimento de cada plano.
+                  Defina o valor mensal, o dia de abertura e o vencimento de cada plano.
                 </p>
               </div>
 
@@ -279,7 +411,7 @@ function OnboardingPage() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{plan.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCents(plan.amountCents)}/mês · vence dia {plan.dueDay}
+                          {formatCents(plan.amountCents)}/mês · abre dia {plan.chargeOpenDay}, às {plan.chargeOpenTime} · vence dia {plan.dueDay}
                         </p>
                       </div>
                       <button
@@ -326,12 +458,32 @@ function OnboardingPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="plan-day">Dia de cobrança</Label>
+                    <Label htmlFor="plan-open-day">Dia de abertura</Label>
+                    <Input
+                      id="plan-open-day"
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={draft.chargeOpenDay}
+                      onChange={(e) => setDraft({ ...draft, chargeOpenDay: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-open-time">Horário de abertura</Label>
+                    <Input
+                      id="plan-open-time"
+                      type="time"
+                      value={draft.chargeOpenTime}
+                      onChange={(e) => setDraft({ ...draft, chargeOpenTime: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plan-day">Dia de vencimento</Label>
                     <Input
                       id="plan-day"
                       type="number"
                       min={1}
-                      max={28}
+                      max={31}
                       value={draft.dueDay}
                       onChange={(e) => setDraft({ ...draft, dueDay: e.target.value })}
                     />
@@ -344,7 +496,50 @@ function OnboardingPage() {
             </div>
           ) : null}
 
-          {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
+          {step === 3 ? (
+            <div className="space-y-5">
+              <div>
+                <h1 className="text-xl font-semibold text-foreground">Receba suas mensalidades</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  O Stripe valida seus dados e deposita cada pagamento diretamente na sua conta.
+                </p>
+              </div>
+              <div className="flex gap-4 rounded-lg border border-border p-4">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <WalletCards className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {stripeConnection?.status === "ENABLED"
+                      ? "Conta pronta para receber"
+                      : "Conecte sua conta de recebimentos"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    CPF/CNPJ, documentos e dados bancários são informados diretamente ao Stripe e não ficam salvos na Mensaly.
+                  </p>
+                </div>
+              </div>
+              {stripeConnection && stripeConnection.status !== "ENABLED" ? (
+                <p className="text-sm text-muted-foreground">
+                  Status: {stripeConnection.status}. Se o Stripe pediu uma correção, continue o cadastro para concluir.
+                </p>
+              ) : null}
+              {stripeSession && stripeConnection?.status !== "ENABLED" ? (
+                <StripeEmbeddedOnboarding
+                  key={stripeSessionKey}
+                  session={stripeSession}
+                  onExit={refreshStripeAfterExit}
+                  onRetry={prepareStripeOnboarding}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {error ? (
+            <p className="mt-4 text-sm text-destructive" role="alert" aria-live="polite">
+              {error}
+            </p>
+          ) : null}
 
           <div className="mt-6 flex items-center justify-between gap-3">
             <Button
@@ -356,13 +551,29 @@ function OnboardingPage() {
               <ArrowLeft className="size-4" /> Voltar
             </Button>
             {step < steps.length - 1 ? (
-              <Button type="button" onClick={next}>
-                Continuar <ArrowRight className="size-4" />
+              <Button type="button" onClick={step === 2 ? connectStripe : next} disabled={saving}>
+                {step === 2 ? (saving ? "Salvando..." : "Conectar recebimentos") : "Continuar"}
+                <ArrowRight className="size-4" />
               </Button>
             ) : (
-              <Button type="button" onClick={finish} disabled={saving}>
-                {saving ? "Salvando..." : "Concluir e abrir o painel"} <Check className="size-4" />
-              </Button>
+              stripeConnection?.status === "ENABLED" ? (
+                <Button type="button" onClick={finish} disabled={saving}>
+                  {saving ? "Salvando..." : "Concluir e abrir o painel"} <Check className="size-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={stripeSession ? refreshStripeAfterExit : prepareStripeOnboarding}
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Verificando..."
+                    : stripeSession
+                      ? "Verificar conclusão"
+                      : "Continuar configuração"}{" "}
+                  <ArrowRight className="size-4" />
+                </Button>
+              )
 
             )}
           </div>

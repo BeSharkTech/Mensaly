@@ -16,17 +16,19 @@ type ApiRequestOptions = {
   headers?: Record<string, string>;
 };
 
+export type ApiEnvelope<T> = {
+  data: T;
+  meta?: Record<string, unknown>;
+};
+
 function apiOrigin() {
   if (typeof window !== "undefined") {
-    // Cookies with SameSite=Lax are not shared between localhost and 127.0.0.1.
-    // Keep the API on the same local host used by the page, so a session created
-    // during registration is still available when the onboarding page loads.
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return `${window.location.protocol}//${window.location.hostname}:3001`;
-    }
-    return process.env.NEXT_PUBLIC_MENSALY_API_URL ?? "http://127.0.0.1:3001";
+    // Keep every browser request same-origin. Next proxies /api/v1 to the
+    // configured API, avoiding CORS and cookie-domain differences between
+    // localhost and 127.0.0.1 during local development.
+    return process.env.NEXT_PUBLIC_MENSALY_API_URL || window.location.origin;
   }
-  return process.env.MENSALY_API_URL ?? "http://localhost:3001";
+  return process.env.MENSALY_API_URL ?? "http://127.0.0.1:3002";
 }
 
 function endpoint(path: string, query?: Record<string, unknown>) {
@@ -44,7 +46,10 @@ function endpoint(path: string, query?: Record<string, unknown>) {
   return url.toString();
 }
 
-export async function apiRequest<T = unknown>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+async function requestPayload<T>(
+  path: string,
+  options: ApiRequestOptions,
+): Promise<T | ApiEnvelope<T>> {
   const response = await fetch(endpoint(path, options.query), {
     method: options.method ?? "GET",
     credentials: "include",
@@ -59,6 +64,7 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
   const payload = (await response.json().catch(() => null)) as
     | {
         data?: T;
+        meta?: Record<string, unknown>;
         message?: string;
         correlationId?: string;
         error?: { message?: string; correlationId?: string };
@@ -71,5 +77,35 @@ export async function apiRequest<T = unknown>(path: string, options: ApiRequestO
       payload?.correlationId ?? payload?.error?.correlationId,
     );
   }
-  return (payload?.data ?? payload) as T;
+  return payload as T | ApiEnvelope<T>;
+}
+
+export async function apiRequest<T = unknown>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  const payload = await requestPayload<T>(path, options);
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload
+  ) {
+    return (payload as ApiEnvelope<T>).data;
+  }
+  return payload as T;
+}
+
+export async function apiEnvelopeRequest<T = unknown>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<ApiEnvelope<T>> {
+  const payload = await requestPayload<T>(path, options);
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload
+  ) {
+    return payload as ApiEnvelope<T>;
+  }
+  return { data: payload as T };
 }

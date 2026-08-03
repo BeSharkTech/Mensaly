@@ -58,7 +58,12 @@ function queueRecorder(
   };
 }
 
-async function createFixture() {
+async function createFixture(
+  options: { chargeOpenDay?: number; chargeOpenTime?: string; dueDay?: number } = {},
+) {
+  const chargeOpenDay = options.chargeOpenDay ?? 1;
+  const chargeOpenTime = options.chargeOpenTime ?? "00:00";
+  const dueDay = options.dueDay ?? 10;
   if (organizationIds.length > 0) {
     await prisma.organization.updateMany({
       where: { id: { in: organizationIds } },
@@ -114,7 +119,9 @@ async function createFixture() {
       organizationId: organization.id,
       name: "Mensal",
       amountCents: 12000,
-      dueDay: 10,
+      chargeOpenDay,
+      chargeOpenTime,
+      dueDay,
     },
   });
   const student = await prisma.student.create({
@@ -142,7 +149,9 @@ async function createFixture() {
       planId: plan.id,
       amountCents: 12000,
       discountCents: 1000,
-      dueDay: 10,
+      chargeOpenDay,
+      chargeOpenTime,
+      dueDay,
       startDate: new Date("2026-01-01"),
       planNameSnapshot: plan.name,
     },
@@ -206,6 +215,106 @@ describe("scheduled tasks integration", () => {
       recorder.enqueued[0]?.delayMs,
       schedule.scheduledFor.getTime() - now.getTime(),
     );
+  });
+
+  it("keeps charge automation active while V1 message automation is disabled", async () => {
+    const fixture = await createFixture();
+    const recorder = queueRecorder();
+    const service = new ScheduledTasksService(prisma, recorder.queue, {
+      now: () => new Date("2026-07-01T12:00:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+      messageAutomationEnabled: false,
+    });
+
+    const result = await service.reconcile();
+
+    assert.equal(result.chargesCreated, 1);
+    assert.equal(result.schedulesCreated, 0);
+    assert.equal(result.messagesEnqueued, 0);
+    assert.equal(recorder.enqueued.length, 0);
+    assert.equal(
+      await prisma.charge.count({ where: { organizationId: fixture.organization.id } }),
+      1,
+    );
+    assert.equal(
+      await prisma.messageSchedule.count({ where: { organizationId: fixture.organization.id } }),
+      0,
+    );
+  });
+
+  it("opens charges only on the configured day and catches up idempotently", async () => {
+    const fixture = await createFixture({ chargeOpenDay: 10, dueDay: 15 });
+    const recorder = queueRecorder();
+    const beforeOpening = new ScheduledTasksService(prisma, recorder.queue, {
+      now: () => new Date("2026-07-09T12:00:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+    const onOpening = new ScheduledTasksService(prisma, recorder.queue, {
+      now: () => new Date("2026-07-10T12:00:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+    const afterRestart = new ScheduledTasksService(prisma, recorder.queue, {
+      now: () => new Date("2026-07-11T12:00:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+
+    assert.equal((await beforeOpening.reconcile()).chargesCreated, 0);
+    assert.equal(
+      await prisma.charge.count({ where: { organizationId: fixture.organization.id } }),
+      0,
+    );
+    assert.equal((await onOpening.reconcile()).chargesCreated, 1);
+    assert.equal((await afterRestart.reconcile()).chargesCreated, 0);
+
+    const charge = await prisma.charge.findFirstOrThrow({
+      where: { organizationId: fixture.organization.id },
+    });
+    assert.equal(charge.dueDate.toISOString(), "2026-07-15T00:00:00.000Z");
+    assert.equal(
+      await prisma.charge.count({ where: { organizationId: fixture.organization.id } }),
+      1,
+    );
+  });
+
+  it("waits for the configured local opening time", async () => {
+    const fixture = await createFixture({
+      chargeOpenDay: 10,
+      chargeOpenTime: "09:00",
+      dueDay: 15,
+    });
+    const recorder = queueRecorder();
+    const beforeTime = new ScheduledTasksService(prisma, recorder.queue, {
+      // 08:59 in America/Sao_Paulo.
+      now: () => new Date("2026-07-10T11:59:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+    const atTime = new ScheduledTasksService(prisma, recorder.queue, {
+      // 09:00 in America/Sao_Paulo.
+      now: () => new Date("2026-07-10T12:00:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+
+    assert.equal((await beforeTime.reconcile()).chargesCreated, 0);
+    assert.equal((await atTime.reconcile()).chargesCreated, 1);
+    assert.equal(
+      await prisma.charge.count({ where: { organizationId: fixture.organization.id } }),
+      1,
+    );
+  });
+
+  it("uses the last calendar day when opening day is 31", async () => {
+    const fixture = await createFixture({ chargeOpenDay: 31, dueDay: 31 });
+    const recorder = queueRecorder();
+    const service = new ScheduledTasksService(prisma, recorder.queue, {
+      now: () => new Date("2027-02-28T12:00:00.000Z"),
+      lookaheadMs: 15 * 24 * 60 * 60 * 1000,
+    });
+
+    assert.equal((await service.reconcile()).chargesCreated, 1);
+    const charge = await prisma.charge.findFirstOrThrow({
+      where: { organizationId: fixture.organization.id },
+    });
+    assert.equal(charge.dueDate.toISOString(), "2027-02-28T00:00:00.000Z");
   });
 
   it("serializes concurrent reconciliation without duplicating domain data", async () => {

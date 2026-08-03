@@ -27,7 +27,10 @@ export async function currentUser(): Promise<SessionUser | null> {
 }
 
 export async function register(input: { name: string; email: string; password: string }) {
-  await apiRequest("/auth/register", { method: "POST", body: input });
+  return apiRequest<{ devVerificationToken?: string }>("/auth/register", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export async function login(input: { email: string; password: string }) {
@@ -52,6 +55,21 @@ export async function requestPasswordReset(email: string) {
     method: "POST",
     body: { email },
   });
+}
+
+export async function requestEmailVerification(email: string) {
+  await apiRequest("/auth/verify-email/request", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export async function verifyEmail(token: string) {
+  await apiRequest("/auth/verify-email/confirm", {
+    method: "POST",
+    body: { token },
+  });
+  notify("USER_UPDATED");
 }
 
 export async function confirmPasswordReset(token: string, password: string) {

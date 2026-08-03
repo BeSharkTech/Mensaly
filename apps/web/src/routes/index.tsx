@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { useDashboardData } from "@/lib/data";
 import {
   formatCents,
-  formatDate,
+  formatDateOnly,
   formatDateTime,
   formatReferenceMonth,
 } from "@/lib/format";
@@ -60,7 +60,7 @@ function DashboardPage() {
         actions={
           <>
             <Button variant="outline" asChild>
-              <Link to="/mensagens">Ver mensagens</Link>
+              <Link to="/envio">Abrir envios</Link>
             </Button>
             <Button asChild>
               <Link to="/cobrancas">Gerar cobranças</Link>
@@ -180,7 +180,7 @@ function DashboardPage() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {charge.plan} · vence {formatDate(charge.dueDate)}
+                    {charge.plan} · vence {formatDateOnly(charge.dueDate)}
                   </p>
                 </li>
               ))

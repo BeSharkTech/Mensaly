@@ -32,6 +32,8 @@ function localDate(now: Date, timeZone: string) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
     hourCycle: "h23",
   }).formatToParts(now);
   const value = (type: Intl.DateTimeFormatPartTypes) =>
@@ -40,7 +42,19 @@ function localDate(now: Date, timeZone: string) {
     year: value("year"),
     month: value("month"),
     day: value("day"),
+    hour: value("hour"),
+    minute: value("minute"),
   };
+}
+
+function minuteOfDay(value: string): number {
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return 0;
+  }
+  return hour * 60 + minute;
 }
 
 function calendarDate(year: number, month: number, day: number): Date {
@@ -143,6 +157,7 @@ export class ScheduledTasksService {
       now?: () => Date;
       lookaheadMs: number;
       logger?: QueueLogger;
+      messageAutomationEnabled?: boolean;
     },
   ) {}
 
@@ -198,6 +213,7 @@ export class ScheduledTasksService {
           const monthEnd = new Date(
             Date.UTC(current.year, current.month, 0),
           );
+          const lastDayOfMonth = monthEnd.getUTCDate();
           await tx.$executeRaw(
             Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`charge-generation:${organization.id}:${current.year}-${String(current.month).padStart(2, "0")}`}))`,
           );
@@ -206,10 +222,12 @@ export class ScheduledTasksService {
               id: string;
               amountCents: number;
               discountCents: number;
+              chargeOpenDay: number;
+              chargeOpenTime: string;
               dueDay: number;
             }>
           >(Prisma.sql`
-            SELECT "id", "amountCents", "discountCents", "dueDay"
+            SELECT "id", "amountCents", "discountCents", "chargeOpenDay", "chargeOpenTime", "dueDay"
             FROM "enrollment"
             WHERE "organizationId" = ${organization.id}::uuid
               AND "status" = ${EnrollmentStatus.ACTIVE}::"EnrollmentStatus"
@@ -217,10 +235,19 @@ export class ScheduledTasksService {
               AND ("endDate" IS NULL OR "endDate" >= ${referenceMonth})
             FOR SHARE
           `);
+          const currentMinute = current.hour * 60 + current.minute;
+          const eligibleEnrollments = enrollments.filter((enrollment) => {
+            const openingDay = Math.min(enrollment.chargeOpenDay, lastDayOfMonth);
+            return (
+              current.day > openingDay ||
+              (current.day === openingDay &&
+                currentMinute >= minuteOfDay(enrollment.chargeOpenTime))
+            );
+          });
           const createdCharges =
-            enrollments.length > 0
+            eligibleEnrollments.length > 0
               ? await tx.charge.createMany({
-                  data: enrollments.map((enrollment) => ({
+                  data: eligibleEnrollments.map((enrollment) => ({
                     organizationId: organization.id,
                     enrollmentId: enrollment.id,
                     referenceMonth,
@@ -247,6 +274,10 @@ export class ScheduledTasksService {
                 },
               },
             });
+          }
+
+          if (this.options.messageAutomationEnabled === false) {
+            continue;
           }
 
           const configuration = organization.reminderConfiguration;
@@ -463,7 +494,9 @@ export class ScheduledTasksService {
       },
       { maxWait: 30_000, timeout: 30_000 },
     );
-    await this.enqueueReady(now, summary);
+    if (this.options.messageAutomationEnabled !== false) {
+      await this.enqueueReady(now, summary);
+    }
     logger.info(
       { component: "scheduled-tasks", ...summary },
       "Scheduled tasks reconciled",

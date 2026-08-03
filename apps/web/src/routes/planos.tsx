@@ -56,7 +56,7 @@ export const Route = createFileRoute("/planos")({
   component: PlansPage,
 });
 
-const emptyForm = { name: "", description: "", amount: "", dueDay: "5" };
+const emptyForm = { name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" };
 
 function toCents(value: string) {
   const normalized = value.replace(/\./g, "").replace(",", ".").trim();
@@ -95,6 +95,8 @@ function PlansPage() {
       name: plan.name,
       description: plan.description === "Plano mensal" ? "" : plan.description,
       amount: fromCents(plan.amountCents),
+      chargeOpenDay: String(plan.chargeOpenDay),
+      chargeOpenTime: plan.chargeOpenTime,
       dueDay: String(plan.dueDay),
     });
     setOpen(true);
@@ -112,8 +114,17 @@ function PlansPage() {
       return;
     }
     const dueDay = Number(form.dueDay);
-    if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 28) {
-      toast.error("O dia de vencimento deve ficar entre 1 e 28.");
+    if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
+      toast.error("O dia de vencimento deve ficar entre 1 e 31.");
+      return;
+    }
+    const chargeOpenDay = Number(form.chargeOpenDay);
+    if (!Number.isInteger(chargeOpenDay) || chargeOpenDay < 1 || chargeOpenDay > dueDay) {
+      toast.error("O dia de abertura deve ficar entre 1 e o dia de vencimento.");
+      return;
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.chargeOpenTime)) {
+      toast.error("Informe o horário de abertura no formato HH:mm.");
       return;
     }
 
@@ -122,6 +133,8 @@ function PlansPage() {
       name: form.name.trim(),
       description: form.description.trim(),
       amountCents,
+      chargeOpenDay,
+      chargeOpenTime: form.chargeOpenTime,
       dueDay,
     };
     try {
@@ -168,7 +181,7 @@ function PlansPage() {
     <AppShell>
       <PageHeader
         title="Planos"
-        description="Cada plano define o valor da mensalidade e o dia de vencimento das cobranças."
+        description="Cada plano define o valor, a abertura e o vencimento mensal das cobranças."
         actions={
           <Button onClick={openCreate}>
             <Plus className="size-4" /> Novo plano
@@ -212,6 +225,10 @@ function PlansPage() {
               </p>
               <dl className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
                 <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Abertura</dt>
+                  <dd className="text-foreground">dia {plan.chargeOpenDay}, às {plan.chargeOpenTime}</dd>
+                </div>
+                <div className="flex justify-between">
                   <dt className="text-muted-foreground">Vencimento</dt>
                   <dd className="text-foreground">dia {plan.dueDay}</dd>
                 </div>
@@ -231,7 +248,7 @@ function PlansPage() {
             <DialogHeader>
               <DialogTitle>{editing ? "Editar plano" : "Novo plano"}</DialogTitle>
               <DialogDescription>
-                Defina o valor da mensalidade e o dia de vencimento das cobranças.
+                Defina quando a cobrança abre e quando ela vence a cada mês.
               </DialogDescription>
             </DialogHeader>
 
@@ -255,7 +272,7 @@ function PlansPage() {
                   rows={2}
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="plan-amount">Valor mensal (R$)</Label>
                   <Input
@@ -267,12 +284,32 @@ function PlansPage() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="plan-open-day">Dia de abertura</Label>
+                  <Input
+                    id="plan-open-day"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={form.chargeOpenDay}
+                    onChange={(event) => set("chargeOpenDay", event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="plan-open-time">Horário de abertura</Label>
+                  <Input
+                    id="plan-open-time"
+                    type="time"
+                    value={form.chargeOpenTime}
+                    onChange={(event) => set("chargeOpenTime", event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="plan-due-day">Dia de vencimento</Label>
                   <Input
                     id="plan-due-day"
                     type="number"
                     min={1}
-                    max={28}
+                    max={31}
                     value={form.dueDay}
                     onChange={(event) => set("dueDay", event.target.value)}
                   />

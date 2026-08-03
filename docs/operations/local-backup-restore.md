@@ -34,3 +34,21 @@ $env:DATABASE_URL = $originalDatabaseUrl
 
 The restore is accepted only after migrations report no pending changes and
 the database integration tests pass.
+
+## Staging and production
+
+Production must use a managed PostgreSQL service with automated daily backups,
+point-in-time recovery when offered by the provider, and encrypted backup
+storage. The API service must never be the only copy of production data.
+
+Before every production release and at least once per quarter, restore the
+latest provider backup into a newly-created **staging** database and record:
+
+1. backup timestamp and provider restore job identifier;
+2. migration status from `pnpm db:migrate:deploy` (must have no pending work);
+3. API readiness check and a read-only login/dashboard smoke test;
+4. restore duration and the responsible operator.
+
+Never point a restore drill at production. If the provider cannot offer a
+tested restore workflow, it is not an acceptable production database for
+Mensaly.

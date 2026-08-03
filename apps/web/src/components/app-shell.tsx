@@ -6,7 +6,6 @@ import {
   
   ClipboardList,
   Receipt,
-  MessageSquare,
   Building2,
   ShieldCheck,
   Webhook,
@@ -53,10 +52,7 @@ const clientNav: { group: string; items: NavItem[] }[] = [
   },
   {
     group: "Comunicação",
-    items: [
-      { to: "/mensagens", label: "Mensagens", icon: MessageSquare },
-      { to: "/envio", label: "Envio", icon: Megaphone },
-    ],
+    items: [{ to: "/envio", label: "Envio", icon: Megaphone }],
   },
   {
     group: "Conta",

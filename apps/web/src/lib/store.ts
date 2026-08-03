@@ -1,6 +1,6 @@
 import { createCacheStore, useCacheStore } from "@/lib/cache";
 import { resetDashboardData } from "@/lib/data";
-import { apiRequest, ApiRequestError } from "@/lib/api";
+import { apiEnvelopeRequest, apiRequest, ApiRequestError } from "@/lib/api";
 import { currentUser, logout, onAuthChange } from "@/lib/auth";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 
@@ -15,6 +15,8 @@ export type Plan = {
   name: string;
   description: string;
   amountCents: number;
+  chargeOpenDay: number;
+  chargeOpenTime: string;
   dueDay: number;
   status: "ACTIVE";
 };
@@ -55,6 +57,8 @@ type ApiPlan = {
   name: string;
   description: string | null;
   amountCents: number;
+  chargeOpenDay: number;
+  chargeOpenTime: string;
   dueDay: number;
   status: "ACTIVE" | "INACTIVE";
 };
@@ -62,9 +66,42 @@ type ApiPlan = {
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 
 async function page<T>(path: string): Promise<Page<T>> {
-  return apiRequest<Page<T>>(path, {
+  const result = await apiEnvelopeRequest<T[] | Partial<Page<T>>>(path, {
     query: { page: 1, pageSize: 100 },
   });
+  const meta = result.meta ?? {};
+  const legacyPage =
+    !Array.isArray(result.data) && result.data && typeof result.data === "object"
+      ? result.data
+      : null;
+  const items = Array.isArray(result.data)
+    ? result.data
+    : Array.isArray(legacyPage?.items)
+      ? legacyPage.items
+      : [];
+  return {
+    items,
+    page:
+      typeof meta.page === "number"
+        ? meta.page
+        : typeof legacyPage?.page === "number"
+          ? legacyPage.page
+          : 1,
+    pageSize:
+      typeof meta.limit === "number"
+        ? meta.limit
+        : typeof meta.pageSize === "number"
+          ? meta.pageSize
+          : typeof legacyPage?.pageSize === "number"
+            ? legacyPage.pageSize
+            : 100,
+    total:
+      typeof meta.total === "number"
+        ? meta.total
+        : typeof legacyPage?.total === "number"
+          ? legacyPage.total
+          : items.length,
+  };
 }
 
 export const emptyState: AppState = {
@@ -151,6 +188,8 @@ export async function loadState(): Promise<AppState> {
         name: plan.name,
         description: plan.description ?? "",
         amountCents: plan.amountCents,
+        chargeOpenDay: plan.chargeOpenDay,
+        chargeOpenTime: plan.chargeOpenTime,
         dueDay: plan.dueDay,
         status: "ACTIVE",
       })),
@@ -223,6 +262,8 @@ export async function saveOnboarding(input: {
               name: plan.name,
               description: plan.description || undefined,
               amountCents: plan.amountCents,
+              chargeOpenDay: plan.chargeOpenDay,
+              chargeOpenTime: plan.chargeOpenTime,
               dueDay: plan.dueDay,
               status: "ACTIVE",
             },
@@ -233,6 +274,8 @@ export async function saveOnboarding(input: {
               name: plan.name,
               description: plan.description || undefined,
               amountCents: plan.amountCents,
+              chargeOpenDay: plan.chargeOpenDay,
+              chargeOpenTime: plan.chargeOpenTime,
               dueDay: plan.dueDay,
             },
           }),

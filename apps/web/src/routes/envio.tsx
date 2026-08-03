@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CalendarDays, ClipboardList, Clock, Copy, FileText, Megaphone, Package, Pencil, Plus, Repeat, Search, Send, Trash2, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, Clock, Copy, ExternalLink, FileText, Megaphone, Package, Pencil, Plus, Repeat, Search, Send, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +39,6 @@ import { apiRequest } from "@/lib/api";
 import {
   useDashboardData,
   type BroadcastMessage,
-  type BroadcastScheduleType,
   type BroadcastTarget,
 } from "@/lib/data";
 import { formatCents } from "@/lib/format";
@@ -74,21 +72,7 @@ const emptyForm = {
   planId: "",
   productId: "",
   eventId: "",
-  scheduledAt: "",
-  scheduleType: "MANUAL" as BroadcastScheduleType,
-  dayOfMonth: "5",
-  weekday: "1",
-  sendTime: "09:00",
-  repeatUntil: "",
 };
-
-/** ISO -> valor aceito pelo input datetime-local (horário local). */
-function toLocalInput(iso: string | null) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
 
 function formatSchedule(iso: string | null) {
   if (!iso) return "";
@@ -170,6 +154,52 @@ const targetLabels: Record<BroadcastTarget, string> = {
   FORM: "Formulário",
 };
 
+export function buildManualBroadcastPayload(
+  form: typeof emptyForm,
+  formUrl: string | null,
+) {
+  const body =
+    form.targetType === "FORM" && formUrl && !form.body.includes(formUrl)
+      ? `${form.body.trim()}\n\n${formUrl}`
+      : form.body.trim();
+  return {
+    name: form.name.trim(),
+    body,
+    targetType: form.targetType,
+    planId: form.targetType === "PLAN" ? form.planId : null,
+    productId: form.targetType === "PRODUCT" ? form.productId : null,
+    eventId: form.targetType === "EVENT" ? form.eventId : null,
+    scheduledFor: null,
+    scheduleType: "MANUAL" as const,
+    dayOfMonth: null,
+    weekday: null,
+    sendTime: "09:00",
+    repeatUntil: null,
+  };
+}
+
+export function whatsappManualLink(phone: string, body: string) {
+  const digits = phone.replace(/\D/g, "");
+  const normalized =
+    digits.length === 10 || digits.length === 11
+      ? `55${digits}`
+      : digits.length >= 12 && digits.length <= 13 && digits.startsWith("55")
+        ? digits
+        : null;
+
+  return normalized ? `https://wa.me/${normalized}?text=${encodeURIComponent(body)}` : null;
+}
+
+export function renderMessageForStudent(
+  body: string,
+  values: { studentName: string; guardianName: string; paymentLink: string },
+) {
+  return body
+    .replaceAll(/\[aluno\]/gi, values.studentName.trim())
+    .replaceAll(/\[responsavel\]/gi, values.guardianName.trim())
+    .replaceAll(/\[link\]/gi, values.paymentLink);
+}
+
 function SendPage() {
   const { data, refresh } = useDashboardData();
   const { state } = useAppState();
@@ -180,9 +210,7 @@ function SendPage() {
   const [editing, setEditing] = useState<BroadcastMessage | null>(null);
   const [deleting, setDeleting] = useState<BroadcastMessage | null>(null);
   const [sending, setSending] = useState<BroadcastMessage | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [dispatching, setDispatching] = useState(false);
-
+  const [openingStudentId, setOpeningStudentId] = useState<string | null>(null);
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -255,12 +283,6 @@ function SendPage() {
       planId: message.planId ?? "",
       productId: message.productId ?? "",
       eventId: message.eventId ?? "",
-      scheduledAt: toLocalInput(message.scheduledFor),
-      scheduleType: message.scheduleType ?? "MANUAL",
-      dayOfMonth: String(message.dayOfMonth ?? 5),
-      weekday: String(message.weekday ?? 1),
-      sendTime: (message.sendTime || "09:00").slice(0, 5),
-      repeatUntil: message.repeatUntil ?? "",
     });
     setOpen(true);
   }
@@ -291,43 +313,8 @@ function SendPage() {
       toast.error("Escolha o evento da mensagem.");
       return;
     }
-    if (form.scheduleType === "ONCE" && !form.scheduledAt) {
-      toast.error("Escolha a data e a hora do envio programado.");
-      return;
-    }
-    if (form.scheduleType === "MONTHLY") {
-      const day = Number(form.dayOfMonth);
-      if (!Number.isInteger(day) || day < 1 || day > 28) {
-        toast.error("Escolha um dia do mês entre 1 e 28.");
-        return;
-      }
-    }
-
     setSaving(true);
-    const bodyText =
-      form.targetType === "FORM" && formUrl && !form.body.includes(formUrl)
-        ? `${form.body.trim()}\n\n${formUrl}`
-        : form.body.trim();
-    const payload = {
-      name: form.name.trim(),
-      body: bodyText,
-      targetType: form.targetType,
-      planId: form.targetType === "PLAN" ? form.planId : null,
-      productId: form.targetType === "PRODUCT" ? form.productId : null,
-      eventId: form.targetType === "EVENT" ? form.eventId : null,
-      scheduledFor:
-        form.scheduleType === "ONCE" && form.scheduledAt
-          ? new Date(form.scheduledAt).toISOString()
-          : null,
-      scheduleType: form.scheduleType,
-      dayOfMonth: form.scheduleType === "MONTHLY" ? Number(form.dayOfMonth) : null,
-      weekday: form.scheduleType === "WEEKLY" ? Number(form.weekday) : null,
-      sendTime: form.scheduleType === "MANUAL" ? "09:00" : form.sendTime,
-      repeatUntil:
-        form.scheduleType !== "MANUAL" && form.scheduleType !== "ONCE" && form.repeatUntil
-          ? form.repeatUntil
-          : null,
-    };
+    const payload = buildManualBroadcastPayload(form, formUrl);
 
     try {
       await apiRequest(editing ? `/workspace/broadcasts/${editing.id}` : "/workspace/broadcasts", {
@@ -360,49 +347,54 @@ function SendPage() {
 
   function openSend(message: BroadcastMessage) {
     setSending(message);
-    setSelected([]);
   }
 
-  async function handleSend() {
+  async function openStudentWhatsApp(student: (typeof data.students)[number]) {
     if (!sending) return;
-    if (selected.length === 0) {
-      toast.error("Selecione ao menos um aluno.");
-      return;
-    }
-    const scheduledDate = sending.scheduleType === "MANUAL" ? null : nextOccurrence(sending);
-    if (sending.scheduleType !== "MANUAL" && !scheduledDate) {
-      toast.error("A recorrência já terminou. Ajuste a programação da mensagem.");
-      return;
-    }
-    if (!state.business?.id) {
-      toast.error("Sessão expirada. Entre novamente.");
+    const phone = guardianPhone(student.guardianId);
+    if (!whatsappManualLink(phone, "teste")) {
+      toast.error("Cadastre um WhatsApp válido para o responsável.");
       return;
     }
 
-    setDispatching(true);
+    const needsPaymentLink = /\[link\]/i.test(sending.body);
+    const popup = needsPaymentLink ? window.open("", "_blank") : null;
+    if (popup) popup.opener = null;
+
+    setOpeningStudentId(student.id);
     try {
-      await apiRequest("/workspace/broadcast-sends", {
-        method: "POST",
-        body: {
-          messageId: sending.id,
-          studentIds: selected,
-          scheduledFor: scheduledDate ? scheduledDate.toISOString() : null,
-        },
+      const charge = needsPaymentLink
+        ? data.charges
+            .filter((item) => item.studentId === student.id && item.status === "PENDING")
+            .sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0]
+        : null;
+      if (needsPaymentLink && !charge) {
+        popup?.close();
+        toast.error(`Não há cobrança pendente para ${student.name}.`);
+        return;
+      }
+      const paymentLink = charge
+        ? (await apiRequest<{ url: string }>(`/charges/${charge.id}/checkout-link`, { method: "POST" })).url
+        : "";
+      const body = renderMessageForStudent(sending.body, {
+        studentName: student.name,
+        guardianName: student.guardian,
+        paymentLink,
       });
-    } catch {
-      setDispatching(false);
-      toast.error("Não foi possível registrar o envio.");
-      return;
+      const href = whatsappManualLink(phone, body);
+      if (!href) {
+        popup?.close();
+        toast.error("Cadastre um WhatsApp válido para o responsável.");
+        return;
+      }
+      if (popup) popup.location.assign(href);
+      else window.open(href, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      popup?.close();
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o link de pagamento.");
+    } finally {
+      setOpeningStudentId(null);
     }
-    setDispatching(false);
-    toast.success(
-      scheduledDate
-        ? `Envio programado para ${selected.length} aluno(s) em ${formatSchedule(scheduledDate.toISOString())}.`
-        : `Mensagem colocada na fila para ${selected.length} aluno(s).`,
-    );
-    setSending(null);
-    setSelected([]);
-    await refresh();
   }
 
   function sendsOf(messageId: string) {
@@ -429,6 +421,13 @@ function SendPage() {
           </Button>
         }
       />
+
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="text-sm font-medium text-foreground">Envio manual pelo WhatsApp</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Ao clicar em abrir WhatsApp, escolha um aluno e abra a conversa do responsável com a mensagem já preenchida. A Mensaly não envia mensagens automaticamente nesta versão de teste.
+        </p>
+      </div>
 
       <div className="flex items-center gap-2">
         <div className="relative w-full max-w-sm">
@@ -569,7 +568,7 @@ function SendPage() {
 
                   <Button size="sm" onClick={() => openSend(message)}>
                     <Send className="size-4" />
-                    {message.scheduleType === "MANUAL" ? "Enviar" : "Programar"}
+                    Abrir WhatsApp
                   </Button>
 
                 </div>
@@ -701,100 +700,17 @@ function SendPage() {
                   onChange={(event) => set("body", event.target.value)}
                   placeholder="Adicione o texto da mensagem"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Tags: <code>[aluno]</code>, <code>[responsavel]</code> e <code>[link]</code>. O link é gerado para a cobrança pendente do aluno ao abrir o WhatsApp.
+                </p>
               </div>
 
-              <div className="space-y-3 rounded-lg border border-border p-3">
-                <div className="space-y-2">
-                  <Label htmlFor="schedule-type">Frequência de envio</Label>
-                  <Select
-                    value={form.scheduleType}
-                    onValueChange={(value) => set("scheduleType", value as BroadcastScheduleType)}
-                  >
-                    <SelectTrigger id="schedule-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MANUAL">Manual — envio quando eu quiser</SelectItem>
-                      <SelectItem value="ONCE">Uma vez — data e hora específicas</SelectItem>
-                      <SelectItem value="DAILY">Em loop — todos os dias</SelectItem>
-                      <SelectItem value="WEEKLY">Em loop — toda semana</SelectItem>
-                      <SelectItem value="MONTHLY">Em loop — todo mês (ex.: dia 5)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Cobranças de plano costumam rodar em loop mensal; mensagens de evento normalmente
-                    são enviadas uma única vez.
-                  </p>
-                </div>
-
-                {form.scheduleType === "ONCE" ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="scheduled-at">Data e hora do envio</Label>
-                    <Input
-                      id="scheduled-at"
-                      type="datetime-local"
-                      value={form.scheduledAt}
-                      onChange={(event) => set("scheduledAt", event.target.value)}
-                    />
-                  </div>
-                ) : null}
-
-                {form.scheduleType === "MONTHLY" ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="day-of-month">Dia do mês</Label>
-                    <Input
-                      id="day-of-month"
-                      type="number"
-                      min={1}
-                      max={28}
-                      value={form.dayOfMonth}
-                      onChange={(event) => set("dayOfMonth", event.target.value)}
-                    />
-                  </div>
-                ) : null}
-
-                {form.scheduleType === "WEEKLY" ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="weekday">Dia da semana</Label>
-                    <Select value={form.weekday} onValueChange={(value) => set("weekday", value)}>
-                      <SelectTrigger id="weekday">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {weekdayLabels.map((label, index) => (
-                          <SelectItem key={label} value={String(index)}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-
-                {form.scheduleType === "DAILY" ||
-                form.scheduleType === "WEEKLY" ||
-                form.scheduleType === "MONTHLY" ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="send-time">Horário</Label>
-                      <Input
-                        id="send-time"
-                        type="time"
-                        value={form.sendTime}
-                        onChange={(event) => set("sendTime", event.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="repeat-until">Repetir até (opcional)</Label>
-                      <Input
-                        id="repeat-until"
-                        type="date"
-                        value={form.repeatUntil}
-                        onChange={(event) => set("repeatUntil", event.target.value)}
-                      />
-                    </div>
-                  </div>
-                ) : null}
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-sm font-medium text-foreground">Envio manual pelo WhatsApp</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A Mensaly prepara a mensagem individual. O envio só acontece quando você escolhe o
+                  aluno e confirma a abertura do WhatsApp.
+                </p>
               </div>
             </div>
 
@@ -814,7 +730,7 @@ function SendPage() {
       <Dialog open={sending !== null} onOpenChange={(value) => (value ? null : setSending(null))}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Enviar mensagem</DialogTitle>
+            <DialogTitle>Abrir conversa no WhatsApp</DialogTitle>
             <DialogDescription>
               Selecione quais alunos vão receber “{sending?.name}”.
               {sending && sending.scheduleType !== "MANUAL"
@@ -837,24 +753,8 @@ function SendPage() {
 
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">
-                Alunos ({selected.length}/{eligibleStudents.length})
+                Alunos do público selecionado ({eligibleStudents.length})
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  setSelected(
-                    selected.length === eligibleStudents.length
-                      ? []
-                      : eligibleStudents.map((student) => student.id),
-                  )
-                }
-              >
-                {selected.length === eligibleStudents.length && eligibleStudents.length > 0
-                  ? "Limpar seleção"
-                  : "Selecionar todos"}
-              </Button>
             </div>
 
             <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
@@ -862,27 +762,34 @@ function SendPage() {
                 <p className="p-3 text-sm text-muted-foreground">Nenhum aluno disponível.</p>
               ) : (
                 eligibleStudents.map((student) => {
-                  const checked = selected.includes(student.id);
                   return (
-                    <label
+                    <div
                       key={student.id}
                       className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/60"
                     >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) =>
-                          setSelected((prev) =>
-                            value ? [...prev, student.id] : prev.filter((id) => id !== student.id),
-                          )
-                        }
-                      />
                       <span className="min-w-0">
                         <span className="block truncate text-sm text-foreground">{student.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {student.plan} · {guardianPhone(student.guardianId) || "Sem telefone"}
                         </span>
                       </span>
-                    </label>
+                      {whatsappManualLink(guardianPhone(student.guardianId), "teste") ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={openingStudentId === student.id}
+                          onClick={() => void openStudentWhatsApp(student)}
+                          aria-label={`Abrir WhatsApp de ${student.name}`}
+                        >
+                          <ExternalLink className="size-4" />
+                          {openingStudentId === student.id ? "Gerando..." : "WhatsApp"}
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled title="Cadastre um WhatsApp válido para o responsável.">
+                          Sem WhatsApp
+                        </Button>
+                      )}
+                    </div>
                   );
                 })
               )}
@@ -893,15 +800,6 @@ function SendPage() {
             <Button type="button" variant="outline" onClick={() => setSending(null)}>
               Cancelar
             </Button>
-            <Button type="button" onClick={handleSend} disabled={dispatching}>
-              {dispatching
-                ? "Salvando..."
-                : sending && sending.scheduleType !== "MANUAL"
-                  ? `Programar para ${selected.length} aluno(s)`
-                  : `Enviar para ${selected.length} aluno(s)`}
-            </Button>
-
-
           </DialogFooter>
         </DialogContent>
       </Dialog>

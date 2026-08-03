@@ -43,7 +43,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/api";
 import { useDashboardData, type Charge, type Student } from "@/lib/data";
-import { formatCents, formatDate, formatReferenceMonth } from "@/lib/format";
+import { formatCents, formatDateOnly, formatReferenceMonth } from "@/lib/format";
 
 export const Route = createFileRoute("/alunos")({
   head: () => ({
@@ -67,12 +67,26 @@ export const Route = createFileRoute("/alunos")({
 const NO_PLAN = "__none__";
 const NEW_GUARDIAN = "__new__";
 
+export function normalizeCpf(value: string | null | undefined) {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+/** Allows profile-only edits of students created before CPF became mandatory. */
+export function studentCpfWasChanged(
+  editing: Pick<Student, "cpf"> | null,
+  value: string,
+) {
+  return !editing || normalizeCpf(editing.cpf) !== normalizeCpf(value);
+}
+
 const emptyForm = {
   studentName: "",
+  studentCpf: "",
   birthDate: "",
   planId: NO_PLAN,
   guardianId: NEW_GUARDIAN,
   guardianName: "",
+  guardianCpf: "",
   guardianPhone: "",
   guardianEmail: "",
 };
@@ -194,6 +208,7 @@ function StudentsPage() {
     setForm({
       ...emptyForm,
       studentName: student.name,
+      studentCpf: student.cpf,
       birthDate: student.birthDate ?? "",
       planId: student.planId ?? NO_PLAN,
       guardianId: student.guardianId ?? NEW_GUARDIAN,
@@ -208,11 +223,30 @@ function StudentsPage() {
       toast.error("Informe o nome do aluno.");
       return;
     }
-    if (newGuardian && !form.guardianName.trim()) {
+    const cpfChanged = studentCpfWasChanged(editing, form.studentCpf);
+    if (cpfChanged && normalizeCpf(form.studentCpf).length !== 11) {
+      toast.error("Informe o CPF do aluno com 11 dígitos.");
+      return;
+    }
+    const editingWithoutGuardian = Boolean(
+      editing &&
+        !editing.guardianId &&
+        newGuardian &&
+        !form.guardianName.trim() &&
+        !form.guardianCpf.trim() &&
+        !form.guardianPhone.trim() &&
+        !form.guardianEmail.trim(),
+    );
+    const createGuardian = newGuardian && !editingWithoutGuardian;
+    if (createGuardian && !form.guardianName.trim()) {
       toast.error("Informe o nome do responsável.");
       return;
     }
-    if (newGuardian && !form.guardianPhone.trim()) {
+    if (createGuardian && normalizeCpf(form.guardianCpf).length !== 11) {
+      toast.error("Informe o CPF do responsável com 11 dígitos.");
+      return;
+    }
+    if (createGuardian && !form.guardianPhone.trim()) {
       toast.error("Informe o WhatsApp do responsável.");
       return;
     }
@@ -228,13 +262,18 @@ function StudentsPage() {
 
     setSaving(true);
     try {
-      let guardianId = newGuardian ? null : form.guardianId;
+      let guardianId = createGuardian
+        ? null
+        : newGuardian
+          ? (editing?.guardianId ?? null)
+          : form.guardianId;
 
-      if (newGuardian) {
+      if (createGuardian) {
         const created = await apiRequest<{ id: string }>("/guardians", {
           method: "POST",
           body: {
             name: form.guardianName.trim().slice(0, 120),
+            taxId: form.guardianCpf,
             phone: form.guardianPhone.trim().slice(0, 40),
             ...(form.guardianEmail.trim()
               ? { email: form.guardianEmail.trim().slice(0, 255) }
@@ -251,6 +290,7 @@ function StudentsPage() {
           method: "PATCH",
           body: {
             name: form.studentName.trim().slice(0, 120),
+            ...(cpfChanged ? { cpf: form.studentCpf } : {}),
             ...(form.birthDate ? { birthDate: form.birthDate } : {}),
           },
         });
@@ -259,6 +299,7 @@ function StudentsPage() {
           method: "POST",
           body: {
             name: form.studentName.trim().slice(0, 120),
+            cpf: form.studentCpf,
             ...(form.birthDate ? { birthDate: form.birthDate } : {}),
           },
         });
@@ -410,7 +451,7 @@ function StudentsPage() {
                     >
                       <td className="px-5 py-3 font-medium text-foreground">{student.name}</td>
                       <td className="px-5 py-3 text-muted-foreground">
-                        {student.birthDate ? formatDate(student.birthDate) : "—"}
+                        {student.birthDate ? formatDateOnly(student.birthDate) : "—"}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">{student.guardian}</td>
                       <td className="px-5 py-3 text-muted-foreground">{student.plan}</td>
@@ -533,6 +574,18 @@ function StudentsPage() {
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="studentCpf">CPF do aluno</Label>
+                <Input
+                  id="studentCpf"
+                  value={form.studentCpf}
+                  inputMode="numeric"
+                  maxLength={14}
+                  placeholder="000.000.000-00"
+                  onChange={(event) => set("studentCpf", event.target.value)}
+                  required
+                />
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="birthDate">Data de nascimento</Label>
@@ -540,7 +593,7 @@ function StudentsPage() {
                     id="birthDate"
                     type="date"
                     value={form.birthDate}
-                    onChange={(event) => set("birthDate", event.target.value)}
+                    onInput={(event) => set("birthDate", event.currentTarget.value)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -597,6 +650,18 @@ function StudentsPage() {
                       value={form.guardianName}
                       maxLength={120}
                       onChange={(event) => set("guardianName", event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="guardianCpf">CPF do responsável</Label>
+                    <Input
+                      id="guardianCpf"
+                      value={form.guardianCpf}
+                      inputMode="numeric"
+                      maxLength={14}
+                      placeholder="000.000.000-00"
+                      onChange={(event) => set("guardianCpf", event.target.value)}
                       required
                     />
                   </div>

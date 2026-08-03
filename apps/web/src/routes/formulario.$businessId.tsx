@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { applyBrandColor, DEFAULT_BRAND_COLOR, isValidHexColor } from "@/lib/branding";
-import { getStudentFormConfig, submitStudentForm } from "@/lib/student-form.functions";
+import { apiRequest } from "@/lib/api";
+import type { StudentFormConfig } from "@/lib/student-form.functions";
 
 export const Route = createFileRoute("/formulario/$businessId")({
   head: () => ({
@@ -50,17 +51,19 @@ function initialsOf(name: string) {
 }
 
 function StudentFormPage() {
-  const { businessId } = Route.useParams();
-  const loadConfig = useServerFn(getStudentFormConfig);
-  const submit = useServerFn(submitStudentForm);
+  // This project renders TanStack route components through Next's catch-all
+  // page, so dynamic parameters must come from Next's pathname.
+  const pathname = usePathname();
+  const businessId = decodeURIComponent(pathname.split("/")[2] ?? "");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["student-form", businessId],
-    queryFn: () => loadConfig({ data: { businessId } }),
+    queryFn: () =>
+      apiRequest<StudentFormConfig>(`/public/forms/${businessId}`),
     retry: false,
   });
 
-  const [studentName, setStudentName] = useState("");
+  const [studentCpf, setStudentCpf] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -76,15 +79,20 @@ function StudentFormPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (studentName.trim().length < 2) {
-      toast.error("Informe o nome completo do aluno.");
+    const cpf = studentCpf.replace(/\D/g, "");
+    if (cpf.length !== 11) {
+      toast.error("Informe o CPF do aluno com 11 dígitos.");
       return;
     }
     setSaving(true);
     try {
-      const result = await submit({
-        data: { businessId, studentName: studentName.trim().slice(0, 120), values },
-      });
+      const result = await apiRequest<{ studentName: string; saved: number }>(
+        `/public/forms/${businessId}/responses`,
+        {
+          method: "POST",
+          body: { cpf, values },
+        },
+      );
       setDone(result.studentName);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível enviar o formulário.");
@@ -148,17 +156,18 @@ function StudentFormPage() {
         ) : (
           <form onSubmit={handleSubmit} className="card-surface space-y-5 p-6">
             <div className="space-y-2">
-              <Label htmlFor="studentName">Nome completo do aluno</Label>
+              <Label htmlFor="studentCpf">CPF do aluno</Label>
               <Input
-                id="studentName"
-                value={studentName}
-                maxLength={120}
-                placeholder="Digite seu nome completo"
-                onChange={(event) => setStudentName(event.target.value)}
+                id="studentCpf"
+                value={studentCpf}
+                inputMode="numeric"
+                maxLength={14}
+                placeholder="000.000.000-00"
+                onChange={(event) => setStudentCpf(event.target.value)}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Usamos o nome completo para vincular as respostas ao cadastro correto.
+                Usamos o CPF para vincular as respostas ao cadastro correto.
               </p>
             </div>
 

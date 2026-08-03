@@ -16,15 +16,18 @@ const addressSchema = z.object({
 
 const brandSchema = z.object({
   logoUrl: z.string().trim().url().max(2_048).optional(),
+  logoDataUrl: z.string().trim().max(2_000_000).optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   secondaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  segment: z.string().trim().max(120).optional(),
+  onboardingComplete: z.boolean().optional(),
 }).strict();
 
 const organizationFields = {
   name: z.string().trim().min(2).max(120),
   legalName: optionalText(160),
-  taxId: z.string().trim().min(11).max(18),
-  phone: z.string().trim().min(8).max(32),
+  taxId: z.string().trim().min(11).max(18).optional(),
+  phone: z.string().trim().min(8).max(32).optional(),
   address: addressSchema.optional(),
   timezone: z.string().trim().min(1).max(64).optional(),
   brand: brandSchema.optional(),

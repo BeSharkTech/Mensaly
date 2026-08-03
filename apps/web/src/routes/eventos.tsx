@@ -414,7 +414,7 @@ function EventsPage() {
                   id="eventStart"
                   type="datetime-local"
                   value={form.startsAt}
-                  onChange={(event) => set("startsAt", event.target.value)}
+                  onInput={(event) => set("startsAt", event.currentTarget.value)}
                   required
                 />
               </div>
@@ -424,7 +424,7 @@ function EventsPage() {
                   id="eventEnd"
                   type="datetime-local"
                   value={form.endsAt}
-                  onChange={(event) => set("endsAt", event.target.value)}
+                  onInput={(event) => set("endsAt", event.currentTarget.value)}
                 />
               </div>
             </div>

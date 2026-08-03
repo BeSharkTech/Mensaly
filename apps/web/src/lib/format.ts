@@ -33,6 +33,15 @@ export function formatDate(value: string): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
 }
 
+export function formatDateOnly(value: string): string {
+  const datePart = value.slice(0, 10);
+  const date = new Date(`${datePart}T12:00:00Z`);
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+}
+
 export function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",

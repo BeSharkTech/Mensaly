@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -13,6 +14,7 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
+import { apiRequest } from "@/lib/api";
 import { useDashboardData } from "@/lib/data";
 import { formatCents, formatDateTime } from "@/lib/format";
 
@@ -37,6 +39,19 @@ export const Route = createFileRoute("/admin/")({
 
 function AdminOverviewPage() {
   const { data } = useDashboardData();
+  const [platformHealth, setPlatformHealth] = useState<{
+    status: "ready" | "degraded";
+    dependencies: Record<string, "ready" | "unavailable">;
+  } | null>(null);
+
+  useEffect(() => {
+    void apiRequest<{
+      status: "ready" | "degraded";
+      dependencies: Record<string, "ready" | "unavailable">;
+    }>("/health/platform")
+      .then(setPlatformHealth)
+      .catch(() => setPlatformHealth(null));
+  }, []);
   const { organizations, failures, overview, schedules } = data;
   const activeOrgs = organizations.filter((org) => org.status === "ACTIVE").length;
   const totalMessages = schedules.length;
@@ -60,6 +75,11 @@ function AdminOverviewPage() {
         <StatCard label="Faturado no mês" value={formatCents(overview.monthlyBilledCents)} />
         <StatCard label="Mensagens" value={String(totalMessages)} />
         <StatCard label="Taxa de falha" value={`${failureRate}%`} hint={`${overview.messageFailures} falhas`} />
+        <StatCard
+          label="Infraestrutura"
+          value={platformHealth?.status === "ready" ? "Operacional" : "Verificar"}
+          hint={platformHealth ? Object.values(platformHealth.dependencies).every((value) => value === "ready") ? "Banco, fila e arquivos prontos" : "Há dependência indisponível" : "Status indisponível"}
+        />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-3">

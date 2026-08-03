@@ -24,6 +24,7 @@ import { Route as CheckoutRoute } from "@/routes/pagar.$token";
 import { Route as PlansRoute } from "@/routes/planos";
 import { Route as ForgotPasswordRoute } from "@/routes/recuperar-senha";
 import { Route as ResetPasswordRoute } from "@/routes/redefinir-senha";
+import { Route as VerifyEmailRoute } from "@/routes/verificar-email";
 
 const routes: Record<string, ComponentType> = {
   "/": DashboardRoute.component,
@@ -45,6 +46,7 @@ const routes: Record<string, ComponentType> = {
   "/planos": PlansRoute.component,
   "/recuperar-senha": ForgotPasswordRoute.component,
   "/redefinir-senha": ResetPasswordRoute.component,
+  "/verificar-email": VerifyEmailRoute.component,
 };
 
 function NotFound() {

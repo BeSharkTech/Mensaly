@@ -6,7 +6,7 @@ import { apiRequest } from "@/lib/api";
 const configSchema = z.object({ businessId: z.string().uuid() });
 const submitSchema = z.object({
   businessId: z.string().uuid(),
-  studentName: z.string().trim().min(2).max(120),
+  cpf: z.string().trim().min(11).max(14),
   values: z.record(z.string().uuid(), z.string().max(500)),
 });
 
@@ -22,12 +22,12 @@ export const getStudentFormConfig = createServerFn({ method: "GET" })
   .inputValidator((data: unknown) => configSchema.parse(data))
   .handler(({ data }): Promise<StudentFormConfig> => apiRequest(`/public/forms/${data.businessId}`));
 
-/** Public submit: validation, ambiguous-name protection and persistence happen in the API. */
+/** Public submit: CPF lookup and persistence happen in the API. */
 export const submitStudentForm = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => submitSchema.parse(data))
   .handler(({ data }): Promise<StudentFormSubmitResult> =>
     apiRequest<StudentFormSubmitResult>(`/public/forms/${data.businessId}/responses`, {
       method: "POST",
-      body: { studentName: data.studentName, values: data.values },
+      body: { cpf: data.cpf, values: data.values },
     }),
   );

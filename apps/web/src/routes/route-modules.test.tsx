@@ -21,6 +21,7 @@ import * as checkout from "./pagar.$token";
 import * as plans from "./planos";
 import * as forgotPassword from "./recuperar-senha";
 import * as resetPassword from "./redefinir-senha";
+import * as verifyEmail from "./verificar-email";
 
 const routeModules = [
   adminFailures,
@@ -44,11 +45,12 @@ const routeModules = [
   plans,
   forgotPassword,
   resetPassword,
+  verifyEmail,
 ];
 
 describe("Lovable route modules", () => {
   it("imports every preserved screen without a module-level crash", () => {
-    expect(routeModules).toHaveLength(21);
+    expect(routeModules).toHaveLength(22);
     routeModules.forEach((module) => expect(module).toHaveProperty("Route"));
   });
 });

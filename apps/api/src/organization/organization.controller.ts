@@ -25,7 +25,7 @@ export class OrganizationController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Creates the authenticated owner's organization" })
-  @ApiBody({ schema: { type: "object", required: ["name", "taxId", "phone"], properties: { name: { type: "string", minLength: 2, maxLength: 120 }, legalName: { type: "string", maxLength: 160 }, taxId: { type: "string", description: "CPF or CNPJ" }, phone: { type: "string" }, timezone: { type: "string", example: "America/Sao_Paulo" }, address: { type: "object" }, brand: { type: "object" } } } })
+  @ApiBody({ schema: { type: "object", required: ["name"], properties: { name: { type: "string", minLength: 2, maxLength: 120 }, legalName: { type: "string", maxLength: 160 }, taxId: { type: "string", description: "CPF or CNPJ" }, phone: { type: "string" }, timezone: { type: "string", example: "America/Sao_Paulo" }, address: { type: "object" }, brand: { type: "object" } } } })
   @ApiCreatedResponse({ description: "Organization created for the authenticated account" })
   @ApiConflictResponse({ description: "The account already has an organization or tax ID is in use" })
   @ApiUnauthorizedResponse({ description: "A valid session is required" })

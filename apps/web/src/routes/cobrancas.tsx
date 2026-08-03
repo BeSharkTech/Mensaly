@@ -1,19 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Download, ExternalLink, Link2, Plus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiRequest } from "@/lib/api";
 import { useDashboardData } from "@/lib/data";
-import { useAppState } from "@/lib/store";
-import { checkoutUrl } from "@/lib/checkout";
 import {
   formatCents,
-  formatDate,
+  formatDateOnly,
   formatDateTime,
   formatReferenceMonth,
 } from "@/lib/format";
@@ -39,44 +49,111 @@ export const Route = createFileRoute("/cobrancas")({
 });
 
 function ChargesPage() {
-  const { data } = useDashboardData();
-  const { state } = useAppState();
+  const { data, refresh } = useDashboardData();
   const { charges, payments, overview } = data;
+  const [generatingCharges, setGeneratingCharges] = useState(false);
+  const [creatingLinkId, setCreatingLinkId] = useState<string | null>(null);
+  const [payingChargeId, setPayingChargeId] = useState<string | null>(null);
+  const [selectedCharge, setSelectedCharge] = useState<
+    (typeof charges)[number] | null
+  >(null);
 
-  async function copyCheckoutLink(charge: (typeof charges)[number]) {
-    const url = checkoutUrl({
-      business: state.business?.name || "Sua escola",
-      businessId: state.business?.id,
-      brandColor: state.business?.brandColor,
-      student: charge.student,
-      plan: charge.plan,
-      amountCents: charge.finalAmountCents,
-      dueDate: charge.dueDate,
-      referenceMonth: charge.referenceMonth,
-      chargeId: charge.id,
-    });
+  async function generateMonthlyCharges() {
+    if (generatingCharges) return;
+    setGeneratingCharges(true);
     try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Link de pagamento copiado", { description: url });
-    } catch {
-      window.open(url, "_blank", "noopener");
+      const result = await apiRequest<{ processed: number }>("/charges/generate", {
+        method: "POST",
+        body: { referenceMonth: data.referenceMonth },
+      });
+      await refresh();
+      toast.success(
+        result.processed === 1
+          ? "1 cobrança processada."
+          : `${result.processed} cobranças processadas.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar as cobranças do mês.",
+      );
+    } finally {
+      setGeneratingCharges(false);
     }
   }
 
-  function openSampleCheckout() {
-    const sample = charges[0];
-    const url = checkoutUrl({
-      business: state.business?.name || "Escola Demonstração",
-      businessId: state.business?.id,
-      brandColor: state.business?.brandColor,
-      student: sample?.student ?? "Ana Lima",
-      plan: sample?.plan ?? "Mensal Integral",
-      amountCents: sample?.finalAmountCents ?? 45000,
-      dueDate: sample?.dueDate ?? new Date().toISOString().slice(0, 10),
-      referenceMonth: sample?.referenceMonth ?? data.referenceMonth,
-      chargeId: sample?.id ?? "exemplo-0001",
-    });
-    window.open(url, "_blank", "noopener");
+  async function registerPayment() {
+    const charge = selectedCharge;
+    if (!charge) return;
+    if (payingChargeId) return;
+
+    setPayingChargeId(charge.id);
+    try {
+      const payment = await apiRequest<{ id: string }>(`/charges/${charge.id}/payments`, {
+        method: "POST",
+        headers: {
+          "Idempotency-Key": `manual:${charge.id}:${crypto.randomUUID()}`,
+        },
+        body: {
+          amountCents: charge.finalAmountCents,
+          method: "CASH",
+          paidAt: new Date().toISOString(),
+        },
+      });
+      await apiRequest(`/payments/${payment.id}/confirm`, { method: "POST" });
+      await refresh();
+      setSelectedCharge(null);
+      toast.success("Pagamento confirmado.");
+    } catch (error) {
+      await refresh();
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar o pagamento.",
+      );
+    } finally {
+      setPayingChargeId(null);
+    }
+  }
+
+  async function copyCheckoutLink(charge: (typeof charges)[number]) {
+    if (creatingLinkId) return;
+    setCreatingLinkId(charge.id);
+    try {
+      const { url } = await apiRequest<{ url: string }>(`/charges/${charge.id}/checkout-link`, {
+        method: "POST",
+      });
+      await navigator.clipboard.writeText(url);
+      toast.success("Link de pagamento copiado", { description: url });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar o checkout.");
+    } finally {
+      setCreatingLinkId(null);
+    }
+  }
+
+  async function openCheckout() {
+    const charge = charges.find((item) => item.status === "PENDING");
+    if (!charge || creatingLinkId) {
+      toast.error("Gere uma cobrança pendente antes de abrir o checkout.");
+      return;
+    }
+    const checkoutWindow = window.open("about:blank", "_blank");
+    if (checkoutWindow) checkoutWindow.opener = null;
+    setCreatingLinkId(charge.id);
+    try {
+      const { url } = await apiRequest<{ url: string }>(`/charges/${charge.id}/checkout-link`, {
+        method: "POST",
+      });
+      if (checkoutWindow) checkoutWindow.location.href = url;
+      else window.location.href = url;
+    } catch (error) {
+      checkoutWindow?.close();
+      toast.error(error instanceof Error ? error.message : "Não foi possível abrir o checkout.");
+    } finally {
+      setCreatingLinkId(null);
+    }
   }
 
   return (
@@ -86,13 +163,13 @@ function ChargesPage() {
         description={`Mês de referência ${formatReferenceMonth(data.referenceMonth)} · valores sempre em centavos inteiros.`}
         actions={
           <>
-            <Button variant="outline" onClick={openSampleCheckout}>
-              <ExternalLink className="size-4" /> Ver checkout de exemplo
+            <Button variant="outline" onClick={openCheckout} disabled={Boolean(creatingLinkId)}>
+              <ExternalLink className="size-4" /> Abrir checkout
             </Button>
             <Button variant="outline">
               <Download className="size-4" /> Exportar
             </Button>
-            <Button>
+            <Button disabled={generatingCharges} onClick={generateMonthlyCharges}>
               <Plus className="size-4" /> Gerar cobranças do mês
             </Button>
           </>
@@ -152,7 +229,7 @@ function ChargesPage() {
                       <td className="px-5 py-3 text-muted-foreground">
                         {formatReferenceMonth(charge.referenceMonth)}
                       </td>
-                      <td className="px-5 py-3 text-muted-foreground">{formatDate(charge.dueDate)}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{formatDateOnly(charge.dueDate)}</td>
                       <td className="px-5 py-3 text-muted-foreground">
                         {charge.discountCents ? formatCents(charge.discountCents) : "—"}
                       </td>
@@ -168,10 +245,20 @@ function ChargesPage() {
                           size="sm"
                           className="mr-2"
                           onClick={() => copyCheckoutLink(charge)}
+                          disabled={Boolean(creatingLinkId) || charge.status !== "PENDING"}
                         >
                           <Link2 className="size-4" /> Link de pagamento
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={payingChargeId === charge.id}
+                          onClick={
+                            charge.status === "PENDING"
+                              ? () => setSelectedCharge(charge)
+                              : undefined
+                          }
+                        >
                           {charge.status === "PENDING" ? "Registrar pagamento" : "Detalhes"}
                         </Button>
                       </td>
@@ -239,6 +326,34 @@ function ChargesPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog
+        open={selectedCharge !== null}
+        onOpenChange={(open) => !open && !payingChargeId && setSelectedCharge(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Validar pagamento em dinheiro</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedCharge
+                ? `Confirmar o recebimento de ${formatCents(selectedCharge.finalAmountCents)} de ${selectedCharge.student}? A cobrança será marcada como paga.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={payingChargeId !== null}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={payingChargeId !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                void registerPayment();
+              }}
+            >
+              {payingChargeId ? "Confirmando..." : "Confirmar pagamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

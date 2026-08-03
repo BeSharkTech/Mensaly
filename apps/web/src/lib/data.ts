@@ -1,4 +1,4 @@
-import { apiRequest, ApiRequestError } from "@/lib/api";
+import { apiEnvelopeRequest, apiRequest, ApiRequestError } from "@/lib/api";
 import { currentUser } from "@/lib/auth";
 import { createCacheStore, useCacheStore } from "@/lib/cache";
 import { currentReferenceMonth } from "@/lib/format";
@@ -21,6 +21,7 @@ export type Guardian = {
 export type Student = {
   id: string;
   name: string;
+  cpf: string;
   birthDate: string | null;
   guardian: string;
   guardianId: string | null;
@@ -195,6 +196,8 @@ export type PlanRow = {
   name: string;
   description: string;
   amountCents: number;
+  chargeOpenDay: number;
+  chargeOpenTime: string;
   dueDay: number;
   status: "ACTIVE" | "INACTIVE";
   enrollments: number;
@@ -328,12 +331,15 @@ type RawPlan = {
   name: string;
   description: string | null;
   amountCents: number;
+  chargeOpenDay: number;
+  chargeOpenTime: string;
   dueDay: number;
   status: "ACTIVE" | "INACTIVE";
 };
 type RawStudent = {
   id: string;
   name: string;
+  cpf: string | null;
   birthDate?: string | null;
   status: "ACTIVE" | "INACTIVE";
 };
@@ -437,14 +443,41 @@ async function optional<T>(request: Promise<T>, fallback: T): Promise<T> {
 }
 
 async function page<T>(path: string): Promise<Page<T>> {
-  const result = await apiRequest<Partial<Page<T>>>(path, {
+  const result = await apiEnvelopeRequest<T[] | Partial<Page<T>>>(path, {
     query: { page: 1, pageSize: 100 },
   });
+  const meta = result.meta ?? {};
+  const legacyPage =
+    !Array.isArray(result.data) && result.data && typeof result.data === "object"
+      ? result.data
+      : null;
+  const items = Array.isArray(result.data)
+    ? result.data
+    : Array.isArray(legacyPage?.items)
+      ? legacyPage.items
+      : [];
   return {
-    items: Array.isArray(result?.items) ? result.items : [],
-    page: result?.page ?? 1,
-    pageSize: result?.pageSize ?? 100,
-    total: result?.total ?? 0,
+    items,
+    page:
+      typeof meta.page === "number"
+        ? meta.page
+        : typeof legacyPage?.page === "number"
+          ? legacyPage.page
+          : 1,
+    pageSize:
+      typeof meta.limit === "number"
+        ? meta.limit
+        : typeof meta.pageSize === "number"
+          ? meta.pageSize
+          : typeof legacyPage?.pageSize === "number"
+            ? legacyPage.pageSize
+            : 100,
+    total:
+      typeof meta.total === "number"
+        ? meta.total
+        : typeof legacyPage?.total === "number"
+          ? legacyPage.total
+          : items.length,
   };
 }
 
@@ -631,6 +664,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return {
       id: student.id,
       name: student.name,
+      cpf: student.cpf ?? "",
       birthDate: student.birthDate ?? null,
       guardian: enrollment?.guardian.name ?? "—",
       guardianId: enrollment?.guardianId ?? null,
@@ -665,6 +699,8 @@ export async function loadDashboardData(): Promise<DashboardData> {
     name: plan.name,
     description: plan.description ?? "Plano mensal",
     amountCents: plan.amountCents,
+    chargeOpenDay: plan.chargeOpenDay,
+    chargeOpenTime: plan.chargeOpenTime,
     dueDay: plan.dueDay,
     status: plan.status,
     enrollments: list(enrollmentPage.items).filter(
