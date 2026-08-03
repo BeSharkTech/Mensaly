@@ -29,6 +29,9 @@ function environment() {
     DATABASE_URL: databaseUrl,
     REDIS_URL: redisUrl,
     CORS_ORIGINS: "https://allowed.example",
+    ADMIN_MONTHLY_FIXED_COST_CENTS: "2400",
+    ADMIN_EMAIL_COST_PER_THOUSAND_CENTS: "100",
+    ADMIN_STORAGE_COST_PER_GB_CENTS: "150",
   });
 }
 
@@ -342,6 +345,16 @@ describe("dashboard and platform insights", () => {
         ).statusCode,
         403,
       );
+      assert.equal(
+        (
+          await fastify.inject({
+            headers: { cookie: accountA.cookie },
+            method: "GET",
+            url: "/api/v1/admin/analytics",
+          })
+        ).statusCode,
+        403,
+      );
 
       const adminEmail = `insights-admin-${suffix}@api.example.test`;
       emails.add(adminEmail);
@@ -376,6 +389,29 @@ describe("dashboard and platform insights", () => {
         typeof adminOverview.json().data.internalUsage.storageBytes,
         "number",
       );
+      const analytics = await fastify.inject({
+        headers: { cookie: adminCookie },
+        method: "GET",
+        url: "/api/v1/admin/analytics?days=30&months=6",
+      });
+      assert.equal(analytics.statusCode, 200);
+      assert.equal(analytics.json().data.trends.length, 6);
+      assert.equal(analytics.json().data.costs.configured, true);
+      assert.equal(
+        analytics.json().data.costs.organizations.some(
+          (organization: { organizationId: string }) =>
+            organization.organizationId === accountA.organizationId,
+        ),
+        true,
+      );
+      assert.equal(analytics.json().data.sentry.status, "not_configured");
+      const invalidAnalytics = await fastify.inject({
+        headers: { cookie: adminCookie },
+        method: "GET",
+        url: "/api/v1/admin/analytics?days=2&months=99",
+      });
+      assert.equal(invalidAnalytics.statusCode, 400);
+      assert.equal(invalidAnalytics.json().error.code, "VALIDATION_ERROR");
       const organizations = await fastify.inject({
         headers: { cookie: adminCookie },
         method: "GET",
@@ -412,6 +448,7 @@ describe("dashboard and platform insights", () => {
       });
       assert.ok(openApi.json().paths["/api/v1/dashboard/overview"]);
       assert.ok(openApi.json().paths["/api/v1/admin/overview"]);
+      assert.ok(openApi.json().paths["/api/v1/admin/analytics"]);
     } finally {
       await app.close();
     }

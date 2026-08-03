@@ -2837,6 +2837,26 @@
         ]
       }
     },
+    "/api/v1/admin/analytics": {
+      "get": {
+        "operationId": "AdminInsightsController_analytics_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Platform administration analytics"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets platform trends, estimated costs and Sentry health",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
     "/api/v1/admin/organizations": {
       "get": {
         "operationId": "AdminInsightsController_organizations_v1",

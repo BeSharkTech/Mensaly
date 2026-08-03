@@ -29,6 +29,7 @@ const s3EndpointSchema = z
   })
   .optional();
 const sentrySampleRateSchema = z.coerce.number().min(0).max(1).default(0.1);
+const nonNegativeCostSchema = z.coerce.number().int().min(0).max(100_000_000).default(0);
 const workerConcurrencySchema = z.coerce.number().int().min(1).max(100).default(5);
 const jobAttemptsSchema = z.coerce.number().int().min(1).max(20).default(4);
 const jobBackoffMsSchema = z.coerce
@@ -145,6 +146,13 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
     SENTRY_DSN: z.string().url().optional(),
     SENTRY_TRACES_SAMPLE_RATE: sentrySampleRateSchema,
+    SENTRY_API_BASE_URL: z.string().url().default("https://sentry.io/api/0"),
+    SENTRY_API_TOKEN: z.string().trim().min(1).optional(),
+    SENTRY_ORG_SLUG: z.string().trim().min(1).max(100).optional(),
+    SENTRY_PROJECT_ID: z.coerce.number().int().positive().optional(),
+    ADMIN_MONTHLY_FIXED_COST_CENTS: nonNegativeCostSchema,
+    ADMIN_EMAIL_COST_PER_THOUSAND_CENTS: nonNegativeCostSchema,
+    ADMIN_STORAGE_COST_PER_GB_CENTS: nonNegativeCostSchema,
     EMAIL_DELIVERY_MODE: emailDeliveryModeSchema,
     RESEND_API_KEY: z.string().trim().min(1).optional(),
     RESEND_FROM_EMAIL: z.string().trim().email().optional(),

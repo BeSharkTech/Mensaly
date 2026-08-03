@@ -18,6 +18,7 @@ import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { AdminInsightsService } from "./admin-insights.service";
 import {
   adminFailuresSchema,
+  adminAnalyticsSchema,
   adminHistorySchema,
   adminOrganizationListSchema,
 } from "./insights.dto";
@@ -37,6 +38,16 @@ export class AdminInsightsController {
   @ApiOkResponse({ description: "Platform overview" })
   async overview(): Promise<{ data: unknown }> {
     return { data: await this.insights.overview() };
+  }
+
+  @Get("analytics")
+  @ApiOperation({ summary: "Gets platform trends, estimated costs and Sentry health" })
+  @ApiOkResponse({ description: "Platform administration analytics" })
+  async analytics(
+    @Query(new ZodValidationPipe(adminAnalyticsSchema))
+    query: z.infer<typeof adminAnalyticsSchema>,
+  ): Promise<{ data: unknown }> {
+    return { data: await this.insights.analytics(query) };
   }
 
   @Get("organizations")

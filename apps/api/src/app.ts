@@ -22,6 +22,7 @@ import { configureObservability } from "./common/observability";
 import { StructuredNestLogger } from "./common/structured-nest-logger";
 import { ZodValidationPipe } from "./common/zod-validation.pipe";
 import { configureFiles } from "./files/files.configuration";
+import { configureAdminInsights } from "./insights/admin-insights.configuration";
 
 function configureCors(
   app: NestFastifyApplication,
@@ -95,6 +96,7 @@ export async function createApiApplication(
 ): Promise<NestFastifyApplication> {
   configureObservability(environment);
   configureFiles(environment);
+  configureAdminInsights(environment);
   const adapter = new FastifyAdapter({
     bodyLimit: Math.max(1_048_576, environment.FILE_MAX_SIZE_BYTES + 65_536),
     trustProxy:

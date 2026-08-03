@@ -162,7 +162,7 @@ describe("frozen OpenAPI v1 contract", () => {
           operationIds.add(operation.operationId ?? "");
         }
       }
-      assert.equal(operationCount, 102);
+      assert.equal(operationCount, 103);
     } finally {
       await app.close();
     }

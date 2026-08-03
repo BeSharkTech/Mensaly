@@ -10,6 +10,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { getCorrelationId } from "./correlation";
 import { reportUnhandledException } from "./observability";
+import { currentAuthContext } from "../authorization/authorization-context";
 
 type ErrorPayload = {
   code?: unknown;
@@ -58,6 +59,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         correlationId,
         method: request.method,
         path: request.url,
+        organizationId: currentAuthContext(request)?.organizationId,
       });
     }
 

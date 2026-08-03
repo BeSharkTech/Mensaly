@@ -19,7 +19,7 @@ export function configureObservability(environment: ApiEnvironment): void {
 
 export function reportUnhandledException(
   exception: unknown,
-  context: { correlationId: string; method: string; path: string },
+  context: { correlationId: string; method: string; path: string; organizationId?: string },
 ): void {
   if (!enabled) {
     return;
@@ -28,6 +28,9 @@ export function reportUnhandledException(
     scope.setTag("correlation_id", context.correlationId);
     scope.setTag("http.method", context.method);
     scope.setTag("http.path", context.path);
+    if (context.organizationId) {
+      scope.setTag("organization_id", context.organizationId);
+    }
     Sentry.captureException(exception);
   });
 }
