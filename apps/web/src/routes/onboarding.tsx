@@ -44,7 +44,7 @@ export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
 
-const steps = ["Seu negócio", "Identidade visual", "Planos", "Recebimentos"];
+const steps = ["Seu negócio", "Identidade visual", "Planos", "Recebimentos (opcional)"];
 
 type StripeConnection = {
   status: string;
@@ -57,6 +57,7 @@ function OnboardingPage() {
   const navigate = useNavigate();
   const searchParams = useSearchParams();
   const stripeReturn = searchParams.get("stripe");
+  const openPayments = searchParams.get("step") === "payments";
   const { state, hydrated, refresh } = useAppState();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -92,8 +93,9 @@ function OnboardingPage() {
   }, [hydrated, state.account, state.business, state.plans, navigate]);
 
   useEffect(() => {
-    if (!hydrated || !stripeReturn) return;
+    if (!hydrated || (!stripeReturn && !openPayments)) return;
     setStep(3);
+    if (!stripeReturn) return;
     setSaving(true);
     apiRequest<StripeConnection>("/payment-integrations/stripe/refresh", { method: "POST" })
       .then(setStripeConnection)
@@ -101,7 +103,7 @@ function OnboardingPage() {
         setError(reason instanceof Error ? reason.message : "Não foi possível atualizar o Stripe."),
       )
       .finally(() => setSaving(false));
-  }, [hydrated, stripeReturn]);
+  }, [hydrated, stripeReturn, openPayments]);
 
   function handleLogo(file: File | undefined) {
     if (!file) return;
@@ -501,7 +503,7 @@ function OnboardingPage() {
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Receba suas mensalidades</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  O Stripe valida seus dados e deposita cada pagamento diretamente na sua conta.
+                  Esta etapa é opcional. Conecte o Stripe agora ou continue usando o painel e configure os recebimentos quando precisar gerar cobranças online.
                 </p>
               </div>
               <div className="flex gap-4 rounded-lg border border-border p-4">
@@ -515,7 +517,7 @@ function OnboardingPage() {
                       : "Conecte sua conta de recebimentos"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    CPF/CNPJ, documentos e dados bancários são informados diretamente ao Stripe e não ficam salvos na Mensaly.
+                    CPF/CNPJ, documentos e dados bancários são solicitados somente ao conectar o Stripe; esses dados não ficam salvos na Mensaly.
                   </p>
                 </div>
               </div>
@@ -551,30 +553,33 @@ function OnboardingPage() {
               <ArrowLeft className="size-4" /> Voltar
             </Button>
             {step < steps.length - 1 ? (
-              <Button type="button" onClick={step === 2 ? connectStripe : next} disabled={saving}>
-                {step === 2 ? (saving ? "Salvando..." : "Conectar recebimentos") : "Continuar"}
+              <Button type="button" onClick={next} disabled={saving}>
+                {saving ? "Salvando..." : "Continuar"}
                 <ArrowRight className="size-4" />
               </Button>
             ) : (
-              stripeConnection?.status === "ENABLED" ? (
-                <Button type="button" onClick={finish} disabled={saving}>
-                  {saving ? "Salvando..." : "Concluir e abrir o painel"} <Check className="size-4" />
-                </Button>
-              ) : (
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   type="button"
-                  onClick={stripeSession ? refreshStripeAfterExit : prepareStripeOnboarding}
-                  disabled={saving}
+                  variant="outline"
+                  onClick={stripeSession ? refreshStripeAfterExit : stripeConnection ? prepareStripeOnboarding : connectStripe}
+                  disabled={saving || stripeConnection?.status === "ENABLED"}
                 >
                   {saving
                     ? "Verificando..."
                     : stripeSession
                       ? "Verificar conclusão"
-                      : "Continuar configuração"}{" "}
+                      : stripeConnection?.status === "ENABLED"
+                        ? "Recebimentos conectados"
+                        : stripeConnection
+                          ? "Continuar configuração"
+                          : "Conectar Stripe agora"}{" "}
                   <ArrowRight className="size-4" />
                 </Button>
-              )
-
+                <Button type="button" onClick={finish} disabled={saving}>
+                  {saving ? "Salvando..." : "Concluir e abrir o painel"} <Check className="size-4" />
+                </Button>
+              </div>
             )}
           </div>
         </div>

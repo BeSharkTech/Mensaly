@@ -121,6 +121,7 @@ function SettingsPage() {
         <TabsList>
           <TabsTrigger value="organizacao">Organização</TabsTrigger>
           <TabsTrigger value="marca">Identidade visual</TabsTrigger>
+          <TabsTrigger value="recebimentos">Recebimentos</TabsTrigger>
           <TabsTrigger value="conta">Conta</TabsTrigger>
         </TabsList>
 
@@ -193,6 +194,22 @@ function SettingsPage() {
             </div>
 
             <BrandColorPicker value={brandColor} onChange={setBrandColor} preview />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="recebimentos" className="mt-4">
+          <div className="card-surface max-w-2xl space-y-4 p-6">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Recebimentos online</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                A conexão com o Stripe é opcional. Você só precisa configurá-la para gerar links de pagamento e receber cobranças online.
+              </p>
+            </div>
+            <Button asChild>
+              <a href="/onboarding?step=payments">
+                Configurar recebimentos
+              </a>
+            </Button>
           </div>
         </TabsContent>
 
