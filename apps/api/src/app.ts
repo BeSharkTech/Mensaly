@@ -17,7 +17,10 @@ import { AppModule } from "./app.module";
 import { registerApiSecurity } from "./common/api-security";
 import { GlobalExceptionFilter } from "./common/global-exception.filter";
 import { registerRequestContext } from "./common/correlation";
-import { registerLocalRateLimit } from "./common/local-rate-limit";
+import {
+  RedisRateLimitStore,
+  registerRateLimit,
+} from "./common/local-rate-limit";
 import { configureObservability } from "./common/observability";
 import { StructuredNestLogger } from "./common/structured-nest-logger";
 import { ZodValidationPipe } from "./common/zod-validation.pipe";
@@ -114,7 +117,16 @@ export async function createApiApplication(
   });
   registerRequestContext(adapter.getInstance());
   registerApiSecurity(adapter.getInstance(), environment.CORS_ORIGINS);
-  registerLocalRateLimit(adapter.getInstance());
+  registerRateLimit(adapter.getInstance(), {
+    store: new RedisRateLimitStore(
+      environment.REDIS_URL,
+      `mensaly:${environment.NODE_ENV}:rate-limit`,
+    ),
+    // Integration tests deliberately run many independent tenant journeys in
+    // parallel through one loopback IP. Keep the middleware and Redis path
+    // active without letting those fixtures consume the production budget.
+    limitMultiplier: environment.NODE_ENV === "test" ? 1_000 : 1,
+  });
 
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,

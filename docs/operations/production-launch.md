@@ -111,6 +111,37 @@ rollback against production without a migration-specific recovery plan.
   growth, dead-letter jobs, email failures and webhook failures;
 - enable automatic security updates and firewall SSH to the operator network.
 
+The API already enforces these Redis-backed limits per pseudonymous client-IP
+hash. Raw IP addresses are not stored in the rate-limit keys:
+
+| Flow | Limit |
+| --- | ---: |
+| Login | 10 requests / 15 minutes |
+| Registration | 5 requests / hour |
+| Password reset | 5 requests / 15 minutes |
+| E-mail verification | 10 requests / 15 minutes |
+| Public form | 30 requests / minute |
+| Public checkout | 60 requests / minute |
+| Stripe connection/payment-link creation | 20 requests / minute |
+| WhatsApp/manual messaging operations | 30 requests / minute |
+| Signed Stripe/Resend webhooks | 600 requests / minute |
+| Other mutations | 120 requests / minute |
+
+The fixed window is incremented atomically in Redis and shared by every API
+instance. Responses expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+`X-RateLimit-Reset`, `RateLimit-Policy` and, for HTTP `429`, `Retry-After`.
+Redis failure does not disable protection: a local fallback is activated and a
+structured `rate_limit.redis_fallback` warning is emitted. A short circuit
+breaker prevents every request from waiting on the failed dependency and probes
+Redis again after five seconds. Alert on the fallback event, because fallback
+counters are not shared across multiple API instances.
+
+At Cloudflare, mirror the login, registration, password-reset, public-form and
+public-checkout policies by method and URI path. Give signed webhooks a separate
+high-burst rule rather than sharing the authentication budget. Keep the origin
+limits enabled even after the edge rules are active: Cloudflare is the first
+layer, Redis is the authoritative application-wide layer.
+
 ## 7. Stripe Live (final activation)
 
 After every previous gate passes, replace only the four Stripe test values with

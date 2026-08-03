@@ -7,7 +7,7 @@
 - [x] Pagination is positive and capped at 100.
 - [x] Mass-assignment attempts are rejected and tenant IDs are assigned last.
 - [x] Request body and multipart limits are configured.
-- [x] Local mutation and sensitive-auth rate limits are active.
+- [x] Redis-backed mutation and route-specific rate limits are active, with a local fail-safe fallback.
 - [x] Session cookies are HTTP-only, same-site and secure in production.
 - [x] Passwords use salted scrypt and session tokens are stored as hashes.
 - [x] Credentials, bodies, webhook payloads and common PII are redacted in logs.
@@ -16,6 +16,6 @@
 - [x] File type, magic bytes, size, path and integrity are verified.
 - [x] Dashboard, payment, message, webhook, file and audit indexes were reviewed.
 - [x] No external provider is required to run the test suite.
-- [ ] Production edge rate limiting and TLS termination must be configured at deployment.
+- [ ] Cloudflare edge rate limiting must still be configured as a second layer; TLS termination is active on the VPS.
 - [ ] Production backup encryption, retention and restore drills require the selected host.
 - [ ] Central dependency and secret scanning must remain enabled in the deployment repository.
