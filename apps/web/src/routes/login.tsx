@@ -36,7 +36,17 @@ function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login({ email: email.trim(), password });
+      const user = await login({ email: email.trim(), password });
+      const state = await loadState();
+      setLoading(false);
+      navigate({
+        to:
+          user.role === "PLATFORM_ADMIN"
+            ? "/admin"
+            : state.onboardingComplete
+              ? "/"
+              : "/onboarding",
+      });
     } catch (signInError) {
       if (
         signInError instanceof Error &&
@@ -61,9 +71,6 @@ function LoginPage() {
       );
       return;
     }
-    const state = await loadState();
-    setLoading(false);
-    navigate({ to: state.onboardingComplete ? "/" : "/onboarding" });
   }
 
   return (

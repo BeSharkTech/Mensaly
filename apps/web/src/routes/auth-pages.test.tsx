@@ -97,7 +97,7 @@ describe("authentication pages", () => {
   it("accepts login credentials and routes an onboarded account", async () => {
     const { Route } = await import("./login");
     const user = userEvent.setup();
-    login.mockResolvedValue({});
+    login.mockResolvedValue({ role: "COMPANY_ACCOUNT" });
     loadState.mockResolvedValue({ onboardingComplete: true });
     render(createElement(Route.component));
 
@@ -112,5 +112,19 @@ describe("authentication pages", () => {
       }),
     );
     expect(push).toHaveBeenCalledWith("/");
+  });
+
+  it("routes a platform administrator directly to the admin dashboard", async () => {
+    const { Route } = await import("./login");
+    const user = userEvent.setup();
+    login.mockResolvedValue({ role: "PLATFORM_ADMIN" });
+    loadState.mockResolvedValue({ onboardingComplete: true });
+    render(createElement(Route.component));
+
+    await user.type(screen.getByLabelText("E-mail"), "admin@mensaly.local");
+    await user.type(screen.getByLabelText("Senha"), "MensalyAdmin!2026");
+    await user.click(screen.getByRole("button", { name: "Entrar" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/admin"));
   });
 });
