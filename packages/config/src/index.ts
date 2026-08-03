@@ -21,6 +21,23 @@ const fileMaxSizeBytesSchema = z.coerce
   .max(25 * 1024 * 1024)
   .default(5 * 1024 * 1024);
 const storageDriverSchema = z.enum(["local", "s3"]).default("local");
+// Docker Compose expands an unset `${VARIABLE:-}` to an empty string when the
+// variable is listed in a container's environment. Normalize that transport
+// detail back to `undefined` before validating optional provider settings.
+const emptyStringToUndefined = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
+const optionalNonEmptyStringSchema = z.preprocess(
+  emptyStringToUndefined,
+  z.string().trim().min(1).optional(),
+);
+const optionalUrlSchema = z.preprocess(
+  emptyStringToUndefined,
+  z.string().url().optional(),
+);
+const optionalPositiveIntegerSchema = z.preprocess(
+  emptyStringToUndefined,
+  z.coerce.number().int().positive().optional(),
+);
 const s3EndpointSchema = z
   .string()
   .url()
@@ -144,12 +161,12 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
     S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
     S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
-    SENTRY_DSN: z.string().url().optional(),
+    SENTRY_DSN: optionalUrlSchema,
     SENTRY_TRACES_SAMPLE_RATE: sentrySampleRateSchema,
     SENTRY_API_BASE_URL: z.string().url().default("https://sentry.io/api/0"),
-    SENTRY_API_TOKEN: z.string().trim().min(1).optional(),
-    SENTRY_ORG_SLUG: z.string().trim().min(1).max(100).optional(),
-    SENTRY_PROJECT_ID: z.coerce.number().int().positive().optional(),
+    SENTRY_API_TOKEN: optionalNonEmptyStringSchema,
+    SENTRY_ORG_SLUG: optionalNonEmptyStringSchema.pipe(z.string().max(100).optional()),
+    SENTRY_PROJECT_ID: optionalPositiveIntegerSchema,
     ADMIN_MONTHLY_FIXED_COST_CENTS: nonNegativeCostSchema,
     ADMIN_EMAIL_COST_PER_THOUSAND_CENTS: nonNegativeCostSchema,
     ADMIN_STORAGE_COST_PER_GB_CENTS: nonNegativeCostSchema,

@@ -57,6 +57,21 @@ describe("environment configuration", () => {
     }
   });
 
+  it("treats blank optional Sentry values from Docker Compose as unset", () => {
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      SENTRY_DSN: "",
+      SENTRY_API_TOKEN: "   ",
+      SENTRY_ORG_SLUG: "",
+      SENTRY_PROJECT_ID: "",
+    });
+
+    assert.equal(environment.SENTRY_DSN, undefined);
+    assert.equal(environment.SENTRY_API_TOKEN, undefined);
+    assert.equal(environment.SENTRY_ORG_SLUG, undefined);
+    assert.equal(environment.SENTRY_PROJECT_ID, undefined);
+  });
+
   it("requires remote object storage in production", () => {
     assert.throws(
       () =>
