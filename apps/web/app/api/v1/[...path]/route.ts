@@ -15,12 +15,15 @@ const forwardedRequestHeaders = [
   "origin",
   "user-agent",
   "x-correlation-id",
+  "x-request-id",
+  "x-signature",
 ] as const;
 
 const forwardedResponseHeaders = [
   "cache-control",
   "content-disposition",
   "content-type",
+  "location",
   "retry-after",
   "set-cookie",
   "x-correlation-id",

@@ -202,7 +202,7 @@ function SettingsPage() {
             <div>
               <h2 className="text-base font-semibold text-foreground">Recebimentos online</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                A conexão com o Stripe é opcional. Você só precisa configurá-la para gerar links de pagamento e receber cobranças online.
+                A conexão com o Mercado Pago é opcional. Configure-a para gerar links e receber as mensalidades diretamente na conta da escola.
               </p>
             </div>
             <Button asChild>

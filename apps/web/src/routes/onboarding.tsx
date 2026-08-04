@@ -5,10 +5,6 @@ import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Trash2, WalletCards } fr
 
 import logo from "@/assets/mensaly-logo.png";
 import { BrandColorPicker } from "@/components/brand-color-picker";
-import {
-  StripeEmbeddedOnboarding,
-  type StripeOnboardingSession,
-} from "@/components/stripe-embedded-onboarding";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -46,17 +42,15 @@ export const Route = createFileRoute("/onboarding")({
 
 const steps = ["Seu negócio", "Identidade visual", "Planos", "Recebimentos (opcional)"];
 
-type StripeConnection = {
+type MercadoPagoConnection = {
   status: string;
-  chargesEnabled: boolean;
-  payoutsEnabled: boolean;
-  accountType?: "STANDARD" | "EXPRESS";
+  liveMode: boolean;
 };
 
 function OnboardingPage() {
   const navigate = useNavigate();
   const searchParams = useSearchParams();
-  const stripeReturn = searchParams.get("stripe");
+  const mercadoPagoReturn = searchParams.get("mercadopago");
   const openPayments = searchParams.get("step") === "payments";
   const { state, hydrated, refresh } = useAppState();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -71,9 +65,7 @@ function OnboardingPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [draft, setDraft] = useState({ name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" });
   const [error, setError] = useState("");
-  const [stripeConnection, setStripeConnection] = useState<StripeConnection | null>(null);
-  const [stripeSession, setStripeSession] = useState<StripeOnboardingSession | null>(null);
-  const [stripeSessionKey, setStripeSessionKey] = useState(0);
+  const [mercadoPagoConnection, setMercadoPagoConnection] = useState<MercadoPagoConnection | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -93,17 +85,16 @@ function OnboardingPage() {
   }, [hydrated, state.account, state.business, state.plans, navigate]);
 
   useEffect(() => {
-    if (!hydrated || (!stripeReturn && !openPayments)) return;
+    if (!hydrated || (!mercadoPagoReturn && !openPayments)) return;
     setStep(3);
-    if (!stripeReturn) return;
     setSaving(true);
-    apiRequest<StripeConnection>("/payment-integrations/stripe/refresh", { method: "POST" })
-      .then(setStripeConnection)
+    apiRequest<MercadoPagoConnection>("/payment-integrations/mercadopago")
+      .then(setMercadoPagoConnection)
       .catch((reason: unknown) =>
-        setError(reason instanceof Error ? reason.message : "Não foi possível atualizar o Stripe."),
+        setError(reason instanceof Error ? reason.message : "Não foi possível atualizar o Mercado Pago."),
       )
       .finally(() => setSaving(false));
-  }, [hydrated, stripeReturn, openPayments]);
+  }, [hydrated, mercadoPagoReturn, openPayments]);
 
   function handleLogo(file: File | undefined) {
     if (!file) return;
@@ -154,57 +145,7 @@ function OnboardingPage() {
 
   const [saving, setSaving] = useState(false);
 
-  async function prepareStripeOnboarding() {
-    setSaving(true);
-    setError("");
-    try {
-      const session = await apiRequest<StripeOnboardingSession>(
-        "/payment-integrations/stripe/onboarding-session",
-        { method: "POST" },
-      );
-      if (!session.clientSecret || !session.publishableKey) {
-        throw new Error("A configuração segura de recebimentos está indisponível.");
-      }
-      setStripeSession(session);
-      setStripeSessionKey((current) => current + 1);
-    } catch (reason) {
-      setStripeSession(null);
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Não foi possível abrir a configuração de recebimentos.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function refreshStripeAfterExit() {
-    setSaving(true);
-    setError("");
-    try {
-      const connection = await apiRequest<StripeConnection>(
-        "/payment-integrations/stripe/refresh",
-        { method: "POST" },
-      );
-      setStripeConnection(connection);
-      if (connection.status !== "ENABLED") {
-        setError(
-          "Ainda existem dados obrigatórios pendentes. Revise o formulário para liberar cobranças e repasses.",
-        );
-      }
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Não foi possível confirmar o status dos recebimentos.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function connectStripe() {
+  async function connectMercadoPago() {
     if (!plans.length) {
       setError("Cadastre pelo menos um plano para continuar.");
       return;
@@ -217,25 +158,12 @@ function OnboardingPage() {
         plans,
         onboardingComplete: false,
       });
-      const connection = await apiRequest<StripeConnection>(
-        stripeConnection?.accountType === "STANDARD"
-          ? "/payment-integrations/stripe/reconnect"
-          : "/payment-integrations/stripe/account",
+      const authorization = await apiRequest<{ authorizationUrl: string }>(
+        "/payment-integrations/mercadopago/authorize",
         { method: "POST" },
       );
-      setStripeConnection(connection);
       setStep(3);
-      if (connection.status !== "ENABLED") {
-        const session = await apiRequest<StripeOnboardingSession>(
-          "/payment-integrations/stripe/onboarding-session",
-          { method: "POST" },
-        );
-        if (!session.clientSecret || !session.publishableKey) {
-          throw new Error("A configuração segura de recebimentos está indisponível.");
-        }
-        setStripeSession(session);
-        setStripeSessionKey((current) => current + 1);
-      }
+      window.location.assign(authorization.authorizationUrl);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -503,7 +431,7 @@ function OnboardingPage() {
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Receba suas mensalidades</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Esta etapa é opcional. Conecte o Stripe agora ou continue usando o painel e configure os recebimentos quando precisar gerar cobranças online.
+                  Esta etapa é opcional. Conecte o Mercado Pago agora ou configure os recebimentos quando precisar gerar cobranças online.
                 </p>
               </div>
               <div className="flex gap-4 rounded-lg border border-border p-4">
@@ -512,27 +440,19 @@ function OnboardingPage() {
                 </span>
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {stripeConnection?.status === "ENABLED"
+                    {mercadoPagoConnection?.status === "CONNECTED"
                       ? "Conta pronta para receber"
                       : "Conecte sua conta de recebimentos"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    CPF/CNPJ, documentos e dados bancários são solicitados somente ao conectar o Stripe; esses dados não ficam salvos na Mensaly.
+                    A autorização acontece dentro do Mercado Pago. A Mensaly guarda somente tokens criptografados para criar cobranças na conta da escola.
                   </p>
                 </div>
               </div>
-              {stripeConnection && stripeConnection.status !== "ENABLED" ? (
+              {mercadoPagoConnection && mercadoPagoConnection.status !== "CONNECTED" && mercadoPagoConnection.status !== "NOT_CONNECTED" ? (
                 <p className="text-sm text-muted-foreground">
-                  Status: {stripeConnection.status}. Se o Stripe pediu uma correção, continue o cadastro para concluir.
+                  Status: {mercadoPagoConnection.status}. Reconecte a conta para liberar os recebimentos.
                 </p>
-              ) : null}
-              {stripeSession && stripeConnection?.status !== "ENABLED" ? (
-                <StripeEmbeddedOnboarding
-                  key={stripeSessionKey}
-                  session={stripeSession}
-                  onExit={refreshStripeAfterExit}
-                  onRetry={prepareStripeOnboarding}
-                />
               ) : null}
             </div>
           ) : null}
@@ -562,18 +482,14 @@ function OnboardingPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={stripeSession ? refreshStripeAfterExit : stripeConnection ? prepareStripeOnboarding : connectStripe}
-                  disabled={saving || stripeConnection?.status === "ENABLED"}
+                  onClick={connectMercadoPago}
+                  disabled={saving || mercadoPagoConnection?.status === "CONNECTED"}
                 >
                   {saving
                     ? "Verificando..."
-                    : stripeSession
-                      ? "Verificar conclusão"
-                      : stripeConnection?.status === "ENABLED"
+                    : mercadoPagoConnection?.status === "CONNECTED"
                         ? "Recebimentos conectados"
-                        : stripeConnection
-                          ? "Continuar configuração"
-                          : "Conectar Stripe agora"}{" "}
+                        : "Conectar Mercado Pago agora"}{" "}
                   <ArrowRight className="size-4" />
                 </Button>
                 <Button type="button" onClick={finish} disabled={saving}>

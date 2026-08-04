@@ -2554,6 +2554,131 @@
         ]
       }
     },
+    "/api/v1/payment-integrations/mercadopago": {
+      "get": {
+        "operationId": "MercadoPagoConnectController_status_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets the authenticated organization's Mercado Pago status",
+        "tags": [
+          "Mercado Pago"
+        ]
+      }
+    },
+    "/api/v1/payment-integrations/mercadopago/authorize": {
+      "post": {
+        "operationId": "MercadoPagoConnectController_authorize_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Starts the Mercado Pago OAuth authorization",
+        "tags": [
+          "Mercado Pago"
+        ]
+      }
+    },
+    "/api/v1/payment-integrations/mercadopago/disconnect": {
+      "post": {
+        "operationId": "MercadoPagoConnectController_disconnect_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Disconnects the organization's Mercado Pago account",
+        "tags": [
+          "Mercado Pago"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}/mercadopago-checkout-link": {
+      "post": {
+        "operationId": "MercadoPagoCheckoutController_createLink_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates or reuses a Mercado Pago payment link",
+        "tags": [
+          "Mercado Pago Checkout"
+        ]
+      }
+    },
+    "/api/v1/public/mercadopago-checkout/{token}": {
+      "get": {
+        "operationId": "MercadoPagoPublicCheckoutController_details_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets a public Mercado Pago checkout",
+        "tags": [
+          "Public Mercado Pago Checkout"
+        ]
+      }
+    },
+    "/api/v1/public/mercadopago-checkout/{token}/process": {
+      "post": {
+        "operationId": "MercadoPagoPublicCheckoutController_process_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Submits a tokenized Mercado Pago payment",
+        "tags": [
+          "Public Mercado Pago Checkout"
+        ]
+      }
+    },
+    "/api/v1/public/mercadopago-checkout/{token}/reconcile": {
+      "post": {
+        "operationId": "MercadoPagoPublicCheckoutController_reconcile_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Reconciles a checkout with Mercado Pago",
+        "tags": [
+          "Public Mercado Pago Checkout"
+        ]
+      }
+    },
     "/api/v1/files": {
       "post": {
         "operationId": "FilesController_upload_v1",

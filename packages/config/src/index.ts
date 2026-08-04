@@ -92,6 +92,7 @@ const booleanFlagSchema = z
   .transform((value) => value === "true");
 const emailDeliveryModeSchema = z.enum(["local", "resend"]).default("local");
 const stripeConnectModeSchema = z.enum(["disabled", "test", "live"]).default("disabled");
+const mercadoPagoModeSchema = z.enum(["disabled", "test", "live"]).default("disabled");
 const emailEncryptionKeySchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/, "must be a 32-byte base64 key").optional();
 
 function usesProtocol(value: string, protocols: string[]): boolean {
@@ -180,6 +181,16 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
     STRIPE_PUBLISHABLE_KEY: z.string().trim().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
+    MERCADOPAGO_MODE: mercadoPagoModeSchema,
+    MERCADOPAGO_API_BASE_URL: z.string().url().default("https://api.mercadopago.com"),
+    MERCADOPAGO_AUTH_BASE_URL: z.string().url().default("https://auth.mercadopago.com.br"),
+    MERCADOPAGO_CLIENT_ID: optionalNonEmptyStringSchema,
+    MERCADOPAGO_CLIENT_SECRET: optionalNonEmptyStringSchema,
+    MERCADOPAGO_PUBLIC_KEY: optionalNonEmptyStringSchema,
+    MERCADOPAGO_ACCESS_TOKEN: optionalNonEmptyStringSchema,
+    MERCADOPAGO_OAUTH_REDIRECT_URI: optionalUrlSchema,
+    MERCADOPAGO_WEBHOOK_SECRET: optionalNonEmptyStringSchema,
+    PAYMENT_PROVIDER_ENCRYPTION_KEY: emailEncryptionKeySchema,
     PAYMENT_LINK_SECRET: emailEncryptionKeySchema,
   })
   .superRefine((environment, context) => {
@@ -270,6 +281,51 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
         code: z.ZodIssueCode.custom,
         path: ["STRIPE_CONNECT_MODE"],
         message: "live mode is allowed only in production",
+      });
+    }
+    if (environment.MERCADOPAGO_MODE !== "disabled") {
+      for (const field of [
+        "MERCADOPAGO_CLIENT_ID",
+        "MERCADOPAGO_CLIENT_SECRET",
+        "MERCADOPAGO_OAUTH_REDIRECT_URI",
+        "MERCADOPAGO_WEBHOOK_SECRET",
+        "PAYMENT_PROVIDER_ENCRYPTION_KEY",
+        "PAYMENT_LINK_SECRET",
+      ] as const) {
+        if (!environment[field]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `is required when MERCADOPAGO_MODE=${environment.MERCADOPAGO_MODE}`,
+          });
+        }
+      }
+    }
+    if (environment.MERCADOPAGO_MODE === "live" && environment.NODE_ENV !== "production") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MERCADOPAGO_MODE"],
+        message: "live mode is allowed only in production",
+      });
+    }
+    if (
+      environment.PAYMENT_PROVIDER_ENCRYPTION_KEY &&
+      environment.EMAIL_ENCRYPTION_KEY === environment.PAYMENT_PROVIDER_ENCRYPTION_KEY
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PAYMENT_PROVIDER_ENCRYPTION_KEY"],
+        message: "must be different from EMAIL_ENCRYPTION_KEY",
+      });
+    }
+    if (
+      environment.PAYMENT_PROVIDER_ENCRYPTION_KEY &&
+      environment.PAYMENT_LINK_SECRET === environment.PAYMENT_PROVIDER_ENCRYPTION_KEY
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PAYMENT_PROVIDER_ENCRYPTION_KEY"],
+        message: "must be different from PAYMENT_LINK_SECRET",
       });
     }
   })

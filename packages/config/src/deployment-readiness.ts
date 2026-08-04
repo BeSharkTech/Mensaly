@@ -136,6 +136,9 @@ export function validateDeploymentReadiness(
     "EMAIL_ENCRYPTION_KEY",
     "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY",
+    "MERCADOPAGO_CLIENT_SECRET",
+    "MERCADOPAGO_WEBHOOK_SECRET",
+    "PAYMENT_PROVIDER_ENCRYPTION_KEY",
     "PAYMENT_LINK_SECRET",
   ] as const) {
     requireSecret(errors, field, environment[field]);
@@ -148,6 +151,12 @@ export function validateDeploymentReadiness(
   ) {
     issue(errors, "PAYMENT_LINK_SECRET", "must be different from EMAIL_ENCRYPTION_KEY");
   }
+  if (
+    environment.PAYMENT_PROVIDER_ENCRYPTION_KEY &&
+    environment.PAYMENT_LINK_SECRET === environment.PAYMENT_PROVIDER_ENCRYPTION_KEY
+  ) {
+    issue(errors, "PAYMENT_PROVIDER_ENCRYPTION_KEY", "must be different from PAYMENT_LINK_SECRET");
+  }
 
   if (!environment.MENSALY_IMAGE) {
     issue(errors, "MENSALY_IMAGE", "is required");
@@ -155,9 +164,9 @@ export function validateDeploymentReadiness(
     issue(errors, "MENSALY_IMAGE", "must use an immutable sha-<40 hex commit> GHCR tag");
   }
 
-  const expectedStripeMode = target === "production" ? "live" : "test";
-  if (environment.STRIPE_CONNECT_MODE !== expectedStripeMode) {
-    issue(errors, "STRIPE_CONNECT_MODE", `must be ${expectedStripeMode} for ${target}`);
+  const expectedMercadoPagoMode = target === "production" ? "live" : "test";
+  if (environment.MERCADOPAGO_MODE !== expectedMercadoPagoMode) {
+    issue(errors, "MERCADOPAGO_MODE", `must be ${expectedMercadoPagoMode} for ${target}`);
   }
 
   if (environment.MESSAGE_AUTOMATION_ENABLED !== "false") {

@@ -90,11 +90,11 @@ const routePolicies: Array<{
   },
   {
     method: "POST",
-    path: /^\/api\/v1\/public\/checkout\/[^/]+\/(?:session|reconcile)$/,
+    path: /^\/api\/v1\/public\/(?:checkout\/[^/]+\/(?:session|reconcile)|mercadopago-checkout\/[^/]+\/(?:process|reconcile))$/,
     policy: "publicCheckout",
   },
   {
-    path: /^\/api\/v1\/(?:payment-integrations\/stripe|charges\/[^/]+\/checkout-link)(?:\/|$)/,
+    path: /^\/api\/v1\/(?:payment-integrations\/(?:stripe|mercadopago)|charges\/[^/]+\/(?:checkout-link|mercadopago-checkout-link))(?:\/|$)/,
     policy: "paymentIntegration",
   },
   {
@@ -103,7 +103,7 @@ const routePolicies: Array<{
   },
   {
     method: "POST",
-    path: /^\/api\/v1\/webhooks\/(?:resend|stripe)$/,
+    path: /^\/api\/v1\/webhooks\/(?:resend|stripe|mercadopago)$/,
     policy: "webhook",
   },
 ];

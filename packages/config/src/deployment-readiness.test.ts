@@ -33,6 +33,12 @@ function environment(overrides: Record<string, string | undefined> = {}) {
     STRIPE_SECRET_KEY: "sk_test_real-looking-secret",
     STRIPE_PUBLISHABLE_KEY: "pk_test_real-looking-public-key",
     STRIPE_WEBHOOK_SECRET: "whsec_stripe-real-secret",
+    MERCADOPAGO_MODE: "test",
+    MERCADOPAGO_CLIENT_ID: "123456789",
+    MERCADOPAGO_CLIENT_SECRET: "mercadopago-client-secret-value",
+    MERCADOPAGO_OAUTH_REDIRECT_URI: "https://api.mensaly.online/api/v1/payment-integrations/mercadopago/callback",
+    MERCADOPAGO_WEBHOOK_SECRET: "mercadopago-webhook-secret-value",
+    PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString("base64"),
     PAYMENT_LINK_SECRET: Buffer.alloc(32, 2).toString("base64"),
     MESSAGE_AUTOMATION_ENABLED: "false",
     MENSALY_IMAGE: `ghcr.io/besharktech/mensaly:sha-${"a".repeat(40)}`,
@@ -41,21 +47,19 @@ function environment(overrides: Record<string, string | undefined> = {}) {
 }
 
 describe("deployment readiness", () => {
-  it("accepts a hardened staging configuration with Stripe test mode", () => {
+  it("accepts a hardened staging configuration with Mercado Pago test mode", () => {
     const report = validateDeploymentReadiness(environment(), "staging");
     assert.deepEqual(report, { target: "staging", ok: true, errors: [] });
   });
 
-  it("requires live Stripe credentials only for the final production gate", () => {
+  it("requires live Mercado Pago credentials only for the final production gate", () => {
     const stagingCredentials = validateDeploymentReadiness(environment(), "production");
     assert.equal(stagingCredentials.ok, false);
-    assert.match(stagingCredentials.errors.join("\n"), /STRIPE_CONNECT_MODE: must be live/);
+    assert.match(stagingCredentials.errors.join("\n"), /MERCADOPAGO_MODE: must be live/);
 
     const live = validateDeploymentReadiness(
       environment({
-        STRIPE_CONNECT_MODE: "live",
-        STRIPE_SECRET_KEY: "sk_live_real-looking-secret",
-        STRIPE_PUBLISHABLE_KEY: "pk_live_real-looking-public-key",
+        MERCADOPAGO_MODE: "live",
       }),
       "production",
     );

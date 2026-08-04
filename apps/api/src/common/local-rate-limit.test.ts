@@ -45,7 +45,9 @@ function testApplication(
   app.post("/api/v1/auth/register", async () => ({ ok: true }));
   app.post("/api/v1/public/forms/:organizationId/responses", async () => ({ ok: true }));
   app.post("/api/v1/public/checkout/:token/session", async () => ({ ok: true }));
+  app.post("/api/v1/public/mercadopago-checkout/:token/process", async () => ({ ok: true }));
   app.post("/api/v1/webhooks/stripe", async () => ({ ok: true }));
+  app.post("/api/v1/webhooks/mercadopago", async () => ({ ok: true }));
   return app;
 }
 
@@ -180,8 +182,10 @@ describe("request rate limiting", () => {
         url: "/api/v1/public/forms/company/responses",
       });
       const webhook = await app.inject({ method: "POST", url: "/api/v1/webhooks/stripe" });
+      const mercadoPago = await app.inject({ method: "POST", url: "/api/v1/webhooks/mercadopago" });
       assert.match(String(form.headers["ratelimit-policy"] ?? ""), /name="public-form"/);
       assert.match(String(webhook.headers["ratelimit-policy"] ?? ""), /name="webhook"/);
+      assert.match(String(mercadoPago.headers["ratelimit-policy"] ?? ""), /name="webhook"/);
     } finally {
       await app.close();
     }

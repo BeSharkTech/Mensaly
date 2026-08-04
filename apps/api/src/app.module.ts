@@ -17,9 +17,10 @@ import { SecurityModule } from "./security/security.module";
 import { WorkspaceModule } from "./workspace/workspace.module";
 import { ResendWebhookModule } from "./resend-webhook/resend-webhook.module";
 import { StripeConnectModule } from "./stripe-connect/stripe-connect.module";
+import { MercadoPagoModule } from "./mercadopago/mercadopago.module";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule, WebhookInboxModule, ResendWebhookModule, StripeConnectModule, FilesModule, InsightsModule, SecurityModule, WorkspaceModule],
+  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule, WebhookInboxModule, ResendWebhookModule, StripeConnectModule, MercadoPagoModule, FilesModule, InsightsModule, SecurityModule, WorkspaceModule],
   controllers: [HealthController],
   providers: [HealthService, RedisHealthService],
 })

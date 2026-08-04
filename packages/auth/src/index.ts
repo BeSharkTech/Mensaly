@@ -62,7 +62,7 @@ export type EncryptedPayload = {
 function encryptionKey(encodedKey: string): Buffer {
   const key = Buffer.from(encodedKey, "base64");
   if (key.length !== 32) {
-    throw new Error("EMAIL_ENCRYPTION_KEY must decode to exactly 32 bytes");
+    throw new Error("Encryption key must decode to exactly 32 bytes");
   }
   return key;
 }

@@ -73,6 +73,9 @@ const publicOperations = new Set([
   "GET /api/v1/public/checkout/{token}",
   "POST /api/v1/public/checkout/{token}/session",
   "POST /api/v1/public/checkout/{token}/reconcile",
+  "GET /api/v1/public/mercadopago-checkout/{token}",
+  "POST /api/v1/public/mercadopago-checkout/{token}/process",
+  "POST /api/v1/public/mercadopago-checkout/{token}/reconcile",
   "GET /api/v1/public/forms/{organizationId}",
   "POST /api/v1/public/forms/{organizationId}/responses",
   "POST /api/v1/webhooks/stripe",
@@ -162,7 +165,7 @@ describe("frozen OpenAPI v1 contract", () => {
           operationIds.add(operation.operationId ?? "");
         }
       }
-      assert.equal(operationCount, 103);
+      assert.equal(operationCount, 110);
     } finally {
       await app.close();
     }

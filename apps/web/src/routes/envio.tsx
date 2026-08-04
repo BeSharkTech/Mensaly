@@ -374,7 +374,7 @@ function SendPage() {
         return;
       }
       const paymentLink = charge
-        ? (await apiRequest<{ url: string }>(`/charges/${charge.id}/checkout-link`, { method: "POST" })).url
+        ? (await apiRequest<{ url: string }>(`/charges/${charge.id}/mercadopago-checkout-link`, { method: "POST" })).url
         : "";
       const body = renderMessageForStudent(sending.body, {
         studentName: student.name,

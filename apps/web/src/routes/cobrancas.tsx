@@ -121,7 +121,7 @@ function ChargesPage() {
     if (creatingLinkId) return;
     setCreatingLinkId(charge.id);
     try {
-      const { url } = await apiRequest<{ url: string }>(`/charges/${charge.id}/checkout-link`, {
+      const { url } = await apiRequest<{ url: string }>(`/charges/${charge.id}/mercadopago-checkout-link`, {
         method: "POST",
       });
       await navigator.clipboard.writeText(url);
@@ -143,7 +143,7 @@ function ChargesPage() {
     if (checkoutWindow) checkoutWindow.opener = null;
     setCreatingLinkId(charge.id);
     try {
-      const { url } = await apiRequest<{ url: string }>(`/charges/${charge.id}/checkout-link`, {
+      const { url } = await apiRequest<{ url: string }>(`/charges/${charge.id}/mercadopago-checkout-link`, {
         method: "POST",
       });
       if (checkoutWindow) checkoutWindow.location.href = url;

@@ -145,6 +145,43 @@ describe("environment configuration", () => {
     );
   });
 
+  it("requires Mercado Pago OAuth, webhook and isolated encryption settings when enabled", () => {
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        MERCADOPAGO_MODE: "test",
+      }),
+      /MERCADOPAGO_CLIENT_ID/,
+    );
+
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      MERCADOPAGO_MODE: "test",
+      MERCADOPAGO_CLIENT_ID: "123456",
+      MERCADOPAGO_CLIENT_SECRET: "client-secret",
+      MERCADOPAGO_OAUTH_REDIRECT_URI: "https://app.example.test/api/v1/payment-integrations/mercadopago/callback",
+      MERCADOPAGO_WEBHOOK_SECRET: "webhook-secret",
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+      PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+    });
+    assert.equal(environment.MERCADOPAGO_MODE, "test");
+
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+        MERCADOPAGO_MODE: "test",
+        MERCADOPAGO_CLIENT_ID: "123456",
+        MERCADOPAGO_CLIENT_SECRET: "client-secret",
+        MERCADOPAGO_OAUTH_REDIRECT_URI: "https://app.example.test/api/v1/payment-integrations/mercadopago/callback",
+        MERCADOPAGO_WEBHOOK_SECRET: "webhook-secret",
+        PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+        PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+      }),
+      /must be different from EMAIL_ENCRYPTION_KEY/,
+    );
+  });
+
   it("coerces a valid API port", () => {
     const environment = parseEnvironment(apiEnvironmentSchema, {
       ...validConnections,

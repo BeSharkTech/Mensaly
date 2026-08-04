@@ -61,4 +61,36 @@ describe("runtime API proxy", () => {
     });
     expect(payload).not.toContain("private detail");
   });
+
+  it("forwards Mercado Pago signature headers and OAuth redirects", async () => {
+    process.env.MENSALY_API_URL = "http://api:3001";
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect((init?.headers as Headers).get("x-signature")).toBe("ts=1,v1=signature");
+      expect((init?.headers as Headers).get("x-request-id")).toBe("mp-request-1");
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://app.mensaly.online/onboarding?mercadopago=connected" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new NextRequest(
+      "https://app.mensaly.online/api/v1/webhooks/mercadopago?data.id=order-1",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-signature": "ts=1,v1=signature",
+          "x-request-id": "mp-request-1",
+        },
+        body: JSON.stringify({ type: "order", data: { id: "order-1" } }),
+      },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["webhooks", "mercadopago"] }),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("mercadopago=connected");
+  });
 });
