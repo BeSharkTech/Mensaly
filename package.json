@@ -29,10 +29,10 @@
   },
   "devDependencies": {
     "@mensaly/eslint-config": "workspace:*",
-    "@types/node": "^22.15.3",
+    "@types/node": "^26.1.2",
     "eslint": "10.8.0",
-    "turbo": "^2.5.6",
+    "turbo": "^2.10.8",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "^7.0.2"
   }
 }
