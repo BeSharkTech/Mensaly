@@ -1,0 +1,104 @@
+name: mensaly
+
+# Combine with compose.yaml for a complete local runtime:
+# docker compose -f infra/docker/compose.yaml -f infra/docker/compose.local.app.yaml up -d --build
+services:
+  migrate:
+    image: mensaly-local:dev
+    pull_policy: never
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+    command: ["pnpm", "db:migrate:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: mensaly-local:dev
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    environment:
+      NODE_ENV: development
+      APP: api
+      API_PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: http://localhost:${LOCAL_WEB_PORT:-5174}
+      LOCAL_STORAGE_PATH: /data/files
+      FILE_STORAGE_DRIVER: local
+      FILE_MAX_SIZE_BYTES: ${FILE_MAX_SIZE_BYTES:-5242880}
+      TRUST_PROXY_HOPS: 0
+      EMAIL_DELIVERY_MODE: local
+      WEB_APP_URL: http://localhost:${LOCAL_WEB_PORT:-5174}
+      STRIPE_CONNECT_MODE: ${STRIPE_CONNECT_MODE:-disabled}
+      MERCADOPAGO_MODE: ${MERCADOPAGO_MODE:-disabled}
+      MERCADOPAGO_CONNECTION_MODE: ${MERCADOPAGO_CONNECTION_MODE:-oauth}
+      MERCADOPAGO_API_BASE_URL: ${MERCADOPAGO_API_BASE_URL:-https://api.mercadopago.com}
+      MERCADOPAGO_AUTH_BASE_URL: ${MERCADOPAGO_AUTH_BASE_URL:-https://auth.mercadopago.com}
+      MERCADOPAGO_CLIENT_ID: ${MERCADOPAGO_CLIENT_ID:-}
+      MERCADOPAGO_CLIENT_SECRET: ${MERCADOPAGO_CLIENT_SECRET:-}
+      MERCADOPAGO_PUBLIC_KEY: ${MERCADOPAGO_PUBLIC_KEY:-}
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MERCADOPAGO_OAUTH_REDIRECT_URI: ${MERCADOPAGO_OAUTH_REDIRECT_URI:-}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: ${PAYMENT_PROVIDER_ENCRYPTION_KEY:-}
+      PAYMENT_LINK_SECRET: ${PAYMENT_LINK_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LOCAL_API_PORT:-3001}:3001"
+    volumes:
+      - local_files:/data/files
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    image: mensaly-local:dev
+    pull_policy: never
+    environment:
+      NODE_ENV: development
+      APP: worker
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      REDIS_URL: redis://redis:6379
+      BULLMQ_PREFIX: ${BULLMQ_PREFIX:-mensaly}
+      BULLMQ_WORKER_CONCURRENCY: ${BULLMQ_WORKER_CONCURRENCY:-5}
+      BULLMQ_JOB_ATTEMPTS: ${BULLMQ_JOB_ATTEMPTS:-4}
+      BULLMQ_BACKOFF_MS: ${BULLMQ_BACKOFF_MS:-1000}
+      BULLMQ_METRICS_INTERVAL_MS: ${BULLMQ_METRICS_INTERVAL_MS:-30000}
+      SCHEDULER_INTERVAL_MS: ${SCHEDULER_INTERVAL_MS:-60000}
+      SCHEDULER_LOOKAHEAD_MS: ${SCHEDULER_LOOKAHEAD_MS:-86400000}
+      FAKE_MESSAGE_ADAPTER_OUTCOME: ${FAKE_MESSAGE_ADAPTER_OUTCOME:-READ}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: mensaly-local:dev
+    pull_policy: never
+    environment:
+      NODE_ENV: production
+      APP: web
+      MENSALY_API_URL: http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LOCAL_WEB_PORT:-5174}:3000"
+    restart: unless-stopped
+
+volumes:
+  local_files:

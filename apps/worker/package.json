@@ -13,6 +13,7 @@
     "test:runtime": "node --test integration/runtime.test.cjs"
   },
   "dependencies": {
+    "@mensaly/auth": "workspace:*",
     "@mensaly/config": "workspace:*",
     "@mensaly/database": "workspace:*",
     "@mensaly/logger": "workspace:*",

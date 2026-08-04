@@ -1,0 +1,153 @@
+name: mensaly-app
+
+# Application stack for staging/production. PostgreSQL and Redis are external,
+# managed services; pass all variables with --env-file from a secret store.
+x-app-build: &app-build
+  context: ../..
+  dockerfile: infra/docker/Dockerfile
+
+services:
+  migrate:
+    image: ${MENSALY_IMAGE:-mensaly:local}
+    build: *app-build
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    command: ["pnpm", "db:migrate:deploy"]
+    restart: "no"
+    init: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  api:
+    image: ${MENSALY_IMAGE:-mensaly:local}
+    build: *app-build
+    environment:
+      NODE_ENV: production
+      APP: api
+      API_PORT: 3001
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      FILE_STORAGE_DRIVER: s3
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      SENTRY_API_BASE_URL: ${SENTRY_API_BASE_URL:-https://sentry.io/api/0}
+      SENTRY_API_TOKEN: ${SENTRY_API_TOKEN:-}
+      SENTRY_ORG_SLUG: ${SENTRY_ORG_SLUG:-}
+      SENTRY_PROJECT_ID: ${SENTRY_PROJECT_ID:-}
+      ADMIN_MONTHLY_FIXED_COST_CENTS: ${ADMIN_MONTHLY_FIXED_COST_CENTS:-0}
+      ADMIN_EMAIL_COST_PER_THOUSAND_CENTS: ${ADMIN_EMAIL_COST_PER_THOUSAND_CENTS:-0}
+      ADMIN_STORAGE_COST_PER_GB_CENTS: ${ADMIN_STORAGE_COST_PER_GB_CENTS:-0}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      EMAIL_DELIVERY_MODE: resend
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:?RESEND_FROM_EMAIL is required}
+      RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:?RESEND_WEBHOOK_SECRET is required}
+      EMAIL_ENCRYPTION_KEY: ${EMAIL_ENCRYPTION_KEY:?EMAIL_ENCRYPTION_KEY is required}
+      WEB_APP_URL: ${PUBLIC_WEB_URL:?PUBLIC_WEB_URL is required}
+      STRIPE_CONNECT_MODE: ${STRIPE_CONNECT_MODE:-disabled}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      MERCADOPAGO_MODE: ${MERCADOPAGO_MODE:-disabled}
+      MERCADOPAGO_CONNECTION_MODE: ${MERCADOPAGO_CONNECTION_MODE:-oauth}
+      MERCADOPAGO_API_BASE_URL: ${MERCADOPAGO_API_BASE_URL:-https://api.mercadopago.com}
+      MERCADOPAGO_AUTH_BASE_URL: ${MERCADOPAGO_AUTH_BASE_URL:-https://auth.mercadopago.com}
+      MERCADOPAGO_CLIENT_ID: ${MERCADOPAGO_CLIENT_ID:-}
+      MERCADOPAGO_CLIENT_SECRET: ${MERCADOPAGO_CLIENT_SECRET:-}
+      MERCADOPAGO_PUBLIC_KEY: ${MERCADOPAGO_PUBLIC_KEY:-}
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MERCADOPAGO_OAUTH_REDIRECT_URI: ${MERCADOPAGO_OAUTH_REDIRECT_URI:-}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: ${PAYMENT_PROVIDER_ENCRYPTION_KEY:-}
+      PAYMENT_LINK_SECRET: ${PAYMENT_LINK_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${API_PORT:-3001}:3001"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    image: ${MENSALY_IMAGE:-mensaly:local}
+    build: *app-build
+    environment:
+      NODE_ENV: production
+      APP: worker
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      BULLMQ_PREFIX: ${BULLMQ_PREFIX:-mensaly}
+      BULLMQ_WORKER_CONCURRENCY: ${BULLMQ_WORKER_CONCURRENCY:-5}
+      BULLMQ_JOB_ATTEMPTS: ${BULLMQ_JOB_ATTEMPTS:-4}
+      BULLMQ_BACKOFF_MS: ${BULLMQ_BACKOFF_MS:-1000}
+      BULLMQ_METRICS_INTERVAL_MS: ${BULLMQ_METRICS_INTERVAL_MS:-30000}
+      SCHEDULER_INTERVAL_MS: ${SCHEDULER_INTERVAL_MS:-60000}
+      SCHEDULER_LOOKAHEAD_MS: ${SCHEDULER_LOOKAHEAD_MS:-86400000}
+      FAKE_MESSAGE_ADAPTER_OUTCOME: ${FAKE_MESSAGE_ADAPTER_OUTCOME:-READ}
+      MESSAGE_AUTOMATION_ENABLED: ${MESSAGE_AUTOMATION_ENABLED:-false}
+      EMAIL_DELIVERY_MODE: resend
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:?RESEND_FROM_EMAIL is required}
+      EMAIL_ENCRYPTION_KEY: ${EMAIL_ENCRYPTION_KEY:?EMAIL_ENCRYPTION_KEY is required}
+      WEB_APP_URL: ${PUBLIC_WEB_URL:?PUBLIC_WEB_URL is required}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  web:
+    image: ${MENSALY_IMAGE:-mensaly:local}
+    build: *app-build
+    environment:
+      NODE_ENV: production
+      APP: web
+      MENSALY_API_URL: http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-5173}:3000"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

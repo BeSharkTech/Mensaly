@@ -92,8 +92,10 @@ These are deployment capabilities, not hidden passing test results:
 - Email delivery and the message provider are local/fake adapters. Provider
   sandbox and production delivery must be validated when F8 introduces the
   real integrations.
-- Mutation rate limiting is process-local. A horizontally scaled deployment
-  needs a shared Redis/gateway limiter.
+- Mutation rate limiting now uses an atomic Redis counter shared by API
+  instances. If Redis is temporarily unavailable, the API logs the transition
+  and enforces a process-local fail-safe budget until Redis recovers. Cloudflare
+  edge limiting remains a deployment defense-in-depth task.
 - Local file storage assumes a single shared filesystem. Multi-instance
   deployment needs shared object storage.
 - No production API URL or production environment is configured, so TLS,

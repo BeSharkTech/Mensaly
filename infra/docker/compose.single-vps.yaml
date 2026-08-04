@@ -1,0 +1,224 @@
+name: mensaly-production
+
+# Pilot deployment for one VPS. PostgreSQL and Redis are intentionally private
+# to this Compose network; neither service publishes a host port.
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    shm_size: 256mb
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  redis:
+    image: redis:7.2-bookworm
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: ["/bin/sh", "-ec", "exec redis-server --appendonly yes --maxmemory-policy noeviction --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  migrate:
+    image: ${MENSALY_IMAGE:?MENSALY_IMAGE is required}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+    command: ["pnpm", "db:migrate:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    init: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  api:
+    image: ${MENSALY_IMAGE:?MENSALY_IMAGE is required}
+    environment:
+      NODE_ENV: production
+      APP: api
+      API_PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      CORS_ORIGINS: ${PUBLIC_WEB_URL:?PUBLIC_WEB_URL is required}
+      FILE_STORAGE_DRIVER: s3
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      SENTRY_API_BASE_URL: ${SENTRY_API_BASE_URL:-https://sentry.io/api/0}
+      SENTRY_API_TOKEN: ${SENTRY_API_TOKEN:-}
+      SENTRY_ORG_SLUG: ${SENTRY_ORG_SLUG:-}
+      SENTRY_PROJECT_ID: ${SENTRY_PROJECT_ID:-}
+      ADMIN_MONTHLY_FIXED_COST_CENTS: ${ADMIN_MONTHLY_FIXED_COST_CENTS:-0}
+      ADMIN_EMAIL_COST_PER_THOUSAND_CENTS: ${ADMIN_EMAIL_COST_PER_THOUSAND_CENTS:-0}
+      ADMIN_STORAGE_COST_PER_GB_CENTS: ${ADMIN_STORAGE_COST_PER_GB_CENTS:-0}
+      TRUST_PROXY_HOPS: 1
+      AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-168}
+      EMAIL_DELIVERY_MODE: resend
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:?RESEND_FROM_EMAIL is required}
+      RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:?RESEND_WEBHOOK_SECRET is required}
+      EMAIL_ENCRYPTION_KEY: ${EMAIL_ENCRYPTION_KEY:?EMAIL_ENCRYPTION_KEY is required}
+      WEB_APP_URL: ${PUBLIC_WEB_URL:?PUBLIC_WEB_URL is required}
+      STRIPE_CONNECT_MODE: ${STRIPE_CONNECT_MODE:-disabled}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      MERCADOPAGO_MODE: ${MERCADOPAGO_MODE:-live}
+      MERCADOPAGO_CONNECTION_MODE: ${MERCADOPAGO_CONNECTION_MODE:-oauth}
+      MERCADOPAGO_API_BASE_URL: ${MERCADOPAGO_API_BASE_URL:-https://api.mercadopago.com}
+      MERCADOPAGO_AUTH_BASE_URL: ${MERCADOPAGO_AUTH_BASE_URL:-https://auth.mercadopago.com}
+      MERCADOPAGO_CLIENT_ID: ${MERCADOPAGO_CLIENT_ID:-}
+      MERCADOPAGO_CLIENT_SECRET: ${MERCADOPAGO_CLIENT_SECRET:-}
+      MERCADOPAGO_PUBLIC_KEY: ${MERCADOPAGO_PUBLIC_KEY:-}
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+      MERCADOPAGO_OAUTH_REDIRECT_URI: ${MERCADOPAGO_OAUTH_REDIRECT_URI:-}
+      MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: ${PAYMENT_PROVIDER_ENCRYPTION_KEY:?PAYMENT_PROVIDER_ENCRYPTION_KEY is required}
+      PAYMENT_LINK_SECRET: ${PAYMENT_LINK_SECRET:?PAYMENT_LINK_SECRET is required}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    mem_limit: 700m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  worker:
+    image: ${MENSALY_IMAGE:?MENSALY_IMAGE is required}
+    environment:
+      NODE_ENV: production
+      APP: worker
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      BULLMQ_PREFIX: ${BULLMQ_PREFIX:-mensaly-production}
+      BULLMQ_WORKER_CONCURRENCY: ${BULLMQ_WORKER_CONCURRENCY:-3}
+      BULLMQ_JOB_ATTEMPTS: ${BULLMQ_JOB_ATTEMPTS:-4}
+      BULLMQ_BACKOFF_MS: ${BULLMQ_BACKOFF_MS:-1000}
+      BULLMQ_METRICS_INTERVAL_MS: ${BULLMQ_METRICS_INTERVAL_MS:-30000}
+      SCHEDULER_INTERVAL_MS: ${SCHEDULER_INTERVAL_MS:-60000}
+      SCHEDULER_LOOKAHEAD_MS: ${SCHEDULER_LOOKAHEAD_MS:-86400000}
+      MESSAGE_AUTOMATION_ENABLED: "false"
+      EMAIL_DELIVERY_MODE: resend
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:?RESEND_FROM_EMAIL is required}
+      EMAIL_ENCRYPTION_KEY: ${EMAIL_ENCRYPTION_KEY:?EMAIL_ENCRYPTION_KEY is required}
+      WEB_APP_URL: ${PUBLIC_WEB_URL:?PUBLIC_WEB_URL is required}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    mem_limit: 600m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  web:
+    image: ${MENSALY_IMAGE:?MENSALY_IMAGE is required}
+    environment:
+      NODE_ENV: production
+      APP: web
+      MENSALY_API_URL: http://api:3001
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    mem_limit: 512m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2.8-alpine
+    environment:
+      PUBLIC_WEB_HOST: ${PUBLIC_WEB_HOST:?PUBLIC_WEB_HOST is required}
+      PUBLIC_API_HOST: ${PUBLIC_API_HOST:?PUBLIC_API_HOST is required}
+      CADDY_EMAIL: ${CADDY_EMAIL:?CADDY_EMAIL is required}
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    mem_limit: 128m
+    cap_drop: ["ALL"]
+    # The official Caddy image uses a file capability to bind 80/443 as its
+    # unprivileged user. no-new-privileges blocks that exec-time capability
+    # grant and makes the process fail before it can start.
+    cap_add: ["NET_BIND_SERVICE"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

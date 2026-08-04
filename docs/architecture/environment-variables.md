@@ -34,7 +34,7 @@ aplicação web ainda não possui variáveis públicas próprias.
 | `POSTGRES_PORT`      | Docker Compose          | Sim no ambiente local | Porta exposta pelo PostgreSQL local.                                       |
 | `REDIS_PORT`         | Docker Compose          | Sim no ambiente local | Porta exposta pelo Redis local.                                            |
 | `DATABASE_URL`       | API, Prisma e worker    | Sim                   | Endereço PostgreSQL completo.                                              |
-| `REDIS_URL`          | API e worker            | Sim                   | Endereço Redis completo.                                                   |
+| `REDIS_URL`          | API e worker            | Sim                   | Endereço Redis completo para filas, saúde, locks e rate limit distribuído. |
 | `BULLMQ_PREFIX`      | Worker                  | Não                   | Prefixo das chaves BullMQ; o padrão é `mensaly`.                           |
 | `BULLMQ_WORKER_CONCURRENCY` | Worker            | Não                   | Jobs concorrentes; o padrão é `5`.                                         |
 | `BULLMQ_JOB_ATTEMPTS` | Worker                 | Não                   | Total de tentativas por job; o padrão é `4`.                               |
@@ -66,6 +66,17 @@ envie um arquivo `.env` de produção ao repositório ou à imagem Docker.
 
 O ambiente de staging, o cofre de segredos e as credenciais das integrações
 serão configurados em tarefas posteriores, conforme o roadmap.
+
+Antes de qualquer deploy, use o modelo `infra/env/staging.env.example` ou
+`infra/env/production.env.example` e execute o preflight correspondente. Em V1,
+`MESSAGE_AUTOMATION_ENABLED=false` impede que o worker crie ou enfileire envios
+automáticos de WhatsApp sem afetar a geração mensal de cobranças. O deploy exige
+`MENSALY_IMAGE` apontando para uma tag imutável `sha-<commit>` publicada pelo CI.
+
+As variáveis de armazenamento S3/R2, Resend, Sentry, URLs públicas, criptografia,
+Mercado Pago OAuth, webhooks e TLS estão detalhados em
+`docs/operations/mercadopago-student-payments.md` e
+`docs/operations/production-launch.md`.
 
 ## Segurança
 

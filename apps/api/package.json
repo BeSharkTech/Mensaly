@@ -12,9 +12,11 @@
     "test:coverage": "tsx --test --experimental-test-coverage src/**/*.test.ts",
     "openapi:export": "tsx scripts/export-openapi.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
+    "stripe:onboarding:verify": "tsx --env-file-if-exists=../../.env scripts/verify-stripe-onboarding.ts",
     "test:runtime": "node --test integration/runtime.test.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1099.0",
     "@fastify/cors": "^11.3.0",
     "@fastify/multipart": "^9.4.0",
     "@mensaly/auth": "workspace:*",
@@ -26,10 +28,13 @@
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-fastify": "^11.1.6",
     "@nestjs/swagger": "^11.4.6",
+    "@sentry/node": "^10.69.0",
     "fastify": "^5.10.0",
     "ioredis": "^5.11.1",
+    "mercadopago": "^3.2.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "stripe": "^22.4.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

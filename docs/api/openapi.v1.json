@@ -34,6 +34,26 @@
         ]
       }
     },
+    "/api/v1/health/platform": {
+      "get": {
+        "operationId": "HealthController_platform_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Platform health for internal administrators"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets protected platform dependency health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
         "operationId": "AuthController_register_v1",
@@ -63,7 +83,7 @@
                   "password": {
                     "type": "string",
                     "format": "password",
-                    "minLength": 12,
+                    "minLength": 6,
                     "maxLength": 128
                   }
                 }
@@ -73,7 +93,7 @@
         },
         "responses": {
           "201": {
-            "description": "Account registered and awaiting email verification"
+            "description": "Pending account registered; email confirmation is required"
           },
           "409": {
             "description": "An account already uses this email"
@@ -207,7 +227,7 @@
                   "password": {
                     "type": "string",
                     "format": "password",
-                    "minLength": 12,
+                    "minLength": 6,
                     "maxLength": 128
                   }
                 }
@@ -319,9 +339,7 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "name",
-                  "taxId",
-                  "phone"
+                  "name"
                 ],
                 "properties": {
                   "name": {
@@ -565,6 +583,17 @@
                     "minimum": 1,
                     "maximum": 2000000000
                   },
+                  "chargeOpenDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31,
+                    "default": 1
+                  },
+                  "chargeOpenTime": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                    "default": "00:00"
+                  },
                   "dueDay": {
                     "type": "integer",
                     "minimum": 1,
@@ -646,6 +675,17 @@
                     "minimum": 1,
                     "maximum": 2000000000
                   },
+                  "chargeOpenDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31,
+                    "default": 1
+                  },
+                  "chargeOpenTime": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                    "default": "00:00"
+                  },
                   "dueDay": {
                     "type": "integer",
                     "minimum": 1,
@@ -708,11 +748,24 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "name"
+                ],
                 "properties": {
                   "name": {
                     "type": "string",
                     "minLength": 2,
                     "maxLength": 120
+                  },
+                  "cpf": {
+                    "type": "string",
+                    "minLength": 11,
+                    "maxLength": 14,
+                    "description": "Brazilian CPF"
+                  },
+                  "birthDate": {
+                    "type": "string",
+                    "format": "date"
                   },
                   "email": {
                     "type": "string",
@@ -727,10 +780,7 @@
                     "type": "string",
                     "maxLength": 2000
                   }
-                },
-                "required": [
-                  "name"
-                ]
+                }
               }
             }
           }
@@ -779,11 +829,25 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "name",
+                  "cpf"
+                ],
                 "properties": {
                   "name": {
                     "type": "string",
                     "minLength": 2,
                     "maxLength": 120
+                  },
+                  "cpf": {
+                    "type": "string",
+                    "minLength": 11,
+                    "maxLength": 14,
+                    "description": "Brazilian CPF"
+                  },
+                  "birthDate": {
+                    "type": "string",
+                    "format": "date"
                   },
                   "email": {
                     "type": "string",
@@ -895,6 +959,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "name",
+                  "phone"
+                ],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -914,13 +982,10 @@
                   "taxId": {
                     "type": "string",
                     "minLength": 11,
-                    "maxLength": 18
+                    "maxLength": 14,
+                    "description": "Brazilian CPF"
                   }
-                },
-                "required": [
-                  "name",
-                  "phone"
-                ]
+                }
               }
             }
           }
@@ -969,6 +1034,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "name",
+                  "phone",
+                  "taxId"
+                ],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -988,7 +1058,8 @@
                   "taxId": {
                     "type": "string",
                     "minLength": 11,
-                    "maxLength": 18
+                    "maxLength": 14,
+                    "description": "Brazilian CPF"
                   },
                   "status": {
                     "type": "string",
@@ -1064,6 +1135,15 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 2000000000
+                  },
+                  "chargeOpenDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "chargeOpenTime": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
                   },
                   "dueDay": {
                     "type": "integer",
@@ -1144,6 +1224,15 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 2000000000
+                  },
+                  "chargeOpenDay": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  },
+                  "chargeOpenTime": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
                   },
                   "dueDay": {
                     "type": "integer",
@@ -2280,6 +2369,131 @@
         ]
       }
     },
+    "/api/v1/payment-integrations/mercadopago": {
+      "get": {
+        "operationId": "MercadoPagoConnectController_status_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets the authenticated organization's Mercado Pago status",
+        "tags": [
+          "Mercado Pago"
+        ]
+      }
+    },
+    "/api/v1/payment-integrations/mercadopago/authorize": {
+      "post": {
+        "operationId": "MercadoPagoConnectController_authorize_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Starts the Mercado Pago OAuth authorization",
+        "tags": [
+          "Mercado Pago"
+        ]
+      }
+    },
+    "/api/v1/payment-integrations/mercadopago/disconnect": {
+      "post": {
+        "operationId": "MercadoPagoConnectController_disconnect_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Disconnects the organization's Mercado Pago account",
+        "tags": [
+          "Mercado Pago"
+        ]
+      }
+    },
+    "/api/v1/charges/{id}/mercadopago-checkout-link": {
+      "post": {
+        "operationId": "MercadoPagoCheckoutController_createLink_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates or reuses a Mercado Pago payment link",
+        "tags": [
+          "Mercado Pago Checkout"
+        ]
+      }
+    },
+    "/api/v1/public/mercadopago-checkout/{token}": {
+      "get": {
+        "operationId": "MercadoPagoPublicCheckoutController_details_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets a public Mercado Pago checkout",
+        "tags": [
+          "Public Mercado Pago Checkout"
+        ]
+      }
+    },
+    "/api/v1/public/mercadopago-checkout/{token}/process": {
+      "post": {
+        "operationId": "MercadoPagoPublicCheckoutController_process_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Submits a tokenized Mercado Pago payment",
+        "tags": [
+          "Public Mercado Pago Checkout"
+        ]
+      }
+    },
+    "/api/v1/public/mercadopago-checkout/{token}/reconcile": {
+      "post": {
+        "operationId": "MercadoPagoPublicCheckoutController_reconcile_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Reconciles a checkout with Mercado Pago",
+        "tags": [
+          "Public Mercado Pago Checkout"
+        ]
+      }
+    },
     "/api/v1/files": {
       "post": {
         "operationId": "FilesController_upload_v1",
@@ -2563,6 +2777,26 @@
         ]
       }
     },
+    "/api/v1/admin/analytics": {
+      "get": {
+        "operationId": "AdminInsightsController_analytics_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Platform administration analytics"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets platform trends, estimated costs and Sentry health",
+        "tags": [
+          "Platform administration"
+        ]
+      }
+    },
     "/api/v1/admin/organizations": {
       "get": {
         "operationId": "AdminInsightsController_organizations_v1",
@@ -2649,6 +2883,328 @@
         "summary": "Lists the current organization's audit trail",
         "tags": [
           "Audit"
+        ]
+      }
+    },
+    "/api/v1/workspace": {
+      "get": {
+        "operationId": "WorkspaceController_all_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets all organization workspace resources",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/products": {
+      "post": {
+        "operationId": "WorkspaceController_createProduct_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates a product",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/products/{id}": {
+      "patch": {
+        "operationId": "WorkspaceController_updateProduct_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Updates a product",
+        "tags": [
+          "Workspace"
+        ]
+      },
+      "delete": {
+        "operationId": "WorkspaceController_deleteProduct_v1",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Deletes a product",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/events": {
+      "post": {
+        "operationId": "WorkspaceController_createEvent_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates an event",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/events/{id}": {
+      "patch": {
+        "operationId": "WorkspaceController_updateEvent_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Updates an event",
+        "tags": [
+          "Workspace"
+        ]
+      },
+      "delete": {
+        "operationId": "WorkspaceController_deleteEvent_v1",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Deletes an event",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/custom-fields": {
+      "post": {
+        "operationId": "WorkspaceController_createField_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates a custom student field",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/custom-fields/{id}": {
+      "patch": {
+        "operationId": "WorkspaceController_updateField_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Updates a custom student field",
+        "tags": [
+          "Workspace"
+        ]
+      },
+      "delete": {
+        "operationId": "WorkspaceController_deleteField_v1",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Deletes a custom student field",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/student-field-values/{studentId}": {
+      "patch": {
+        "operationId": "WorkspaceController_replaceValues_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Replaces a student's custom field values",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/broadcasts": {
+      "post": {
+        "operationId": "WorkspaceController_createBroadcast_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates a broadcast message",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/broadcasts/{id}": {
+      "patch": {
+        "operationId": "WorkspaceController_updateBroadcast_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Updates a broadcast message",
+        "tags": [
+          "Workspace"
+        ]
+      },
+      "delete": {
+        "operationId": "WorkspaceController_deleteBroadcast_v1",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Deletes a broadcast message",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/workspace/broadcast-sends": {
+      "post": {
+        "operationId": "WorkspaceController_queueBroadcast_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Queues a broadcast for selected students",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
+    "/api/v1/public/forms/{organizationId}": {
+      "get": {
+        "operationId": "PublicFormsController_get_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets one organization's public custom form",
+        "tags": [
+          "Public forms"
+        ]
+      }
+    },
+    "/api/v1/public/forms/{organizationId}/responses": {
+      "post": {
+        "operationId": "PublicFormsController_submit_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Submits one public custom form response",
+        "tags": [
+          "Public forms"
         ]
       }
     }

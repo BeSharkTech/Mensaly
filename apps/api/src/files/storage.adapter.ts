@@ -7,6 +7,7 @@ export interface StorageAdapter {
   put(key: string, body: Buffer): Promise<void>;
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
+  healthcheck?: () => Promise<void>;
 }
 
 export const STORAGE_ADAPTER = Symbol("STORAGE_ADAPTER");

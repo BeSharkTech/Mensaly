@@ -70,6 +70,15 @@ const publicOperations = new Set([
   "POST /api/v1/auth/password-reset/confirm",
   "POST /api/v1/auth/login",
   "POST /api/v1/auth/logout",
+  "GET /api/v1/public/checkout/{token}",
+  "POST /api/v1/public/checkout/{token}/session",
+  "POST /api/v1/public/checkout/{token}/reconcile",
+  "GET /api/v1/public/mercadopago-checkout/{token}",
+  "POST /api/v1/public/mercadopago-checkout/{token}/process",
+  "POST /api/v1/public/mercadopago-checkout/{token}/reconcile",
+  "GET /api/v1/public/forms/{organizationId}",
+  "POST /api/v1/public/forms/{organizationId}/responses",
+  "POST /api/v1/webhooks/stripe",
 ]);
 
 describe("frozen OpenAPI v1 contract", () => {
@@ -156,7 +165,12 @@ describe("frozen OpenAPI v1 contract", () => {
           operationIds.add(operation.operationId ?? "");
         }
       }
-      assert.equal(operationCount, 74);
+      assert.equal(operationCount, 100);
+      assert.equal(
+        Object.keys(live.paths).some((path) => path.includes("stripe")),
+        false,
+        "student payment API must not publish legacy Stripe routes",
+      );
     } finally {
       await app.close();
     }

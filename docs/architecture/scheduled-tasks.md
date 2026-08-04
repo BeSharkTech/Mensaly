@@ -15,7 +15,8 @@ uma interrupção.
 Em cada execução:
 
 1. empresas ativas são avaliadas no próprio timezone;
-2. mensalidades do mês corrente são criadas para matrículas ativas;
+2. mensalidades do mês corrente são criadas para matrículas ativas somente a
+   partir de `chargeOpenDay` e `chargeOpenTime` salvos na matrícula;
 3. regras habilitadas geram agendamentos idempotentes para cobranças pendentes;
 4. regras removidas, desativadas ou sem template ativo cancelam agendamentos
    automáticos ainda pendentes;
@@ -25,6 +26,34 @@ Em cada execução:
 As chaves únicas do PostgreSQL, os IDs determinísticos do BullMQ e as travas de
 reconciliação e geração impedem duplicidade mesmo com dois processos
 concorrentes.
+
+## Abertura e vencimento da cobrança
+
+Cada plano mensal define a abertura e o vencimento:
+
+- `chargeOpenDay`: primeiro dia em que a cobrança do mês pode ser criada;
+- `chargeOpenTime`: horário local, no formato `HH:mm`, em que ela pode ser criada;
+- `dueDay`: vencimento da cobrança já criada.
+
+Ao criar uma matrícula, os três valores são copiados para ela como snapshot.
+Uma alteração posterior no calendário do plano atualiza todas as matrículas
+ativas desse plano, sempre dentro da empresa derivada da sessão. Cobranças já
+existentes não são reescritas.
+
+O worker compara a data e a hora locais da empresa com a abertura. Se estiver
+antes, não cria nada. No dia e horário configurados, ou depois deles, cria a
+cobrança ainda ausente para o mês. Portanto, uma indisponibilidade no momento
+exato é recuperada automaticamente no próximo tick. Para fevereiro e outros meses curtos, os dias
+29, 30 e 31 são ajustados para o último dia do mês.
+
+A restrição única `(organizationId, enrollmentId, referenceMonth)`, combinada
+com a trava transacional por empresa e competência, garante no máximo uma
+cobrança mensal por matrícula. O botão manual de geração continua disponível
+como operação explícita de contingência; ele não é o gatilho da automação.
+
+A geração cria somente a entidade financeira interna. O checkout transparente
+continua sendo criado sob demanda pelo mesmo fluxo existente quando o link de
+pagamento é solicitado. Esta entrega não adiciona nenhum novo envio de mensagem.
 
 ## Regras e templates
 

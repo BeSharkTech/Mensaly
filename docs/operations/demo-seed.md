@@ -9,7 +9,8 @@ It is intentionally guarded:
 - `DEMO_SEED_ENABLED` must be exactly `true`;
 - `NODE_ENV=production` is rejected;
 - only `localhost` and `127.0.0.1` database hosts are accepted;
-- the password must contain 12 to 128 characters;
+- the password must contain 6 to 128 characters, matching the current account
+  contract;
 - an existing non-demo account cannot be taken over by the demo email.
 
 Example in PowerShell:
@@ -18,7 +19,7 @@ Example in PowerShell:
 $env:DATABASE_URL = "postgresql://mensaly_test:mensaly_test_local@localhost:55432/mensaly_test?schema=public"
 $env:DEMO_SEED_ENABLED = "true"
 $env:DEMO_SEED_EMAIL = "owner.demo@mensaly.local"
-$env:DEMO_SEED_PASSWORD = "<choose-a-local-password-with-12-or-more-characters>"
+$env:DEMO_SEED_PASSWORD = "<choose-a-local-password-with-6-or-more-characters>"
 $env:NODE_ENV = "development"
 pnpm db:seed:demo
 ```

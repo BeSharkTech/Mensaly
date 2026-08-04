@@ -965,7 +965,7 @@ Ordem:
 1. Resend para e-mails transacionais;
 2. Cloudflare R2 para arquivos;
 3. Stripe Billing para a assinatura da Mensaly;
-4. prova técnica de Stripe Connect para pagamentos dos alunos;
+4. prova técnica de Mercado Pago OAuth + Checkout Bricks para pagamentos dos alunos;
 5. Meta WhatsApp Cloud API;
 6. Chatwoot para atendimento humano;
 7. Sentry e observabilidade externa;

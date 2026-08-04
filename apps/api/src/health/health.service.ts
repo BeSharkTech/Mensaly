@@ -6,12 +6,15 @@ import {
 
 import { RedisHealthService } from "../infrastructure/cache/redis-health.service";
 import { PrismaService } from "../infrastructure/database/prisma.service";
+import { observabilityStatus } from "../common/observability";
+import { STORAGE_ADAPTER, type StorageAdapter } from "../files/storage.adapter";
 
 @Injectable()
 export class HealthService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(RedisHealthService) private readonly redis: RedisHealthService,
+    @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
   ) {}
 
   live() {
@@ -39,5 +42,26 @@ export class HealthService {
     }
 
     return { status: "ready" as const, dependencies };
+  }
+
+  async platform() {
+    const [database, redis, storage] = await Promise.allSettled([
+      this.prisma.client.$queryRaw`SELECT 1`,
+      this.redis.ping(),
+      this.storage.healthcheck?.() ?? Promise.resolve(),
+    ]);
+    const dependencies = {
+      database: database.status === "fulfilled" ? "ready" : "unavailable",
+      redis: redis.status === "fulfilled" ? "ready" : "unavailable",
+      storage: storage.status === "fulfilled" ? "ready" : "unavailable",
+    } as const;
+    return {
+      status: Object.values(dependencies).every((value) => value === "ready")
+        ? ("ready" as const)
+        : ("degraded" as const),
+      dependencies,
+      observability: observabilityStatus(),
+      uptimeSeconds: Math.floor(process.uptime()),
+    };
   }
 }

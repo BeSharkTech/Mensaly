@@ -24,10 +24,11 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
+import { logger } from "@mensaly/logger";
 
 import { PrismaService } from "../infrastructure/database/prisma.service";
 import { loginSchema } from "./login.dto";
-import { LocalEmailDeliveryService } from "./local-email-delivery.service";
+import { EmailDeliveryService } from "./email-delivery.service";
 import { registerSchema } from "./register.dto";
 import {
   emailRequestSchema,
@@ -52,6 +53,7 @@ type RegisteredUser = {
   email: string;
   emailVerified: boolean;
   status: UserStatus;
+  devVerificationToken?: string;
 };
 
 type AuthenticatedUser = RegisteredUser & {
@@ -85,8 +87,8 @@ function accessMetadata(metadata: AccessMetadata): AccessMetadata {
 export class AuthService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(LocalEmailDeliveryService)
-    private readonly emailDelivery: LocalEmailDeliveryService,
+    @Inject(EmailDeliveryService)
+    private readonly emailDelivery: EmailDeliveryService,
   ) {}
 
   async register(rawInput: unknown): Promise<RegisteredUser> {
@@ -107,6 +109,7 @@ export class AuthService {
             name: input.name,
             email,
             role: UserRole.COMPANY_ACCOUNT,
+            emailVerified: false,
             status: UserStatus.PENDING_VERIFICATION,
           },
           select: {
@@ -140,8 +143,18 @@ export class AuthService {
         return user;
       });
 
-      await this.requestEmailVerificationFor(email, user.id);
-      return user;
+      const verificationToken = await this.requestEmailVerificationFor(
+        email,
+        user.id,
+      );
+      return {
+        ...user,
+        ...(process.env.NODE_ENV !== "production" &&
+        (process.env.EMAIL_DELIVERY_MODE ?? "local") === "local" &&
+        verificationToken
+          ? { devVerificationToken: verificationToken }
+          : {}),
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -200,7 +213,7 @@ export class AuthService {
   private async requestEmailVerificationFor(
     email: string,
     userId?: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     const token = await this.issueVerification(
       email,
       VerificationType.EMAIL_VERIFICATION,
@@ -208,27 +221,38 @@ export class AuthService {
     );
 
     if (!token) {
-      return;
+      return undefined;
     }
 
-    this.emailDelivery.deliver({
-      email,
-      type: VerificationType.EMAIL_VERIFICATION,
-      token,
-      createdAt: new Date(),
-    });
+    let queued = false;
+    try {
+      await this.emailDelivery.deliverVerification({
+        email,
+        type: VerificationType.EMAIL_VERIFICATION,
+        token,
+        createdAt: new Date(),
+        ...(userId ? { userId } : {}),
+      });
+      queued = true;
+    } catch (error) {
+      logger.error({ error, email, type: VerificationType.EMAIL_VERIFICATION }, "Transactional verification email could not be delivered");
+    }
 
     if (userId) {
       await this.prisma.client.auditLog.create({
         data: {
           actor: { connect: { id: userId } },
           actorType: AuditActorType.USER,
-          action: "auth.email_verification.sent",
+          action: queued
+            ? "auth.email_verification.queued"
+            : "auth.email_verification.queue_failed",
           entityType: "Verification",
           entityId: hashVerificationToken(token),
         },
       });
     }
+
+    return token;
   }
 
   async requestEmailVerification(rawInput: unknown): Promise<void> {
@@ -282,7 +306,7 @@ export class AuthService {
       const user = await transaction.user.update({
         where: { email: verification.identifier },
         data: { emailVerified: true, status: UserStatus.ACTIVE },
-        select: { id: true },
+        select: { id: true, email: true, name: true },
       });
       await transaction.verification.deleteMany({
         where: {
@@ -299,7 +323,7 @@ export class AuthService {
           entityId: user.id,
         },
       });
-      return true;
+      return user;
     });
 
     if (!verified) {
@@ -307,6 +331,19 @@ export class AuthService {
         code: "VERIFICATION_TOKEN_INVALID",
         message: "The verification token is invalid, expired, or already used",
       });
+    }
+
+    try {
+      await this.emailDelivery.deliverWelcome({
+        userId: verified.id,
+        email: verified.email,
+        name: verified.name,
+      });
+    } catch (error) {
+      logger.error(
+        { error, email: verified.email, type: "WELCOME" },
+        "Transactional welcome email could not be queued",
+      );
     }
   }
 
@@ -334,17 +371,26 @@ export class AuthService {
       return;
     }
 
-    this.emailDelivery.deliver({
-      email,
-      type: VerificationType.PASSWORD_RESET,
-      token,
-      createdAt: new Date(),
-    });
+    let queued = false;
+    try {
+      await this.emailDelivery.deliverVerification({
+        email,
+        type: VerificationType.PASSWORD_RESET,
+        token,
+        createdAt: new Date(),
+        userId: user.id,
+      });
+      queued = true;
+    } catch (error) {
+      logger.error({ error, email, type: VerificationType.PASSWORD_RESET }, "Transactional password reset email could not be delivered");
+    }
     await this.prisma.client.auditLog.create({
       data: {
         actor: { connect: { id: user.id } },
         actorType: AuditActorType.USER,
-        action: "auth.password_reset.requested",
+        action: queued
+          ? "auth.password_reset.queued"
+          : "auth.password_reset.queue_failed",
         entityType: "Verification",
         entityId: hashVerificationToken(token),
       },
@@ -441,6 +487,18 @@ export class AuthService {
     const expiresAt = new Date(now.getTime() + sessionTtlHours * 60 * 60 * 1_000);
     const since = new Date(now.getTime() - LOGIN_FAILURE_WINDOW_MS);
     const auditMetadata = accessMetadata(metadata);
+    const credential = await this.prisma.client.account.findUnique({
+      where: {
+        providerId_accountId: { providerId: "credential", accountId: email },
+      },
+      select: { password: true },
+    });
+    const passwordMatches = credential?.password
+      ? await verifyPassword(result.data.password, credential.password)
+      : false;
+    if (!credential) {
+      await hashPassword(result.data.password);
+    }
 
     const outcome = await this.prisma.client.$transaction(async (transaction) => {
       await transaction.$executeRaw`
@@ -475,15 +533,10 @@ export class AuthService {
         },
         include: { user: true },
       });
-      const passwordMatches = account?.password
-        ? await verifyPassword(result.data.password, account.password)
-        : false;
+      const credentialUnchanged =
+        account?.password === credential?.password;
 
-      if (!account || !passwordMatches) {
-        if (!account) {
-          await hashPassword(result.data.password);
-        }
-
+      if (!account || !passwordMatches || !credentialUnchanged) {
         await transaction.auditLog.create({
           data: {
             ...(account ? { actor: { connect: { id: account.userId } } } : {}),

@@ -57,3 +57,10 @@ export const adminFailuresSchema = z
     limit: z.coerce.number().int().min(1).max(100).default(20),
   })
   .strict();
+
+export const adminAnalyticsSchema = z
+  .object({
+    days: z.coerce.number().int().min(7).max(90).default(30),
+    months: z.coerce.number().int().min(3).max(12).default(6),
+  })
+  .strict();

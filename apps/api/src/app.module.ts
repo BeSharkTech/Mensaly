@@ -14,9 +14,12 @@ import { WebhookInboxModule } from "./webhook-inbox/webhook-inbox.module";
 import { FilesModule } from "./files/files.module";
 import { InsightsModule } from "./insights/insights.module";
 import { SecurityModule } from "./security/security.module";
+import { WorkspaceModule } from "./workspace/workspace.module";
+import { ResendWebhookModule } from "./resend-webhook/resend-webhook.module";
+import { MercadoPagoModule } from "./mercadopago/mercadopago.module";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule, WebhookInboxModule, FilesModule, InsightsModule, SecurityModule],
+  imports: [DatabaseModule, AuthModule, OrganizationModule, AdminModule, OperationalModule, FinancialModule, RemindersModule, WebhookInboxModule, ResendWebhookModule, MercadoPagoModule, FilesModule, InsightsModule, SecurityModule, WorkspaceModule],
   controllers: [HealthController],
   providers: [HealthService, RedisHealthService],
 })

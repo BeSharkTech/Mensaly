@@ -135,3 +135,34 @@ pnpm env:test:down
 
 Esse comando atua somente no projeto Docker `mensaly-test`. Os dados são
 intencionalmente efêmeros e não devem ser usados para desenvolvimento.
+# Local complete application stack
+
+To validate the complete runtime (database, Redis, migrations, API, worker and
+web) without any external provider, use the local compose overlay:
+
+```powershell
+docker compose -f infra/docker/compose.yaml -f infra/docker/compose.local.app.yaml up -d --build
+```
+
+The web app is exposed at `http://localhost:5174` and the API at
+`http://localhost:3001`. Files are deliberately stored in the `local_files`
+Docker volume only in this local setup. Stop application services without
+destroying local data with:
+
+```powershell
+docker compose -f infra/docker/compose.yaml -f infra/docker/compose.local.app.yaml stop api worker web
+```
+
+## Staging and production image
+
+`compose.app.yaml` uses one immutable image for migrations, API, worker and web;
+the `APP` environment value selects the runtime. CI publishes approved images
+to GHCR as `sha-<commit>`. Validate the external secret file with
+`pnpm production:check:staging` or `pnpm production:check:live`, then deploy with
+`pull` followed by `up -d --no-build`. Production containers run as a non-root
+user with all Linux capabilities dropped and `no-new-privileges` enabled.
+
+For the first-customer single-VPS profile, use
+`docs/operations/single-vps-pilot.md`. It publishes `app.mensaly.online` and
+`api.mensaly.online`, keeps PostgreSQL/Redis private, validates the production
+environment, proves R2 backup restoration and installs the daily backup job.

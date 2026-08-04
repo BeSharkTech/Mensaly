@@ -26,7 +26,8 @@
         "BULLMQ_METRICS_INTERVAL_MS",
         "SCHEDULER_INTERVAL_MS",
         "SCHEDULER_LOOKAHEAD_MS",
-        "FAKE_MESSAGE_ADAPTER_OUTCOME"
+        "FAKE_MESSAGE_ADAPTER_OUTCOME",
+        "MESSAGE_AUTOMATION_ENABLED"
       ]
     },
     "typecheck": {
@@ -52,7 +53,8 @@
         "BULLMQ_METRICS_INTERVAL_MS",
         "SCHEDULER_INTERVAL_MS",
         "SCHEDULER_LOOKAHEAD_MS",
-        "FAKE_MESSAGE_ADAPTER_OUTCOME"
+        "FAKE_MESSAGE_ADAPTER_OUTCOME",
+        "MESSAGE_AUTOMATION_ENABLED"
       ]
     },
     "test:integration": {

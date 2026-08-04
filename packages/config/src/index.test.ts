@@ -25,6 +25,7 @@ describe("environment configuration", () => {
     assert.equal(environment.AUTH_SESSION_TTL_HOURS, 168);
     assert.equal(environment.LOCAL_STORAGE_PATH, ".local-storage");
     assert.equal(environment.FILE_MAX_SIZE_BYTES, 5 * 1024 * 1024);
+    assert.equal(environment.FILE_STORAGE_DRIVER, "local");
     assert.equal(environment.DATABASE_URL, validConnections.DATABASE_URL);
     assert.equal(environment.REDIS_URL, validConnections.REDIS_URL);
     assert.deepEqual(environment.CORS_ORIGINS, ["http://localhost:3000"]);
@@ -54,6 +55,156 @@ describe("environment configuration", () => {
         /production requires at least one explicit origin/,
       );
     }
+  });
+
+  it("treats blank optional Sentry values from Docker Compose as unset", () => {
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      SENTRY_DSN: "",
+      SENTRY_API_TOKEN: "   ",
+      SENTRY_ORG_SLUG: "",
+      SENTRY_PROJECT_ID: "",
+    });
+
+    assert.equal(environment.SENTRY_DSN, undefined);
+    assert.equal(environment.SENTRY_API_TOKEN, undefined);
+    assert.equal(environment.SENTRY_ORG_SLUG, undefined);
+    assert.equal(environment.SENTRY_PROJECT_ID, undefined);
+  });
+
+  it("requires remote object storage in production", () => {
+    assert.throws(
+      () =>
+        parseEnvironment(apiEnvironmentSchema, {
+          ...validConnections,
+          NODE_ENV: "production",
+          CORS_ORIGINS: "https://app.example.test",
+        }),
+      /FILE_STORAGE_DRIVER/,
+    );
+
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      NODE_ENV: "production",
+      CORS_ORIGINS: "https://app.example.test",
+      FILE_STORAGE_DRIVER: "s3",
+      S3_ENDPOINT: "https://account.r2.cloudflarestorage.com",
+      S3_BUCKET: "mensaly-files",
+      S3_ACCESS_KEY_ID: "test-key",
+      S3_SECRET_ACCESS_KEY: "test-secret",
+      EMAIL_DELIVERY_MODE: "resend",
+      RESEND_API_KEY: "re_test_key",
+      RESEND_FROM_EMAIL: "noreply@example.test",
+      RESEND_WEBHOOK_SECRET: "whsec_test_webhook_secret",
+      EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
+    });
+    assert.equal(environment.FILE_STORAGE_DRIVER, "s3");
+    assert.equal(environment.S3_FORCE_PATH_STYLE, false);
+  });
+
+  it("requires Resend credentials when email delivery uses Resend", () => {
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        EMAIL_DELIVERY_MODE: "resend",
+      }),
+      /RESEND_API_KEY/,
+    );
+  });
+
+  it("requires matching Stripe Connect credentials when enabled", () => {
+    assert.throws(
+      () =>
+        parseEnvironment(apiEnvironmentSchema, {
+          ...validConnections,
+          STRIPE_CONNECT_MODE: "test",
+        }),
+      /STRIPE_SECRET_KEY/,
+    );
+
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      STRIPE_CONNECT_MODE: "test",
+      STRIPE_SECRET_KEY: "sk_test_example",
+      STRIPE_PUBLISHABLE_KEY: "pk_test_example",
+      STRIPE_WEBHOOK_SECRET: "whsec_example",
+      PAYMENT_LINK_SECRET: Buffer.alloc(32, 2).toString("base64"),
+    });
+    assert.equal(environment.STRIPE_CONNECT_MODE, "test");
+    assert.throws(
+      () =>
+        parseEnvironment(apiEnvironmentSchema, {
+          ...validConnections,
+          STRIPE_CONNECT_MODE: "test",
+          STRIPE_SECRET_KEY: "sk_live_wrong_mode",
+          STRIPE_PUBLISHABLE_KEY: "pk_test_example",
+          STRIPE_WEBHOOK_SECRET: "whsec_example",
+          PAYMENT_LINK_SECRET: Buffer.alloc(32, 2).toString("base64"),
+        }),
+      /sk_test_/,
+    );
+  });
+
+  it("requires Mercado Pago OAuth, webhook and isolated encryption settings when enabled", () => {
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        MERCADOPAGO_MODE: "test",
+      }),
+      /MERCADOPAGO_CLIENT_ID/,
+    );
+
+    const environment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      MERCADOPAGO_MODE: "test",
+      MERCADOPAGO_CLIENT_ID: "123456",
+      MERCADOPAGO_CLIENT_SECRET: "client-secret",
+      MERCADOPAGO_OAUTH_REDIRECT_URI: "https://app.example.test/api/v1/payment-integrations/mercadopago/callback",
+      MERCADOPAGO_WEBHOOK_SECRET: "webhook-secret",
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+      PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+    });
+    assert.equal(environment.MERCADOPAGO_MODE, "test");
+
+    const directEnvironment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      MERCADOPAGO_MODE: "test",
+      MERCADOPAGO_CONNECTION_MODE: "direct",
+      MERCADOPAGO_PUBLIC_KEY: "TEST-public-key",
+      MERCADOPAGO_ACCESS_TOKEN: "TEST-access-token",
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString("base64"),
+      PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+    });
+    assert.equal(directEnvironment.MERCADOPAGO_CONNECTION_MODE, "direct");
+
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        NODE_ENV: "production",
+        MERCADOPAGO_MODE: "live",
+        MERCADOPAGO_CONNECTION_MODE: "direct",
+        MERCADOPAGO_PUBLIC_KEY: "APP_USR-public-key",
+        MERCADOPAGO_ACCESS_TOKEN: "APP_USR-access-token",
+        PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString("base64"),
+        PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+      }),
+      /direct credentials are allowed only for local test mode/,
+    );
+
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+        MERCADOPAGO_MODE: "test",
+        MERCADOPAGO_CLIENT_ID: "123456",
+        MERCADOPAGO_CLIENT_SECRET: "client-secret",
+        MERCADOPAGO_OAUTH_REDIRECT_URI: "https://app.example.test/api/v1/payment-integrations/mercadopago/callback",
+        MERCADOPAGO_WEBHOOK_SECRET: "webhook-secret",
+        PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+        PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+      }),
+      /must be different from EMAIL_ENCRYPTION_KEY/,
+    );
   });
 
   it("coerces a valid API port", () => {
@@ -95,6 +246,28 @@ describe("environment configuration", () => {
     assert.equal(environment.SCHEDULER_INTERVAL_MS, 60_000);
     assert.equal(environment.SCHEDULER_LOOKAHEAD_MS, 86_400_000);
     assert.equal(environment.FAKE_MESSAGE_ADAPTER_OUTCOME, "READ");
+    assert.equal(environment.MESSAGE_AUTOMATION_ENABLED, true);
+  });
+
+  it("requires Resend delivery and credentials for the production worker", () => {
+    assert.throws(
+      () =>
+        parseEnvironment(workerEnvironmentSchema, {
+          ...validConnections,
+          NODE_ENV: "production",
+        }),
+      /EMAIL_DELIVERY_MODE/,
+    );
+
+    const environment = parseEnvironment(workerEnvironmentSchema, {
+      ...validConnections,
+      NODE_ENV: "production",
+      EMAIL_DELIVERY_MODE: "resend",
+      RESEND_API_KEY: "re_test_key",
+      RESEND_FROM_EMAIL: "noreply@example.test",
+      EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 2).toString("base64"),
+    });
+    assert.equal(environment.EMAIL_DELIVERY_MODE, "resend");
   });
 
   it("validates the configured fake adapter outcome", () => {

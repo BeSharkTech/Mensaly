@@ -193,7 +193,9 @@ export class FinancialService {
       this.prisma.client.charge.findMany({
         where,
         include: {
-          enrollment: { include: { student: true, guardian: true } },
+          enrollment: {
+            include: { student: true, guardian: true, plan: true },
+          },
         },
         orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }, { id: "asc" }],
         skip: (query.page - 1) * query.pageSize,
@@ -208,7 +210,9 @@ export class FinancialService {
     const item = await this.prisma.client.charge.findFirst({
       where: { id, organizationId: organizationId(auth) },
       include: {
-        enrollment: { include: { student: true, guardian: true } },
+        enrollment: {
+          include: { student: true, guardian: true, plan: true },
+        },
         payments: { orderBy: [{ paidAt: "desc" }, { id: "asc" }] },
       },
     });
