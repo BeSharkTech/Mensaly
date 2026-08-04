@@ -40,14 +40,8 @@ multi-customer scale.
 5. Point both `app.mensaly.online` and `api.mensaly.online` to the VPS static
    IP and wait for DNS before starting Caddy. The OAuth callback uses `app` to
    preserve the authenticated browser session; Mercado Pago webhooks use `api`.
-6. Validate the secret environment file without printing values:
-
-   ```bash
-   cd /opt/mensaly
-   pnpm production:check:single-vps -- --env-file=/opt/mensaly/.env.production
-   ```
-
-7. Deploy, migrate, install the backup schedule and verify both public health
+6. Deploy, validate the environment without printing secrets, migrate, install
+   the backup schedule and verify both public health
    endpoints with one command:
 
    ```bash
