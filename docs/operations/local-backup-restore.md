@@ -37,9 +37,15 @@ the database integration tests pass.
 
 ## Staging and production
 
-Production must use a managed PostgreSQL service with automated daily backups,
-point-in-time recovery when offered by the provider, and encrypted backup
-storage. The API service must never be the only copy of production data.
+The first-customer single-VPS profile exports verified daily custom-format
+archives to R2 using `scripts/vps/backup-postgres-to-r2.sh`. It validates each
+archive before upload, stores a SHA-256 sidecar and applies retention. A restore
+drill is available at `scripts/vps/restore-drill-postgres-from-r2.sh` and always
+uses a disposable database. The API service and its Docker volume must never be
+the only copy of production data.
+
+Managed PostgreSQL with automatic backups and point-in-time recovery remains
+the required migration path before multi-customer scale.
 
 Before every production release and at least once per quarter, restore the
 latest provider backup into a newly-created **staging** database and record:

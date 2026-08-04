@@ -66,6 +66,13 @@ export class MercadoPagoConnectService {
   ) {}
 
   async getStatus(auth: AuthenticatedContext) {
+    if (this.directTestMode()) {
+      return {
+        status: "CONNECTED",
+        liveMode: false,
+        connectionMode: "direct",
+      };
+    }
     const connection = await this.prisma.client.mercadoPagoConnection.findUnique({
       where: { organizationId: organizationId(auth) },
       select: {
@@ -89,6 +96,10 @@ export class MercadoPagoConnectService {
   }
 
   async createAuthorization(auth: AuthenticatedContext, metadata: RequestMetadata = {}) {
+    if (this.directTestMode()) {
+      await this.ensurePaymentConnection(auth, metadata);
+      return { authorizationUrl: null, status: "CONNECTED", connectionMode: "direct" };
+    }
     if (!this.mercadoPago.enabled) {
       throw new ServiceUnavailableException({
         code: "MERCADOPAGO_NOT_CONFIGURED",
@@ -239,6 +250,12 @@ export class MercadoPagoConnectService {
   }
 
   async disconnect(auth: AuthenticatedContext, metadata: RequestMetadata = {}) {
+    if (this.directTestMode()) {
+      throw new ConflictException({
+        code: "MERCADOPAGO_DIRECT_TEST_CONFIGURED",
+        message: "Direct test credentials are configured by the local environment",
+      });
+    }
     const orgId = organizationId(auth);
     const encryptionKey = this.encryptionKey();
     const connection = await this.prisma.client.mercadoPagoConnection.findUnique({
@@ -285,6 +302,23 @@ export class MercadoPagoConnectService {
   }
 
   async credentialsForOrganization(organizationId: string) {
+    if (this.directTestMode()) {
+      const connection = await this.prisma.client.mercadoPagoConnection.findUnique({
+        where: { organizationId },
+      });
+      if (!connection || connection.status !== MercadoPagoConnectionStatus.CONNECTED) {
+        throw new ConflictException({
+          code: "MERCADOPAGO_TEST_CONNECTION_NOT_INITIALIZED",
+          message: "Create a payment link to initialize the local test connection",
+        });
+      }
+      return {
+        accessToken: this.environment.MERCADOPAGO_ACCESS_TOKEN!,
+        publicKey: this.environment.MERCADOPAGO_PUBLIC_KEY!,
+        mercadoPagoUserId: connection.mercadoPagoUserId,
+        liveMode: false,
+      };
+    }
     let connection = await this.prisma.client.mercadoPagoConnection.findUnique({
       where: { organizationId },
     });
@@ -353,6 +387,77 @@ export class MercadoPagoConnectService {
       lastErrorCode: null,
       lastErrorMessage: null,
     };
+  }
+
+  async ensurePaymentConnection(auth: AuthenticatedContext, metadata: RequestMetadata = {}) {
+    if (!this.directTestMode()) return;
+    const orgId = organizationId(auth);
+    const existing = await this.prisma.client.mercadoPagoConnection.findUnique({
+      where: { organizationId: orgId },
+    });
+    if (existing?.mercadoPagoUserId === `direct-test:${orgId}` && existing.status === MercadoPagoConnectionStatus.CONNECTED) {
+      return;
+    }
+    const encryptionKey = this.encryptionKey();
+    const encryptedAccessToken = encryptPayload(
+      { token: this.environment.MERCADOPAGO_ACCESS_TOKEN! },
+      encryptionKey,
+    ) as unknown as Prisma.InputJsonValue;
+    const encryptedRefreshToken = encryptPayload(
+      { directTest: true },
+      encryptionKey,
+    ) as unknown as Prisma.InputJsonValue;
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`mercadopago-direct-test:${orgId}`}))`,
+      );
+      const connection = await tx.mercadoPagoConnection.upsert({
+        where: { organizationId: orgId },
+        create: {
+          organizationId: orgId,
+          mercadoPagoUserId: `direct-test:${orgId}`,
+          publicKey: this.environment.MERCADOPAGO_PUBLIC_KEY!,
+          encryptedAccessToken,
+          encryptedRefreshToken,
+          status: MercadoPagoConnectionStatus.CONNECTED,
+          liveMode: false,
+          scopes: "payments write direct-test",
+          tokenExpiresAt: new Date("2100-01-01T00:00:00.000Z"),
+          lastRefreshedAt: new Date(),
+        },
+        update: {
+          mercadoPagoUserId: `direct-test:${orgId}`,
+          publicKey: this.environment.MERCADOPAGO_PUBLIC_KEY!,
+          encryptedAccessToken,
+          encryptedRefreshToken,
+          status: MercadoPagoConnectionStatus.CONNECTED,
+          liveMode: false,
+          scopes: "payments write direct-test",
+          tokenExpiresAt: new Date("2100-01-01T00:00:00.000Z"),
+          lastRefreshedAt: new Date(),
+          disconnectedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: orgId,
+          actorUserId: auth.userId,
+          actorType: AuditActorType.USER,
+          action: "mercadopago.connection.direct_test_initialized",
+          entityType: "MercadoPagoConnection",
+          entityId: connection.id,
+          after: { liveMode: false, connectionMode: "direct" },
+          ...auditMetadata(metadata),
+        },
+      });
+    });
+  }
+
+  private directTestMode(): boolean {
+    return this.environment.MERCADOPAGO_MODE === "test" &&
+      this.environment.MERCADOPAGO_CONNECTION_MODE === "direct";
   }
 
   private encryptionKey(): string {

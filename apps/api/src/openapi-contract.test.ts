@@ -165,7 +165,12 @@ describe("frozen OpenAPI v1 contract", () => {
           operationIds.add(operation.operationId ?? "");
         }
       }
-      assert.equal(operationCount, 110);
+      assert.equal(operationCount, 100);
+      assert.equal(
+        Object.keys(live.paths).some((path) => path.includes("stripe")),
+        false,
+        "student payment API must not publish legacy Stripe routes",
+      );
     } finally {
       await app.close();
     }

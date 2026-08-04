@@ -113,6 +113,12 @@ export class MercadoPagoWebhookService {
             select: { organizationId: true },
           })
         : null;
+    if (["payment", "payments"].includes(event.type) && !connection?.organizationId) {
+      throw new ServiceUnavailableException({
+        code: "MERCADOPAGO_WEBHOOK_CONNECTION_PENDING",
+        message: "Mercado Pago payment ownership is not available yet; retry the notification",
+      });
+    }
     const received = await this.webhookInbox.receive({
       provider: "mercadopago",
       externalEventId: deterministicEventId(event, input.requestId),
@@ -121,7 +127,7 @@ export class MercadoPagoWebhookService {
       organizationId: connection?.organizationId,
     });
     const result = await this.webhookInbox.process(received.event.id, async () => {
-      if (!["order", "orders"].includes(event.type)) return;
+      if (!["payment", "payments"].includes(event.type)) return;
       if (!connection?.organizationId) return;
       const credentials = await this.connections.credentialsForOrganization(connection.organizationId);
       const order = await this.mercadoPago.getOrder(credentials.accessToken, event.data.id);

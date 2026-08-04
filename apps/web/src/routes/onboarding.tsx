@@ -45,6 +45,7 @@ const steps = ["Seu negócio", "Identidade visual", "Planos", "Recebimentos (opc
 type MercadoPagoConnection = {
   status: string;
   liveMode: boolean;
+  connectionMode?: "oauth" | "direct";
 };
 
 function OnboardingPage() {
@@ -158,12 +159,20 @@ function OnboardingPage() {
         plans,
         onboardingComplete: false,
       });
-      const authorization = await apiRequest<{ authorizationUrl: string }>(
+      const authorization = await apiRequest<{ authorizationUrl: string | null; status?: string; connectionMode?: "oauth" | "direct" }>(
         "/payment-integrations/mercadopago/authorize",
         { method: "POST" },
       );
       setStep(3);
-      window.location.assign(authorization.authorizationUrl);
+      if (authorization.authorizationUrl) {
+        window.location.assign(authorization.authorizationUrl);
+      } else {
+        setMercadoPagoConnection({
+          status: authorization.status ?? "CONNECTED",
+          liveMode: false,
+          connectionMode: authorization.connectionMode ?? "direct",
+        });
+      }
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -445,7 +454,9 @@ function OnboardingPage() {
                       : "Conecte sua conta de recebimentos"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    A autorização acontece dentro do Mercado Pago. A Mensaly guarda somente tokens criptografados para criar cobranças na conta da escola.
+                    {mercadoPagoConnection?.connectionMode === "direct"
+                      ? "Ambiente local usando credenciais diretas de teste. Nenhum pagamento real será realizado."
+                      : "A autorização acontece dentro do Mercado Pago. A Mensaly guarda somente tokens criptografados para criar cobranças na conta da escola."}
                   </p>
                 </div>
               </div>

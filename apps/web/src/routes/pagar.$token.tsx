@@ -1,8 +1,8 @@
-import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
+import { CardPayment, initMercadoPago, Payment } from "@mercadopago/sdk-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Clock3, Copy, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Clock3, Copy, CreditCard, Loader2, Lock, QrCode, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,8 @@ type PaymentResult = {
   pix?: { qrCode?: string; qrCodeBase64?: string; ticketUrl?: string };
 };
 
+type CheckoutMethod = "pix" | "card";
+
 function initialsOf(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("");
 }
@@ -56,6 +58,7 @@ function CheckoutPage() {
   const [details, setDetails] = useState<PublicCheckout | null>(null);
   const [payment, setPayment] = useState<PaymentResult | null>(null);
   const [brickReady, setBrickReady] = useState(false);
+  const [checkoutMethod, setCheckoutMethod] = useState<CheckoutMethod>("pix");
   const [error, setError] = useState("");
 
   const loadDetails = useCallback(async (reconcile = false) => {
@@ -120,6 +123,20 @@ function CheckoutPage() {
     toast.success("Código Pix copiado.");
   }
 
+  async function submitCardPayment(formData: unknown) {
+    await submitPayment({
+      paymentType: "credit_card",
+      selectedPaymentMethod: "credit_card",
+      formData,
+    });
+  }
+
+  function selectCheckoutMethod(method: CheckoutMethod) {
+    setBrickReady(false);
+    setError("");
+    setCheckoutMethod(method);
+  }
+
   if (error && !details) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
@@ -161,7 +178,7 @@ function CheckoutPage() {
             <p className="text-xs text-muted-foreground">{brand?.segment || "Pagamento seguro"}</p>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-            <ShieldCheck className="size-3.5" /> Pagamento processado pelo Mercado Pago
+            <ShieldCheck className="size-3.5" /> Pagamento seguro
           </span>
         </header>
 
@@ -170,7 +187,7 @@ function CheckoutPage() {
             <div className="flex flex-col items-center py-10 text-center">
               <span className="flex size-14 items-center justify-center rounded-full bg-secondary"><BadgeCheck className="size-7 text-foreground" /></span>
               <h2 className="mt-4 text-lg font-semibold text-foreground">Pagamento confirmado</h2>
-              <p className="mt-1 max-w-sm text-sm text-muted-foreground">O Mercado Pago confirmou o pagamento e a cobrança foi baixada pela escola.</p>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">O pagamento foi confirmado pelo provedor e registrado pela escola.</p>
             </div>
           ) : unavailable ? (
             <div className="flex flex-col items-center py-8 text-center">
@@ -200,29 +217,73 @@ function CheckoutPage() {
             </div>
           ) : (
             <>
+              <div className="mb-6 grid grid-cols-2 gap-3" role="group" aria-label="Escolha o meio de pagamento">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`h-auto min-h-14 justify-start gap-3 px-4 py-3 text-left transition-none ${
+                    checkoutMethod === "pix"
+                      ? "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                      : "bg-background text-foreground hover:border-input hover:bg-background hover:text-foreground"
+                  }`}
+                  aria-pressed={checkoutMethod === "pix"}
+                  onClick={() => selectCheckoutMethod("pix")}
+                >
+                  <QrCode className="size-5 shrink-0" />
+                  <span className="flex flex-col items-start">
+                    <span>Pix</span>
+                    <span className="text-xs font-normal opacity-75">Aprovação rápida</span>
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`h-auto min-h-14 justify-start gap-3 px-4 py-3 text-left transition-none ${
+                    checkoutMethod === "card"
+                      ? "border-primary bg-primary text-primary-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                      : "bg-background text-foreground hover:border-input hover:bg-background hover:text-foreground"
+                  }`}
+                  aria-pressed={checkoutMethod === "card"}
+                  onClick={() => selectCheckoutMethod("card")}
+                >
+                  <CreditCard className="size-5 shrink-0" />
+                  <span className="flex flex-col items-start">
+                    <span>Cartão de crédito</span>
+                    <span className="text-xs font-normal opacity-75">À vista ou parcelado</span>
+                  </span>
+                </Button>
+              </div>
               {!brickReady ? <div className="flex justify-center py-8"><Loader2 className="size-6 animate-spin text-primary" /></div> : null}
-              <Payment
-                key={details.publicKey}
-                initialization={{
-                  amount: details.amountCents / 100,
-                  payer: {},
-                }}
-                customization={{
-                  paymentMethods: {
-                    creditCard: "all",
-                    debitCard: "all",
-                    bankTransfer: ["pix"],
-                  },
-                }}
-                onReady={() => setBrickReady(true)}
-                onError={() => setError("Não foi possível carregar o formulário seguro do Mercado Pago.")}
-                onSubmit={submitPayment}
-              />
+              {checkoutMethod === "pix" ? (
+                <Payment
+                  key={`${details.publicKey}:pix`}
+                  initialization={{ amount: details.amountCents / 100, payer: {} }}
+                  customization={{
+                    paymentMethods: { bankTransfer: ["pix"] },
+                    visual: { defaultPaymentOption: { bankTransferForm: true }, hideFormTitle: true },
+                  }}
+                  onReady={() => setBrickReady(true)}
+                  onError={() => setError("Não foi possível carregar o formulário seguro do Mercado Pago.")}
+                  onSubmit={submitPayment}
+                />
+              ) : (
+                <CardPayment
+                  key={`${details.publicKey}:card`}
+                  initialization={{ amount: details.amountCents / 100, payer: {} }}
+                  customization={{
+                    paymentMethods: { types: { excluded: ["debit_card", "prepaid_card"] } },
+                    visual: { hideFormTitle: true },
+                  }}
+                  onReady={() => setBrickReady(true)}
+                  onError={() => setError("Não foi possível carregar o formulário seguro do Mercado Pago.")}
+                  onSubmit={submitCardPayment}
+                />
+              )}
             </>
           )}
           {error ? <p className="mt-4 text-sm text-destructive" role="alert">{error}</p> : null}
           <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <Lock className="size-3" /> Os dados do cartão são tokenizados pelo Mercado Pago e não ficam na Mensaly.
+            <Lock className="size-3" /> Os dados sensíveis do cartão são tokenizados e não ficam armazenados na Mensaly.
           </p>
         </section>
 

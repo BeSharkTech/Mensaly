@@ -38,6 +38,7 @@ const optionalPositiveIntegerSchema = z.preprocess(
   emptyStringToUndefined,
   z.coerce.number().int().positive().optional(),
 );
+const mercadoPagoConnectionModeSchema = z.enum(["oauth", "direct"]).default("oauth");
 const s3EndpointSchema = z
   .string()
   .url()
@@ -182,8 +183,9 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     STRIPE_PUBLISHABLE_KEY: z.string().trim().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
     MERCADOPAGO_MODE: mercadoPagoModeSchema,
+    MERCADOPAGO_CONNECTION_MODE: mercadoPagoConnectionModeSchema,
     MERCADOPAGO_API_BASE_URL: z.string().url().default("https://api.mercadopago.com"),
-    MERCADOPAGO_AUTH_BASE_URL: z.string().url().default("https://auth.mercadopago.com.br"),
+    MERCADOPAGO_AUTH_BASE_URL: z.string().url().default("https://auth.mercadopago.com"),
     MERCADOPAGO_CLIENT_ID: optionalNonEmptyStringSchema,
     MERCADOPAGO_CLIENT_SECRET: optionalNonEmptyStringSchema,
     MERCADOPAGO_PUBLIC_KEY: optionalNonEmptyStringSchema,
@@ -284,20 +286,31 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
       });
     }
     if (environment.MERCADOPAGO_MODE !== "disabled") {
-      for (const field of [
-        "MERCADOPAGO_CLIENT_ID",
-        "MERCADOPAGO_CLIENT_SECRET",
-        "MERCADOPAGO_OAUTH_REDIRECT_URI",
-        "MERCADOPAGO_WEBHOOK_SECRET",
-        "PAYMENT_PROVIDER_ENCRYPTION_KEY",
-        "PAYMENT_LINK_SECRET",
-      ] as const) {
+      const requiredFields = environment.MERCADOPAGO_CONNECTION_MODE === "direct"
+        ? ["MERCADOPAGO_PUBLIC_KEY", "MERCADOPAGO_ACCESS_TOKEN", "PAYMENT_PROVIDER_ENCRYPTION_KEY", "PAYMENT_LINK_SECRET"] as const
+        : ["MERCADOPAGO_CLIENT_ID", "MERCADOPAGO_CLIENT_SECRET", "MERCADOPAGO_OAUTH_REDIRECT_URI", "MERCADOPAGO_WEBHOOK_SECRET", "PAYMENT_PROVIDER_ENCRYPTION_KEY", "PAYMENT_LINK_SECRET"] as const;
+      for (const field of requiredFields) {
         if (!environment[field]) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
             path: [field],
             message: `is required when MERCADOPAGO_MODE=${environment.MERCADOPAGO_MODE}`,
           });
+        }
+      }
+      if (environment.MERCADOPAGO_CONNECTION_MODE === "direct") {
+        if (environment.MERCADOPAGO_MODE !== "test" || environment.NODE_ENV === "production") {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["MERCADOPAGO_CONNECTION_MODE"],
+            message: "direct credentials are allowed only for local test mode",
+          });
+        }
+        if (environment.MERCADOPAGO_PUBLIC_KEY && !environment.MERCADOPAGO_PUBLIC_KEY.startsWith("TEST-")) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ["MERCADOPAGO_PUBLIC_KEY"], message: "must be a TEST credential in direct mode" });
+        }
+        if (environment.MERCADOPAGO_ACCESS_TOKEN && !environment.MERCADOPAGO_ACCESS_TOKEN.startsWith("TEST-")) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ["MERCADOPAGO_ACCESS_TOKEN"], message: "must be a TEST credential in direct mode" });
         }
       }
     }
@@ -413,6 +426,7 @@ export function parseEnvironment<TSchema extends z.ZodTypeAny>(
 
 export {
   validateDeploymentReadiness,
+  validateSingleVpsReadiness,
   type DeploymentReadinessReport,
   type DeploymentTarget,
 } from "./deployment-readiness";

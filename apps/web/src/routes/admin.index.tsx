@@ -286,7 +286,7 @@ function AdminOverviewPage() {
       <section className="card-surface overflow-hidden">
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-base font-semibold text-foreground">Custo estimado por empresa</h2>
-          <p className="text-sm text-muted-foreground">Rateio mensal da infraestrutura, e-mails e armazenamento. Não inclui taxas cobradas diretamente pela Stripe.</p>
+          <p className="text-sm text-muted-foreground">Rateio mensal da infraestrutura, e-mails e armazenamento. Não inclui taxas cobradas diretamente pelo Mercado Pago.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[840px] text-sm">

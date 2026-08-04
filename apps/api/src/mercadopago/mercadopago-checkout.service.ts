@@ -86,9 +86,14 @@ export function mercadoPagoAmountCents(value: string): number | null {
 export function mercadoPagoCheckoutStatus(order: MercadoPagoOrder): MercadoPagoCheckoutStatus {
   const detail = order.status_detail.toLowerCase();
   const status = order.status.toLowerCase();
-  if (status === "processed" && detail === "accredited") return MercadoPagoCheckoutStatus.PAID;
+  if (
+    (status === "processed" && detail === "accredited") ||
+    (status === "approved" && ["accredited", "approved"].includes(detail))
+  ) return MercadoPagoCheckoutStatus.PAID;
   if (detail.includes("refund") || status.includes("refund")) return MercadoPagoCheckoutStatus.REFUNDED;
-  if (detail.includes("chargeback") || detail.includes("dispute")) return MercadoPagoCheckoutStatus.DISPUTED;
+  if (status === "charged_back" || detail.includes("chargeback") || detail.includes("dispute")) {
+    return MercadoPagoCheckoutStatus.DISPUTED;
+  }
   if (status === "expired" || detail.includes("expired")) return MercadoPagoCheckoutStatus.EXPIRED;
   if (["failed", "cancelled", "canceled", "rejected"].includes(status) || detail.includes("rejected")) {
     return MercadoPagoCheckoutStatus.FAILED;
@@ -115,6 +120,7 @@ export class MercadoPagoCheckoutService {
 
   async createPaymentLink(auth: AuthenticatedContext, chargeId: string, metadata: RequestMetadata = {}) {
     const orgId = organizationId(auth);
+    await this.connections.ensurePaymentConnection(auth, metadata);
     const secret = this.environment.PAYMENT_LINK_SECRET;
     if (!secret) {
       throw new ConflictException({ code: "PAYMENT_LINKS_NOT_CONFIGURED", message: "Payment links are not configured" });
@@ -258,7 +264,7 @@ export class MercadoPagoCheckoutService {
           installments: submission.formData.installments,
           payer: submission.formData.payer,
         },
-        idempotencyKey: `mensaly-mp-order:${checkout.id}:v${claim.current.providerAttemptVersion}`,
+        idempotencyKey: `mensaly-mp-payment:${checkout.id}:v${claim.current.providerAttemptVersion}`,
       });
       await this.prisma.client.mercadoPagoCheckout.update({
         where: { id: checkout.id },

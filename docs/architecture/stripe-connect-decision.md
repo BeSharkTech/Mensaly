@@ -1,5 +1,8 @@
 # Decisão — Stripe Connect para cobranças dos alunos
 
+> Decisão substituída em 2026-08-04 pela integração Mercado Pago OAuth +
+> Checkout Bricks para cobranças dos alunos. Mantida apenas como histórico.
+
 ## Estado
 
 Aceita em 2026-08-01. Substitui a preferência inicial pelo Asaas para as

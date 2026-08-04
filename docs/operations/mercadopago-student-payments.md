@@ -8,16 +8,17 @@ Esta integração atende somente às mensalidades cobradas pelas escolas. Cada o
 2. O Mercado Pago retorna ao callback configurado e a API troca o código OAuth por credenciais do vendedor.
 3. Access Token e Refresh Token são criptografados no banco com `PAYMENT_PROVIDER_ENCRYPTION_KEY`. Eles nunca são devolvidos ao navegador ou registrados em logs.
 4. A escola gera um link usando `POST /api/v1/charges/:id/mercadopago-checkout-link`.
-5. O responsável abre `/pagar/:token`; o Payment Brick tokeniza os dados e a API cria uma Order com o valor obtido da cobrança no banco.
-6. Apenas uma Order `processed` com `status_detail=accredited`, confirmada diretamente na API do Mercado Pago, baixa a cobrança.
-7. O webhook assinado é deduplicado pela inbox genérica e consulta a Order antes de atualizar o financeiro.
+5. O responsável abre `/pagar/:token`; o Brick tokeniza os dados e a API cria um pagamento com o valor obtido da cobrança no banco.
+6. Apenas um pagamento `approved`/`accredited`, confirmado diretamente na Payments API do Mercado Pago, baixa a cobrança.
+7. O webhook assinado é deduplicado pela inbox genérica e consulta o pagamento antes de atualizar o financeiro.
 
 ## Variáveis da API
 
 ```dotenv
 MERCADOPAGO_MODE=test
+MERCADOPAGO_CONNECTION_MODE=oauth
 MERCADOPAGO_API_BASE_URL=https://api.mercadopago.com
-MERCADOPAGO_AUTH_BASE_URL=https://auth.mercadopago.com.br
+MERCADOPAGO_AUTH_BASE_URL=https://auth.mercadopago.com
 MERCADOPAGO_CLIENT_ID=
 MERCADOPAGO_CLIENT_SECRET=
 MERCADOPAGO_PUBLIC_KEY=
@@ -32,16 +33,18 @@ PAYMENT_LINK_SECRET=
 
 O Access Token e a Public Key globais são aceitos para operação/testes administrativos, mas as cobranças das escolas usam as credenciais obtidas por OAuth e armazenadas por organização.
 
+Para homologação exclusivamente local com as duas credenciais de teste, use `MERCADOPAGO_CONNECTION_MODE=direct`. Nesse modo, Public Key e Access Token `TEST-` criam pagamentos fictícios diretamente na conta de teste da aplicação, sem OAuth. O schema bloqueia esse modo em `NODE_ENV=production`; staging e produção continuam obrigatoriamente em `oauth` para que cada escola receba na própria conta.
+
 ## Configuração no painel Mercado Pago
 
 - Modelo da aplicação: Marketplace, Split 1:1.
 - Redirect URI: deve ser exatamente igual a `MERCADOPAGO_OAUTH_REDIRECT_URI`.
 - Webhook de teste e produção: usar URLs separadas.
-- Evento obrigatório: `Order (Mercado Pago)` / tópico `orders`.
-- Também habilitar vinculação de aplicações, reclamações e chargebacks antes da produção.
+- Evento obrigatório: `Pagamentos (legacy)` / tópico `payment`.
+- Para a primeira entrega, habilitar apenas `Pagamentos (legacy)`; outros tópicos pertencem a fluxos ainda não implementados.
 - Nunca enviar a chave secreta, Client Secret, Access Token ou tokens OAuth por chat ou commit.
 
-Enquanto a topologia pública definitiva não estiver fechada, deixe a URI do webhook configurável. No perfil atual de VPS, a candidata é `https://app.mensaly.online/api/v1/webhooks/mercadopago`; valide uma resposta assinada real antes de ativar pagamentos.
+Na VPS de produção, o callback OAuth é `https://app.mensaly.online/api/v1/payment-integrations/mercadopago/callback`, preservando a sessão do dono. O webhook é `https://api.mensaly.online/api/v1/webhooks/mercadopago`, indo diretamente para a API. Valide uma notificação assinada real antes de ativar pagamentos.
 
 ## Gate de homologação
 

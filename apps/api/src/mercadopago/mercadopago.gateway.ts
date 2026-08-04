@@ -42,8 +42,47 @@ const orderSchema = z.object({
   transactions: z.object({ payments: z.array(orderPaymentSchema).default([]) }).default({ payments: [] }),
 }).passthrough();
 
+const paymentApiSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  external_reference: z.string().nullable().optional(),
+  status: z.string(),
+  status_detail: z.string(),
+  transaction_amount: z.union([z.string(), z.number()]).transform(String),
+  date_last_updated: z.string().optional(),
+  date_created: z.string().optional(),
+  payment_method_id: z.string().optional(),
+  payment_type_id: z.string().optional(),
+  transaction_details: z.object({
+    external_resource_url: z.string().nullable().optional(),
+  }).passthrough().optional(),
+  point_of_interaction: z.object({
+    transaction_data: z.object({
+      qr_code: z.string().optional(),
+      qr_code_base64: z.string().optional(),
+      ticket_url: z.string().optional(),
+    }).passthrough().optional(),
+  }).passthrough().optional(),
+}).passthrough();
+
 export type MercadoPagoOAuthCredentials = z.infer<typeof oauthCredentialsSchema>;
 export type MercadoPagoOrder = z.infer<typeof orderSchema>;
+
+export function mercadoPagoAuthorizationCodeBody(input: {
+  clientId: string;
+  clientSecret: string;
+  code: string;
+  redirectUri: string;
+  testToken: boolean;
+}): Record<string, string> {
+  return {
+    client_id: input.clientId,
+    client_secret: input.clientSecret,
+    grant_type: "authorization_code",
+    code: input.code,
+    redirect_uri: input.redirectUri,
+    test_token: String(input.testToken),
+  };
+}
 
 export type MercadoPagoPaymentInput = {
   paymentType: string;
@@ -95,8 +134,35 @@ function paymentType(value: string, paymentMethodId: string): string {
   );
 }
 
-function amount(cents: number): string {
-  return (cents / 100).toFixed(2);
+export function mercadoPagoPaymentToOrder(payload: unknown): MercadoPagoOrder | null {
+  const parsed = paymentApiSchema.safeParse(payload);
+  if (!parsed.success) return null;
+  const payment = parsed.data;
+  const transactionData = payment.point_of_interaction?.transaction_data;
+  return orderSchema.parse({
+    id: payment.id,
+    external_reference: payment.external_reference,
+    status: payment.status,
+    status_detail: payment.status_detail,
+    total_amount: payment.transaction_amount,
+    last_updated_date: payment.date_last_updated,
+    created_date: payment.date_created,
+    transactions: {
+      payments: [{
+        id: payment.id,
+        amount: payment.transaction_amount,
+        status: payment.status,
+        status_detail: payment.status_detail,
+        payment_method: {
+          id: payment.payment_method_id,
+          type: payment.payment_type_id,
+          qr_code: transactionData?.qr_code,
+          qr_code_base64: transactionData?.qr_code_base64,
+            ticket_url: transactionData?.ticket_url ?? payment.transaction_details?.external_resource_url ?? undefined,
+        },
+      }],
+    },
+  });
 }
 
 class HttpMercadoPagoGateway implements MercadoPagoGateway {
@@ -108,6 +174,7 @@ class HttpMercadoPagoGateway implements MercadoPagoGateway {
     private readonly clientId: string,
     private readonly clientSecret: string,
     private readonly redirectUri: string,
+    private readonly testToken: boolean,
   ) {}
 
   authorizationUrl(input: { state: string }): string {
@@ -121,14 +188,13 @@ class HttpMercadoPagoGateway implements MercadoPagoGateway {
   }
 
   exchangeAuthorizationCode(input: { code: string; state: string }) {
-    return this.oauthToken({
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      grant_type: "authorization_code",
+    return this.oauthToken(mercadoPagoAuthorizationCodeBody({
+      clientId: this.clientId,
+      clientSecret: this.clientSecret,
       code: input.code,
-      redirect_uri: this.redirectUri,
-      state: input.state,
-    });
+      redirectUri: this.redirectUri,
+      testToken: this.testToken,
+    }));
   }
 
   refreshAuthorization(refreshToken: string) {
@@ -147,34 +213,23 @@ class HttpMercadoPagoGateway implements MercadoPagoGateway {
     payment: MercadoPagoPaymentInput;
     idempotencyKey: string;
   }): Promise<MercadoPagoOrder> {
-    const methodType = paymentType(input.payment.paymentType, input.payment.paymentMethodId);
+    paymentType(input.payment.paymentType, input.payment.paymentMethodId);
     const body = {
-      type: "online",
-      processing_mode: "automatic",
+      transaction_amount: input.amountCents / 100,
+      description: `Mensaly mensalidade ${input.checkoutId}`,
       external_reference: input.checkoutId,
-      total_amount: amount(input.amountCents),
+      payment_method_id: input.payment.paymentMethodId,
+      ...(input.payment.token ? { token: input.payment.token } : {}),
+      ...(input.payment.issuerId ? { issuer_id: input.payment.issuerId } : {}),
+      ...(input.payment.installments ? { installments: input.payment.installments } : {}),
       payer: {
         email: input.payment.payer.email,
         ...(input.payment.payer.identification
           ? { identification: input.payment.payer.identification }
           : {}),
       },
-      transactions: {
-        payments: [
-          {
-            amount: amount(input.amountCents),
-            payment_method: {
-              id: input.payment.paymentMethodId,
-              type: methodType,
-              ...(input.payment.token ? { token: input.payment.token } : {}),
-              ...(input.payment.issuerId ? { issuer_id: input.payment.issuerId } : {}),
-              ...(input.payment.installments ? { installments: input.payment.installments } : {}),
-            },
-          },
-        ],
-      },
     };
-    return this.requestOrder("/v1/orders", input.accessToken, {
+    return this.requestPayment("/v1/payments", input.accessToken, {
       method: "POST",
       headers: { "x-idempotency-key": input.idempotencyKey },
       body: JSON.stringify(body),
@@ -182,7 +237,7 @@ class HttpMercadoPagoGateway implements MercadoPagoGateway {
   }
 
   getOrder(accessToken: string, orderId: string): Promise<MercadoPagoOrder> {
-    return this.requestOrder(`/v1/orders/${encodeURIComponent(orderId)}`, accessToken, {
+    return this.requestPayment(`/v1/payments/${encodeURIComponent(orderId)}`, accessToken, {
       method: "GET",
     });
   }
@@ -213,7 +268,7 @@ class HttpMercadoPagoGateway implements MercadoPagoGateway {
     return parsed.data;
   }
 
-  private async requestOrder(
+  private async requestPayment(
     path: string,
     accessToken: string,
     init: RequestInit,
@@ -235,15 +290,20 @@ class HttpMercadoPagoGateway implements MercadoPagoGateway {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw providerError(response.status, payload);
-    const parsed = orderSchema.safeParse(payload);
+    const parsed = paymentApiSchema.safeParse(payload);
     if (!parsed.success) {
+      const invalidFields = parsed.error.issues
+        .map((issue) => issue.path.join(".") || "response")
+        .filter((field, index, fields) => fields.indexOf(field) === index)
+        .slice(0, 8)
+        .join(", ");
       throw new MercadoPagoGatewayError(
         "MERCADOPAGO_RESPONSE_INVALID",
-        "Mercado Pago returned an invalid order",
+        `Mercado Pago returned an invalid payment response (${invalidFields || "unknown fields"})`,
         true,
       );
     }
-    return parsed.data;
+    return mercadoPagoPaymentToOrder(parsed.data)!;
   }
 }
 
@@ -289,5 +349,6 @@ export function createMercadoPagoGateway(): MercadoPagoGateway {
     environment.MERCADOPAGO_CLIENT_ID!,
     environment.MERCADOPAGO_CLIENT_SECRET!,
     environment.MERCADOPAGO_OAUTH_REDIRECT_URI!,
+    environment.MERCADOPAGO_MODE === "test",
   );
 }

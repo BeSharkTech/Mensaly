@@ -161,3 +161,8 @@ to GHCR as `sha-<commit>`. Validate the external secret file with
 `pnpm production:check:staging` or `pnpm production:check:live`, then deploy with
 `pull` followed by `up -d --no-build`. Production containers run as a non-root
 user with all Linux capabilities dropped and `no-new-privileges` enabled.
+
+For the first-customer single-VPS profile, use
+`docs/operations/single-vps-pilot.md`. It publishes `app.mensaly.online` and
+`api.mensaly.online`, keeps PostgreSQL/Redis private, validates the production
+environment, proves R2 backup restoration and installs the daily backup job.

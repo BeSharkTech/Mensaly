@@ -1,5 +1,8 @@
 # Gate — Stripe Connect para cobranças dos alunos
 
+> Gate histórico, substituído por `docs/operations/mercadopago-student-payments.md`.
+> Stripe permanece desativado na primeira entrega.
+
 ## Evidências locais
 
 - Schema Prisma validado e cliente gerado.

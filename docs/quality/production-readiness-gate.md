@@ -19,8 +19,8 @@
 
 Local tests cannot approve a production launch. Attach evidence for managed
 PostgreSQL restore, Redis TLS, R2 restore/versioning, Sentry alerts, Resend real
-delivery/webhook, Cloudflare HTTPS/rate limits, VPS restart behavior, Stripe
-sandbox end-to-end and finally Stripe Live. Each item remains blocking until its
+delivery/webhook, Cloudflare HTTPS/rate limits, VPS restart behavior, Mercado
+Pago OAuth sandbox end-to-end and finally Mercado Pago Live. Each item remains blocking until its
 real provider journey has been observed.
 
 ## Local evidence — 2026-08-02

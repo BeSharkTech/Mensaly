@@ -74,7 +74,9 @@ automáticos de WhatsApp sem afetar a geração mensal de cobranças. O deploy e
 `MENSALY_IMAGE` apontando para uma tag imutável `sha-<commit>` publicada pelo CI.
 
 As variáveis de armazenamento S3/R2, Resend, Sentry, URLs públicas, criptografia,
-Stripe Connect e TLS estão detalhadas em `docs/operations/production-launch.md`.
+Mercado Pago OAuth, webhooks e TLS estão detalhados em
+`docs/operations/mercadopago-student-payments.md` e
+`docs/operations/production-launch.md`.
 
 ## Segurança
 

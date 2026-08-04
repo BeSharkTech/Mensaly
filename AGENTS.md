@@ -54,7 +54,7 @@ Manter separados dois domínios: cobranças dos alunos e assinatura SaaS do Mens
 
 ### Cobranças dos alunos
 
-1. Integrar Stripe Connect com cobranças diretas por conta conectada, Checkout incorporado, PIX, cartão e webhook. Cada empresa recebe em sua própria conta Stripe; a assinatura SaaS do Mensaly permanece separada.
+1. Integrar Mercado Pago via OAuth por empresa, Checkout Bricks transparente, PIX, cartão e webhook assinado. Cada empresa recebe em sua própria conta Mercado Pago; a assinatura SaaS do Mensaly permanece separada e o Stripe fica desativado até esse domínio ser implementado.
 2. Criar cliente financeiro por responsável e cobrança externa por mensalidade.
 3. Persistir IDs externos, link, QR PIX, vencimento e status.
 4. Receber webhooks assinados e processá-los de modo idempotente.

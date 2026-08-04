@@ -1,5 +1,10 @@
 # Stripe Connect — onboarding e cobranças dos alunos
 
+> Documento histórico e integração inativa na primeira entrega. As cobranças
+> dos alunos usam Mercado Pago e `STRIPE_CONNECT_MODE=disabled`. Não configure
+> estas chaves na VPS até a assinatura SaaS da própria Mensaly ser implementada
+> como um domínio separado.
+
 ## Escopo
 
 - Uma conta Stripe Express conectada por organização Mensaly em produção.

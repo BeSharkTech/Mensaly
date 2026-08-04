@@ -52,7 +52,7 @@
   não cria outra.
 - Dia inexistente no mês: abertura e vencimento usam o último dia disponível.
 - Calendário inválido: API e banco rejeitam `chargeOpenDay > dueDay`.
-- Stripe indisponível na abertura: a cobrança interna permanece criada; o
+- Mercado Pago indisponível na abertura: a cobrança interna permanece criada; o
   checkout continua sendo solicitado e tentado separadamente, sem apagar a
   cobrança.
 - Alteração de plano depois da geração: somente matrículas ativas futuras são

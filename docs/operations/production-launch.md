@@ -34,7 +34,7 @@ pnpm production:check:staging
 The check rejects local endpoints, HTTP public URLs, Redis without TLS,
 PostgreSQL without `sslmode`, missing observability, invalid CORS, placeholder
 secrets, reused encryption keys and automatic WhatsApp delivery. The live gate
-also requires live Stripe credentials:
+also requires Mercado Pago live OAuth credentials and keeps Stripe disabled:
 
 ```powershell
 pnpm production:check:live
@@ -78,7 +78,8 @@ The one-shot migration must finish before the API starts. Confirm:
 5. create account, verify email, log in, finish onboarding, create plan,
    responsible party, student and enrollment;
 6. run the charge scheduler at a controlled time, confirm exactly one charge,
-   open checkout and complete a Stripe test payment;
+   connect a Mercado Pago test seller through OAuth, open checkout and complete
+   a Mercado Pago test payment;
 7. verify duplicate webhook delivery does not duplicate the payment;
 8. reset a password through a real Resend email;
 9. create a manual message and confirm tags `[aluno]`, `[responsavel]` and
@@ -122,9 +123,9 @@ hash. Raw IP addresses are not stored in the rate-limit keys:
 | E-mail verification | 10 requests / 15 minutes |
 | Public form | 30 requests / minute |
 | Public checkout | 60 requests / minute |
-| Stripe connection/payment-link creation | 20 requests / minute |
+| Mercado Pago connection/payment-link creation | 20 requests / minute |
 | WhatsApp/manual messaging operations | 30 requests / minute |
-| Signed Stripe/Resend webhooks | 600 requests / minute |
+| Signed Mercado Pago/Resend webhooks | 600 requests / minute |
 | Other mutations | 120 requests / minute |
 
 The fixed window is incremented atomically in Redis and shared by every API
@@ -142,14 +143,15 @@ high-burst rule rather than sharing the authentication budget. Keep the origin
 limits enabled even after the edge rules are active: Cloudflare is the first
 layer, Redis is the authoritative application-wide layer.
 
-## 7. Stripe Live (final activation)
+## 7. Mercado Pago Live (final activation)
 
-After every previous gate passes, replace only the four Stripe test values with
-live values, register the production webhook URL, set
-`STRIPE_CONNECT_MODE=live`, run `pnpm production:check:live`, deploy the same
-approved image and complete one low-value real transaction. Confirm provider
-payment, signed webhook, Mensaly status, audit record and connected-account
-balance before opening customer access.
+After every previous gate passes, set `MERCADOPAGO_MODE=live`, keep
+`MERCADOPAGO_CONNECTION_MODE=oauth` and `STRIPE_CONNECT_MODE=disabled`, register
+the production OAuth callback and payment webhook, then run
+`pnpm production:check:live`. Deploy the same approved image, connect the
+customer's Mercado Pago account and complete one low-value real transaction.
+Confirm provider payment, signed webhook, Mensaly status, audit record and the
+customer account balance before opening access.
 
 ## 8. Incident stop conditions
 

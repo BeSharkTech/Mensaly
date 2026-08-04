@@ -62,19 +62,16 @@ describe("runtime API proxy", () => {
     expect(payload).not.toContain("private detail");
   });
 
-  it("forwards Mercado Pago signature headers and OAuth redirects", async () => {
+  it("forwards Mercado Pago payment signature headers", async () => {
     process.env.MENSALY_API_URL = "http://api:3001";
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect((init?.headers as Headers).get("x-signature")).toBe("ts=1,v1=signature");
       expect((init?.headers as Headers).get("x-request-id")).toBe("mp-request-1");
-      return new Response(null, {
-        status: 302,
-        headers: { location: "https://app.mensaly.online/onboarding?mercadopago=connected" },
-      });
+      return Response.json({ data: { status: "PROCESSED" } });
     });
     vi.stubGlobal("fetch", fetchMock);
     const request = new NextRequest(
-      "https://app.mensaly.online/api/v1/webhooks/mercadopago?data.id=order-1",
+      "https://app.mensaly.online/api/v1/webhooks/mercadopago?data.id=payment-1",
       {
         method: "POST",
         headers: {
@@ -82,12 +79,35 @@ describe("runtime API proxy", () => {
           "x-signature": "ts=1,v1=signature",
           "x-request-id": "mp-request-1",
         },
-        body: JSON.stringify({ type: "order", data: { id: "order-1" } }),
+        body: JSON.stringify({ type: "payment", data: { id: "payment-1" } }),
       },
     );
 
     const response = await POST(request, {
       params: Promise.resolve({ path: ["webhooks", "mercadopago"] }),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it("preserves the authenticated cookie and redirect on the Mercado Pago OAuth callback", async () => {
+    process.env.MENSALY_API_URL = "http://api:3001";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("http://api:3001/api/v1/payment-integrations/mercadopago/callback?code=grant-1&state=state-1");
+      expect((init?.headers as Headers).get("cookie")).toBe("mensaly_session=session-1");
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://app.mensaly.online/onboarding?step=payments&mercadopago=connected" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new NextRequest(
+      "https://app.mensaly.online/api/v1/payment-integrations/mercadopago/callback?code=grant-1&state=state-1",
+      { headers: { cookie: "mensaly_session=session-1" } },
+    );
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["payment-integrations", "mercadopago", "callback"] }),
     });
 
     expect(response.status).toBe(302);

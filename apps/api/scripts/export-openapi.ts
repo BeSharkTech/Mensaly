@@ -6,12 +6,12 @@ import { apiEnvironmentSchema, parseEnvironment } from "@mensaly/config";
 import { createApiApplication } from "../src/app";
 
 const outputPath = resolve(process.cwd(), "../../docs/api/openapi.v1.json");
+process.env.DATABASE_URL ??= "postgresql://openapi:openapi@127.0.0.1:5432/openapi";
+process.env.REDIS_URL ??= "redis://127.0.0.1:6379";
 const exportEnvironment = parseEnvironment(apiEnvironmentSchema, {
   NODE_ENV: "test",
-  DATABASE_URL:
-    process.env.DATABASE_URL ??
-    "postgresql://openapi:openapi@127.0.0.1:5432/openapi",
-  REDIS_URL: process.env.REDIS_URL ?? "redis://127.0.0.1:6379",
+  DATABASE_URL: process.env.DATABASE_URL,
+  REDIS_URL: process.env.REDIS_URL,
   CORS_ORIGINS: "https://openapi.invalid",
 });
 

@@ -166,6 +166,31 @@ describe("environment configuration", () => {
     });
     assert.equal(environment.MERCADOPAGO_MODE, "test");
 
+    const directEnvironment = parseEnvironment(apiEnvironmentSchema, {
+      ...validConnections,
+      MERCADOPAGO_MODE: "test",
+      MERCADOPAGO_CONNECTION_MODE: "direct",
+      MERCADOPAGO_PUBLIC_KEY: "TEST-public-key",
+      MERCADOPAGO_ACCESS_TOKEN: "TEST-access-token",
+      PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString("base64"),
+      PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+    });
+    assert.equal(directEnvironment.MERCADOPAGO_CONNECTION_MODE, "direct");
+
+    assert.throws(
+      () => parseEnvironment(apiEnvironmentSchema, {
+        ...validConnections,
+        NODE_ENV: "production",
+        MERCADOPAGO_MODE: "live",
+        MERCADOPAGO_CONNECTION_MODE: "direct",
+        MERCADOPAGO_PUBLIC_KEY: "APP_USR-public-key",
+        MERCADOPAGO_ACCESS_TOKEN: "APP_USR-access-token",
+        PAYMENT_PROVIDER_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString("base64"),
+        PAYMENT_LINK_SECRET: Buffer.alloc(32, 3).toString("base64"),
+      }),
+      /direct credentials are allowed only for local test mode/,
+    );
+
     assert.throws(
       () => parseEnvironment(apiEnvironmentSchema, {
         ...validConnections,

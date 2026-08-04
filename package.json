@@ -22,6 +22,7 @@
     "postinstall": "pnpm db:generate",
     "production:check:staging": "tsx --env-file-if-exists=.env scripts/production-preflight.ts --target=staging",
     "production:check:live": "tsx --env-file-if-exists=.env scripts/production-preflight.ts --target=production",
+    "production:check:single-vps": "tsx --env-file-if-exists=.env scripts/production-preflight.ts --target=single-vps",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
     "test:runtime": "pnpm --filter @mensaly/api test:runtime && pnpm --filter @mensaly/worker test:runtime"
