@@ -11,6 +11,14 @@ type CorrelatedRequest = FastifyRequest & {
   requestStartedAt: number;
 };
 
+export function safeRequestPath(url: string): string {
+  const pathname = url.split("?", 1)[0] ?? "/";
+  return pathname.replace(
+    /(\/api\/v1\/public\/(?:enrollment|checkout|mercadopago-checkout|stripe-checkout)\/)[^/]+/,
+    "$1[REDACTED]",
+  );
+}
+
 function requestedCorrelationId(request: FastifyRequest): string | undefined {
   const header = request.headers["x-correlation-id"];
   const value = Array.isArray(header) ? header[0] : header;
@@ -33,7 +41,7 @@ export function registerRequestContext(fastify: FastifyInstance): void {
         correlationId: correlated.correlationId,
         durationMs: Math.round(performance.now() - correlated.requestStartedAt),
         method: request.method,
-        path: request.url,
+        path: safeRequestPath(request.url),
         statusCode: reply.statusCode,
       },
       "request completed",

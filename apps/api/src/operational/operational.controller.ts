@@ -26,10 +26,12 @@ import { getCorrelationId } from "../common/correlation";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import {
   CreateEnrollmentDto,
+  CreateStudentEnrollmentDto,
   CreateGuardianDto,
   CreatePlanDto,
   CreateStudentDto,
   type CreateEnrollmentInput,
+  type CreateStudentEnrollmentInput,
   type CreateGuardianInput,
   type CreatePlanInput,
   type CreateStudentInput,
@@ -45,6 +47,7 @@ import {
   type UpdatePlanInput,
   type UpdateStudentInput,
   createEnrollmentSchema,
+  createStudentEnrollmentSchema,
   createGuardianSchema,
   createPlanSchema,
   createStudentSchema,
@@ -89,6 +92,7 @@ const studentBodySchema = {
   properties: {
     name: { type: "string", minLength: 2, maxLength: 120 },
     cpf: { type: "string", minLength: 11, maxLength: 14, description: "Brazilian CPF" },
+    rg: { type: "string", minLength: 5, maxLength: 30, description: "Brazilian RG" },
     birthDate: { type: "string", format: "date" },
     email: { type: "string", format: "email", maxLength: 255 },
     phone: { type: "string", maxLength: 32 },
@@ -355,6 +359,21 @@ export class OperationalController {
     return this.service.createEnrollment(
       auth,
       input as unknown as CreateEnrollmentInput,
+      requestMetadata(request),
+    );
+  }
+
+  @Post("enrollments/manual")
+  @ApiOperation({ summary: "Creates student, guardian, link and enrollment atomically" })
+  createStudentEnrollment(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Body(new ZodValidationPipe(createStudentEnrollmentSchema))
+    input: CreateStudentEnrollmentDto,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.service.createStudentEnrollment(
+      auth,
+      input as unknown as CreateStudentEnrollmentInput,
       requestMetadata(request),
     );
   }

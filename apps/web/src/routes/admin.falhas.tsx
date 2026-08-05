@@ -13,10 +13,14 @@ export const Route = createFileRoute("/admin/falhas")({
       { title: "Falhas — Admin Mensaly" },
       {
         name: "description",
-        content: "Central de falhas da plataforma: mensagens, webhooks e uploads que não concluíram.",
+        content:
+          "Central de falhas da plataforma: mensagens, webhooks e uploads que não concluíram.",
       },
       { property: "og:title", content: "Falhas — Admin Mensaly" },
-      { property: "og:description", content: "Mensagens, webhooks e uploads com falha." },
+      {
+        property: "og:description",
+        content: "Mensagens, webhooks e uploads com falha.",
+      },
     ],
   }),
   component: AdminFailuresPage,
@@ -49,27 +53,49 @@ function AdminFailuresPage() {
           <tbody>
             {failures.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                <td
+                  colSpan={7}
+                  className="px-5 py-12 text-center text-sm text-muted-foreground"
+                >
                   Nenhuma falha registrada.
                 </td>
               </tr>
             ) : (
               failures.map((failure) => (
-                <tr key={failure.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                  <td className="px-5 py-3 font-medium text-foreground">{failure.type}</td>
+                <tr
+                  key={failure.id}
+                  className="border-b border-border last:border-0 hover:bg-muted/50"
+                >
+                  <td className="px-5 py-3 font-medium text-foreground">
+                    {failure.type}
+                  </td>
                   <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
                     {failure.reference}
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{failure.organization}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{failure.code}</td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {failure.organization}
+                  </td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
+                    {failure.code}
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {formatDateTime(failure.occurredAt)}
                   </td>
                   <td className="px-5 py-3">
-                    <StatusBadge status={failure.retryable ? "FAILED_RETRYABLE" : "FAILED_PERMANENT"} />
+                    <StatusBadge
+                      status={
+                        failure.retryable
+                          ? "FAILED_RETRYABLE"
+                          : "FAILED_PERMANENT"
+                      }
+                    />
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <Button variant="ghost" size="sm" disabled={!failure.retryable}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!failure.retryable}
+                    >
                       Tentar novamente
                     </Button>
                   </td>

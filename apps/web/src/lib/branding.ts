@@ -31,13 +31,18 @@ function relativeLuminance(hex: string) {
 
 export function applyBrandColor(color: string | null | undefined) {
   if (typeof document === "undefined") return;
-  const hex = color && isValidHexColor(color) ? color.trim() : DEFAULT_BRAND_COLOR;
+  const hex =
+    color && isValidHexColor(color) ? color.trim() : DEFAULT_BRAND_COLOR;
   const root = document.documentElement;
-  const foreground = relativeLuminance(hex) > 0.55 ? "oklch(0.18 0.02 265)" : "oklch(0.99 0 0)";
+  const foreground =
+    relativeLuminance(hex) > 0.55 ? "oklch(0.18 0.02 265)" : "oklch(0.99 0 0)";
 
   root.style.setProperty("--primary", hex);
   root.style.setProperty("--primary-foreground", foreground);
-  root.style.setProperty("--primary-soft", `color-mix(in oklab, ${hex} 14%, var(--background))`);
+  root.style.setProperty(
+    "--primary-soft",
+    `color-mix(in oklab, ${hex} 14%, var(--background))`,
+  );
   root.style.setProperty("--primary-soft-foreground", hex);
   root.style.setProperty("--ring", hex);
   root.style.setProperty("--sidebar-primary", hex);

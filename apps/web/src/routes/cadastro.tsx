@@ -18,7 +18,10 @@ export const Route = createFileRoute("/cadastro")({
           "Crie a conta da sua escola no Mensaly e organize mensalidades, matrículas e lembretes.",
       },
       { property: "og:title", content: "Criar conta — Mensaly" },
-      { property: "og:description", content: "Crie a conta da sua escola no Mensaly." },
+      {
+        property: "og:description",
+        content: "Crie a conta da sua escola no Mensaly.",
+      },
     ],
   }),
   component: RegisterPage,
@@ -86,7 +89,9 @@ function RegisterPage() {
         </div>
 
         <div className="card-surface p-6 sm:p-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Criar conta</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Criar conta
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Depois do cadastro você configura o seu negócio e os planos.
           </p>
@@ -126,12 +131,14 @@ function RegisterPage() {
               {loading ? "Criando conta..." : "Criar conta e continuar"}
             </Button>
           </form>
-
         </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Entrar
           </Link>
         </p>

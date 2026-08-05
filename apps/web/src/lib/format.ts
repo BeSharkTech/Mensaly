@@ -5,10 +5,7 @@
 
 export type ChargeStatus = "PENDING" | "PAID" | "CANCELLED" | "WAIVED";
 export type PaymentStatus =
-  | "PENDING_RECONCILIATION"
-  | "CONFIRMED"
-  | "REVERSED"
-  | "CANCELLED";
+  "PENDING_RECONCILIATION" | "CONFIRMED" | "REVERSED" | "CANCELLED";
 export type PaymentMethod = "CASH" | "PIX" | "BANK_TRANSFER" | "CARD" | "OTHER";
 export type MessageScheduleStatus =
   | "SCHEDULED"
@@ -51,7 +48,20 @@ export function formatDateTime(value: string): string {
 
 export function formatReferenceMonth(value: string): string {
   const [year, month] = value.split("-");
-  const labels = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const labels = [
+    "jan",
+    "fev",
+    "mar",
+    "abr",
+    "mai",
+    "jun",
+    "jul",
+    "ago",
+    "set",
+    "out",
+    "nov",
+    "dez",
+  ];
   return `${labels[Number(month) - 1]}/${year}`;
 }
 

@@ -763,6 +763,12 @@
                     "maxLength": 14,
                     "description": "Brazilian CPF"
                   },
+                  "rg": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 30,
+                    "description": "Brazilian RG"
+                  },
                   "birthDate": {
                     "type": "string",
                     "format": "date"
@@ -844,6 +850,12 @@
                     "minLength": 11,
                     "maxLength": 14,
                     "description": "Brazilian CPF"
+                  },
+                  "rg": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 30,
+                    "description": "Brazilian RG"
                   },
                   "birthDate": {
                     "type": "string",
@@ -1191,6 +1203,26 @@
         ]
       }
     },
+    "/api/v1/enrollments/manual": {
+      "post": {
+        "operationId": "OperationalController_createStudentEnrollment_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates student, guardian, link and enrollment atomically",
+        "tags": [
+          "Operational CRUD"
+        ]
+      }
+    },
     "/api/v1/enrollments/{id}": {
       "get": {
         "operationId": "OperationalController_enrollment_v1",
@@ -1321,6 +1353,209 @@
           }
         ],
         "summary": "Generates idempotent monthly charges",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/charges/manual": {
+      "post": {
+        "operationId": "FinancialController_createManualCharge_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "studentId"
+                ],
+                "properties": {
+                  "studentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "referenceMonth": {
+                    "type": "string",
+                    "pattern": "^(?:20\\d{2}|[3-9]\\d{3})-(0[1-9]|1[0-2])$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Charge created or the existing monthly charge reused"
+          },
+          "404": {
+            "description": "Student has no active enrollment in this organization"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates the current monthly charge for one active student",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/billing-rules": {
+      "get": {
+        "operationId": "FinancialController_billingRules_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Lists billing rules and their selected students",
+        "tags": [
+          "Financial"
+        ]
+      },
+      "post": {
+        "operationId": "FinancialController_createBillingRule_v1",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Unique key for safely retrying this billing rule creation",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "sourceType",
+                  "sourceId",
+                  "frequency",
+                  "opensOn",
+                  "expiresOn",
+                  "studentIds"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120
+                  },
+                  "sourceType": {
+                    "type": "string",
+                    "enum": [
+                      "PLAN",
+                      "PRODUCT",
+                      "EVENT"
+                    ]
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "frequency": {
+                    "type": "string",
+                    "enum": [
+                      "MONTHLY",
+                      "ONCE"
+                    ]
+                  },
+                  "opensOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "expiresOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "repeatUntil": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "studentIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 2000,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Billing rule created and eligible charges materialized"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates a monthly or one-time billing rule",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/billing-rules/process": {
+      "post": {
+        "operationId": "FinancialController_processBillingRules_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Materializes every billing rule eligible today",
+        "tags": [
+          "Financial"
+        ]
+      }
+    },
+    "/api/v1/billing-rules/{id}/deactivate": {
+      "post": {
+        "operationId": "FinancialController_deactivateBillingRule_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Stops future charges from one billing rule",
         "tags": [
           "Financial"
         ]
@@ -2494,6 +2729,206 @@
         ]
       }
     },
+    "/api/v1/workspace/public-enrollment-form": {
+      "get": {
+        "operationId": "PublicEnrollmentFormController_get_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Gets the authenticated organization's public enrollment form",
+        "tags": [
+          "Public enrollment form"
+        ]
+      },
+      "post": {
+        "operationId": "PublicEnrollmentFormController_create_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Creates the organization's single public enrollment link",
+        "tags": [
+          "Public enrollment form"
+        ]
+      },
+      "patch": {
+        "operationId": "PublicEnrollmentFormController_update_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Updates public enrollment settings",
+        "tags": [
+          "Public enrollment form"
+        ]
+      }
+    },
+    "/api/v1/workspace/public-enrollment-form/rotate": {
+      "post": {
+        "operationId": "PublicEnrollmentFormController_rotate_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Rotates the public enrollment link and invalidates the previous one",
+        "tags": [
+          "Public enrollment form"
+        ]
+      }
+    },
+    "/api/v1/workspace/public-enrollment-form/submissions": {
+      "get": {
+        "operationId": "PublicEnrollmentFormController_submissions_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Lists public enrollment requests for the authenticated organization",
+        "tags": [
+          "Public enrollment form"
+        ]
+      }
+    },
+    "/api/v1/workspace/public-enrollment-form/submissions/{id}/approve": {
+      "post": {
+        "operationId": "PublicEnrollmentFormController_approve_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Approves a public enrollment request atomically",
+        "tags": [
+          "Public enrollment form"
+        ]
+      }
+    },
+    "/api/v1/workspace/public-enrollment-form/submissions/{id}": {
+      "delete": {
+        "operationId": "PublicEnrollmentFormController_reject_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Permanently deletes a pending public enrollment request",
+        "tags": [
+          "Public enrollment form"
+        ]
+      }
+    },
+    "/api/v1/public/enrollment/{token}": {
+      "get": {
+        "operationId": "PublicEnrollmentController_get_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Gets a public enrollment form by signed token",
+        "tags": [
+          "Public enrollment"
+        ]
+      }
+    },
+    "/api/v1/public/enrollment/{token}/photo": {
+      "post": {
+        "operationId": "PublicEnrollmentController_uploadPhoto_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Uploads the required student photo for a public enrollment",
+        "tags": [
+          "Public enrollment"
+        ]
+      }
+    },
+    "/api/v1/public/enrollment/{token}/submissions": {
+      "post": {
+        "operationId": "PublicEnrollmentController_submit_v1",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Creates one student, guardian link and enrollment atomically",
+        "tags": [
+          "Public enrollment"
+        ]
+      }
+    },
     "/api/v1/files": {
       "post": {
         "operationId": "FilesController_upload_v1",
@@ -3100,6 +3535,26 @@
         ]
       }
     },
+    "/api/v1/workspace/guardian-field-values/{guardianId}": {
+      "patch": {
+        "operationId": "WorkspaceController_replaceGuardianValues_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Replaces a guardian's custom field values",
+        "tags": [
+          "Workspace"
+        ]
+      }
+    },
     "/api/v1/workspace/broadcasts": {
       "post": {
         "operationId": "WorkspaceController_createBroadcast_v1",
@@ -3187,7 +3642,7 @@
             "description": ""
           }
         },
-        "summary": "Gets one organization's public custom form",
+        "summary": "Legacy public custom form (retired)",
         "tags": [
           "Public forms"
         ]
@@ -3202,7 +3657,7 @@
             "description": ""
           }
         },
-        "summary": "Submits one public custom form response",
+        "summary": "Legacy public custom form submission (retired)",
         "tags": [
           "Public forms"
         ]

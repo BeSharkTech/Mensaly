@@ -33,7 +33,7 @@ const forwardedResponseHeaders = [
 ] as const;
 
 function apiOrigin(): URL {
-  const configured = process.env.MENSALY_API_URL ?? "http://127.0.0.1:3002";
+  const configured = process.env.MENSALY_API_URL ?? "http://127.0.0.1:3001";
   const url = new URL(configured);
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("MENSALY_API_URL must be an HTTP(S) URL");
@@ -47,9 +47,9 @@ function requestHeaders(request: NextRequest): Headers {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  const clientAddress =
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  // X-Real-IP is overwritten by Caddy before the web container receives the
+  // request. Never trust browser-controlled Cloudflare/X-Forwarded-For values.
+  const clientAddress = request.headers.get("x-real-ip")?.trim();
   if (clientAddress) headers.set("x-forwarded-for", clientAddress);
   return headers;
 }
@@ -63,7 +63,10 @@ function responseHeaders(upstream: Response): Headers {
   return headers;
 }
 
-async function proxy(request: NextRequest, context: RouteContext): Promise<Response> {
+async function proxy(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<Response> {
   const { path } = await context.params;
   const target = new URL(
     `/api/v1/${path.map((segment) => encodeURIComponent(segment)).join("/")}`,
@@ -80,22 +83,31 @@ async function proxy(request: NextRequest, context: RouteContext): Promise<Respo
       redirect: "manual",
       cache: "no-store",
     });
-    const noBody = request.method === "HEAD" || [204, 304].includes(upstream.status);
+    const noBody =
+      request.method === "HEAD" || [204, 304].includes(upstream.status);
     return new Response(noBody ? null : upstream.body, {
       status: upstream.status,
       headers: responseHeaders(upstream),
     });
   } catch {
-    const correlationId = request.headers.get("x-correlation-id") ?? randomUUID();
+    const correlationId =
+      request.headers.get("x-correlation-id") ?? randomUUID();
     return Response.json(
       {
         error: {
           code: "API_UPSTREAM_UNAVAILABLE",
-          message: "O serviço está temporariamente indisponível. Tente novamente.",
+          message:
+            "O serviço está temporariamente indisponível. Tente novamente.",
         },
         correlationId,
       },
-      { status: 502, headers: { "cache-control": "no-store", "x-correlation-id": correlationId } },
+      {
+        status: 502,
+        headers: {
+          "cache-control": "no-store",
+          "x-correlation-id": correlationId,
+        },
+      },
     );
   }
 }

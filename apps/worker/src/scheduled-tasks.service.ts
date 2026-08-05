@@ -47,16 +47,6 @@ function localDate(now: Date, timeZone: string) {
   };
 }
 
-function minuteOfDay(value: string): number {
-  const [hourText, minuteText] = value.split(":");
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-    return 0;
-  }
-  return hour * 60 + minute;
-}
-
 function calendarDate(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
@@ -69,13 +59,6 @@ function addCalendarDays(date: Date, days: number): Date {
       date.getUTCDate() + days,
     ),
   );
-}
-
-function dueDate(referenceMonth: Date, dueDay: number): Date {
-  const year = referenceMonth.getUTCFullYear();
-  const month = referenceMonth.getUTCMonth();
-  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(year, month, Math.min(dueDay, lastDay)));
 }
 
 function zonedDateTime(
@@ -205,77 +188,85 @@ export class ScheduledTasksService {
             continue;
           }
           const current = localDate(now, organization.timezone);
-          const referenceMonth = calendarDate(
-            current.year,
-            current.month,
-            1,
-          );
-          const monthEnd = new Date(
-            Date.UTC(current.year, current.month, 0),
-          );
-          const lastDayOfMonth = monthEnd.getUTCDate();
-          await tx.$executeRaw(
-            Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`charge-generation:${organization.id}:${current.year}-${String(current.month).padStart(2, "0")}`}))`,
-          );
-          const enrollments = await tx.$queryRaw<
-            Array<{
-              id: string;
-              amountCents: number;
-              discountCents: number;
-              chargeOpenDay: number;
-              chargeOpenTime: string;
-              dueDay: number;
-            }>
-          >(Prisma.sql`
-            SELECT "id", "amountCents", "discountCents", "chargeOpenDay", "chargeOpenTime", "dueDay"
-            FROM "enrollment"
-            WHERE "organizationId" = ${organization.id}::uuid
-              AND "status" = ${EnrollmentStatus.ACTIVE}::"EnrollmentStatus"
-              AND "startDate" <= ${monthEnd}
-              AND ("endDate" IS NULL OR "endDate" >= ${referenceMonth})
-            FOR SHARE
-          `);
-          const currentMinute = current.hour * 60 + current.minute;
-          const eligibleEnrollments = enrollments.filter((enrollment) => {
-            const openingDay = Math.min(enrollment.chargeOpenDay, lastDayOfMonth);
-            return (
-              current.day > openingDay ||
-              (current.day === openingDay &&
-                currentMinute >= minuteOfDay(enrollment.chargeOpenTime))
-            );
+          const today = calendarDate(current.year, current.month, current.day);
+          const billingRules = await tx.billingRule.findMany({
+            where: { organizationId: organization.id, status: "ACTIVE" },
+            orderBy: { id: "asc" },
           });
-          const createdCharges =
-            eligibleEnrollments.length > 0
-              ? await tx.charge.createMany({
-                  data: eligibleEnrollments.map((enrollment) => ({
-                    organizationId: organization.id,
-                    enrollmentId: enrollment.id,
-                    referenceMonth,
-                    dueDate: dueDate(referenceMonth, enrollment.dueDay),
-                    amountCents: enrollment.amountCents,
-                    discountCents: enrollment.discountCents,
-                    finalAmountCents:
-                      enrollment.amountCents - enrollment.discountCents,
-                  })),
-                  skipDuplicates: true,
-                })
-              : { count: 0 };
-          result.chargesCreated += createdCharges.count;
-          if (createdCharges.count > 0) {
-            await tx.auditLog.create({
-              data: {
+          for (const rule of billingRules) {
+            let cycleKey: string;
+            let ruleReferenceMonth: Date;
+            let ruleDueDate: Date;
+            if (rule.frequency === "ONCE") {
+              if (today < rule.opensOn) continue;
+              cycleKey = `rule:${rule.id}:once`;
+              ruleReferenceMonth = calendarDate(rule.opensOn.getUTCFullYear(), rule.opensOn.getUTCMonth() + 1, 1);
+              ruleDueDate = rule.expiresOn;
+            } else {
+              if (today < rule.opensOn || (rule.repeatUntil && today > rule.repeatUntil)) continue;
+              const lastDay = new Date(Date.UTC(current.year, current.month, 0)).getUTCDate();
+              const cycleOpen = calendarDate(current.year, current.month, Math.min(rule.opensOn.getUTCDate(), lastDay));
+              if (today < cycleOpen) continue;
+              const offset = Math.max(0, (rule.expiresOn.getUTCFullYear() * 12 + rule.expiresOn.getUTCMonth()) - (rule.opensOn.getUTCFullYear() * 12 + rule.opensOn.getUTCMonth()));
+              const dueMonthIndex = current.month - 1 + offset;
+              const dueYear = current.year + Math.floor(dueMonthIndex / 12);
+              const dueMonth = (dueMonthIndex % 12) + 1;
+              const dueLastDay = new Date(Date.UTC(dueYear, dueMonth, 0)).getUTCDate();
+              ruleDueDate = calendarDate(dueYear, dueMonth, Math.min(rule.expiresOn.getUTCDate(), dueLastDay));
+              ruleReferenceMonth = calendarDate(current.year, current.month, 1);
+              cycleKey = `rule:${rule.id}:${current.year}-${String(current.month).padStart(2, "0")}`;
+            }
+            const targets = await tx.billingRuleTarget.findMany({ where: { organizationId: organization.id, billingRuleId: rule.id }, select: { studentId: true } });
+            if (targets.length > 0) {
+              await tx.$queryRaw(
+                Prisma.sql`
+                  SELECT "id"
+                  FROM "enrollment"
+                  WHERE "organizationId" = ${organization.id}::uuid
+                    AND "studentId" IN (${Prisma.join(targets.map((target) => Prisma.sql`${target.studentId}::uuid`))})
+                  FOR SHARE
+                `,
+              );
+            }
+            const ruleEnrollments = await tx.enrollment.findMany({
+              where: {
                 organizationId: organization.id,
-                actorType: AuditActorType.SYSTEM,
-                action: "charge.generated_by_scheduler",
-                entityType: "ChargeGeneration",
-                after: {
-                  referenceMonth: `${current.year}-${String(current.month).padStart(2, "0")}`,
-                  created: createdCharges.count,
-                },
+                studentId: { in: targets.map((target) => target.studentId) },
+                status: EnrollmentStatus.ACTIVE,
+                student: { status: "ACTIVE" },
+                plan: { status: "ACTIVE" },
+                ...(rule.sourceType === "PLAN" ? { planId: rule.sourceId } : {}),
               },
+              distinct: ["studentId"],
+              orderBy: { createdAt: "desc" },
+              select: { id: true, amountCents: true, discountCents: true },
             });
+            const ruleCharges = await tx.charge.createMany({
+              data: ruleEnrollments.map((enrollment) => {
+                const amountCents = rule.sourceType === "PLAN" ? enrollment.amountCents : rule.amountCents;
+                const discountCents = rule.sourceType === "PLAN" ? enrollment.discountCents : 0;
+                return { organizationId: organization.id, enrollmentId: enrollment.id, billingRuleId: rule.id, cycleKey, referenceMonth: ruleReferenceMonth, dueDate: ruleDueDate, amountCents, discountCents, finalAmountCents: amountCents - discountCents };
+              }),
+              skipDuplicates: true,
+            });
+            result.chargesCreated += ruleCharges.count;
+            if (ruleCharges.count > 0) {
+              await tx.auditLog.create({
+                data: {
+                  organizationId: organization.id,
+                  actorType: AuditActorType.SYSTEM,
+                  action: "charge.generated_by_billing_rule",
+                  entityType: "BillingRule",
+                  entityId: rule.id,
+                  after: {
+                    billingRuleId: rule.id,
+                    cycleKey,
+                    created: ruleCharges.count,
+                  },
+                },
+              });
+            }
           }
-
           if (this.options.messageAutomationEnabled === false) {
             continue;
           }

@@ -81,6 +81,7 @@ export function fakePixCode(payload: CheckoutPayload): string {
 /** Gera uma linha digitável de boleto fictícia. */
 export function fakeBoletoLine(payload: CheckoutPayload): string {
   const seed = payload.chargeId.replace(/\D/g, "").padEnd(20, "7");
-  const digits = (start: number, length: number) => seed.slice(start, start + length).padEnd(length, "3");
+  const digits = (start: number, length: number) =>
+    seed.slice(start, start + length).padEnd(length, "3");
   return `34191.${digits(0, 5)} ${digits(5, 5)}.${digits(10, 6)} ${digits(4, 5)}.${digits(9, 6)} 1 ${String(payload.amountCents).padStart(14, "0")}`;
 }

@@ -28,7 +28,7 @@ function apiOrigin() {
     // localhost and 127.0.0.1 during local development.
     return process.env.NEXT_PUBLIC_MENSALY_API_URL || window.location.origin;
   }
-  return process.env.MENSALY_API_URL ?? "http://127.0.0.1:3002";
+  return process.env.MENSALY_API_URL ?? "http://127.0.0.1:3001";
 }
 
 function endpoint(path: string, query?: Record<string, unknown>) {
@@ -54,25 +54,27 @@ async function requestPayload<T>(
     method: options.method ?? "GET",
     credentials: "include",
     headers: {
-      ...(options.body === undefined ? {} : { "content-type": "application/json" }),
+      ...(options.body === undefined
+        ? {}
+        : { "content-type": "application/json" }),
       ...options.headers,
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
 
   if (response.status === 204) return undefined as T;
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        data?: T;
-        meta?: Record<string, unknown>;
-        message?: string;
-        correlationId?: string;
-        error?: { message?: string; correlationId?: string };
-      }
-    | null;
+  const payload = (await response.json().catch(() => null)) as {
+    data?: T;
+    meta?: Record<string, unknown>;
+    message?: string;
+    correlationId?: string;
+    error?: { message?: string; correlationId?: string };
+  } | null;
   if (!response.ok) {
     throw new ApiRequestError(
-      payload?.message ?? payload?.error?.message ?? "Não foi possível concluir a operação.",
+      payload?.message ??
+        payload?.error?.message ??
+        "Não foi possível concluir a operação.",
       response.status,
       payload?.correlationId ?? payload?.error?.correlationId,
     );
@@ -85,11 +87,7 @@ export async function apiRequest<T = unknown>(
   options: ApiRequestOptions = {},
 ): Promise<T> {
   const payload = await requestPayload<T>(path, options);
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "data" in payload
-  ) {
+  if (payload && typeof payload === "object" && "data" in payload) {
     return (payload as ApiEnvelope<T>).data;
   }
   return payload as T;
@@ -100,11 +98,7 @@ export async function apiEnvelopeRequest<T = unknown>(
   options: ApiRequestOptions = {},
 ): Promise<ApiEnvelope<T>> {
   const payload = await requestPayload<T>(path, options);
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "data" in payload
-  ) {
+  if (payload && typeof payload === "object" && "data" in payload) {
     return payload as ApiEnvelope<T>;
   }
   return { data: payload as T };

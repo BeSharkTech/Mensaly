@@ -13,10 +13,14 @@ export const Route = createFileRoute("/redefinir-senha")({
       { title: "Definir nova senha — Mensaly" },
       {
         name: "description",
-        content: "Escolha uma nova senha para acessar o painel da sua escola no Mensaly.",
+        content:
+          "Escolha uma nova senha para acessar o painel da sua escola no Mensaly.",
       },
       { property: "og:title", content: "Definir nova senha — Mensaly" },
-      { property: "og:description", content: "Escolha uma nova senha para sua conta Mensaly." },
+      {
+        property: "og:description",
+        content: "Escolha uma nova senha para sua conta Mensaly.",
+      },
     ],
   }),
   component: NewPasswordPage,
@@ -56,7 +60,11 @@ function NewPasswordPage() {
       await confirmPasswordReset(token, password);
     } catch (updateError) {
       setLoading(false);
-      setError(updateError instanceof Error ? updateError.message : "Não foi possível salvar a senha.");
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Não foi possível salvar a senha.",
+      );
       return;
     }
     setLoading(false);
@@ -67,7 +75,9 @@ function NewPasswordPage() {
     <div className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
       <img src={logo.src} alt="Mensaly" className="mb-8 h-8 w-auto" />
       <div className="card-surface w-full max-w-md p-8">
-        <h1 className="text-xl font-semibold text-foreground">Definir nova senha</h1>
+        <h1 className="text-xl font-semibold text-foreground">
+          Definir nova senha
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Escolha uma senha nova para acessar o painel.
         </p>
@@ -98,7 +108,10 @@ function NewPasswordPage() {
           </Button>
         </form>
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Voltar para o login
           </Link>
         </p>

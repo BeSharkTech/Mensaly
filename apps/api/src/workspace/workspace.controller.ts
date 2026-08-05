@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  GoneException,
   HttpCode,
   Inject,
   Param,
@@ -28,7 +29,6 @@ import {
   customFieldSchema,
   eventSchema,
   productSchema,
-  publicFormResponseSchema,
   studentValuesSchema,
   updateBroadcastSchema,
   updateCustomFieldSchema,
@@ -107,6 +107,12 @@ export class WorkspaceController {
     return this.service.replaceStudentValues(auth, studentId, input.values);
   }
 
+  @Patch("guardian-field-values/:guardianId")
+  @ApiOperation({ summary: "Replaces a guardian's custom field values" })
+  replaceGuardianValues(@CurrentAuth() auth: AuthenticatedContext, @Param("guardianId", ParseUUIDPipe) guardianId: string, @Body(new ZodValidationPipe(studentValuesSchema)) input: { values: Record<string, string> }) {
+    return this.service.replaceGuardianValues(auth, guardianId, input.values);
+  }
+
   @Post("broadcasts")
   @ApiOperation({ summary: "Creates a broadcast message" })
   createBroadcast(@CurrentAuth() auth: AuthenticatedContext, @Body(new ZodValidationPipe(broadcastSchema)) input: never) {
@@ -133,21 +139,21 @@ export class WorkspaceController {
 @ApiTags("Public forms")
 @Controller({ path: "public/forms", version: "1" })
 export class PublicFormsController {
-  constructor(@Inject(WorkspaceService) private readonly service: WorkspaceService) {}
-
   @Get(":organizationId")
-  @ApiOperation({ summary: "Gets one organization's public custom form" })
-  get(@Param("organizationId", ParseUUIDPipe) organizationId: string): Promise<unknown> {
-    return this.service.publicForm(organizationId);
+  @ApiOperation({ summary: "Legacy public custom form (retired)" })
+  get(): never {
+    throw new GoneException({
+      code: "LEGACY_PUBLIC_FORM_RETIRED",
+      message: "Este formulário foi substituído. Solicite ao local o novo link de cadastro.",
+    });
   }
 
   @Post(":organizationId/responses")
-  @ApiOperation({ summary: "Submits one public custom form response" })
-  submit(
-    @Param("organizationId", ParseUUIDPipe) organizationId: string,
-    @Body(new ZodValidationPipe(publicFormResponseSchema))
-    input: { cpf: string; values: Record<string, string> },
-  ) {
-    return this.service.submitPublicForm(organizationId, input);
+  @ApiOperation({ summary: "Legacy public custom form submission (retired)" })
+  submit(): never {
+    throw new GoneException({
+      code: "LEGACY_PUBLIC_FORM_RETIRED",
+      message: "Este formulário foi substituído. Solicite ao local o novo link de cadastro.",
+    });
   }
 }

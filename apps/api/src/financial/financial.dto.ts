@@ -17,6 +17,49 @@ export class GenerateChargesDto {
 
 export type GenerateChargesInput = z.infer<typeof generateChargesSchema>;
 
+export const createManualChargeSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    referenceMonth,
+  })
+  .strict();
+
+export class CreateManualChargeDto {
+  static readonly schema = createManualChargeSchema;
+}
+
+export type CreateManualChargeInput = z.infer<typeof createManualChargeSchema>;
+
+const billingDate = z.string().date().refine((value) => Number(value.slice(0, 4)) >= 2000, {
+  message: "Date must use a year from 2000 onwards",
+});
+
+export const createBillingRuleSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120),
+    sourceType: z.enum(["PLAN", "PRODUCT", "EVENT"]),
+    sourceId: z.string().uuid(),
+    frequency: z.enum(["MONTHLY", "ONCE"]),
+    opensOn: billingDate,
+    expiresOn: billingDate,
+    repeatUntil: billingDate.nullable().optional(),
+    studentIds: z.array(z.string().uuid()).min(1).max(2_000),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.expiresOn < value.opensOn) {
+      context.addIssue({ code: "custom", path: ["expiresOn"], message: "Expiration cannot precede opening" });
+    }
+    if (value.frequency === "MONTHLY" && !value.repeatUntil) {
+      context.addIssue({ code: "custom", path: ["repeatUntil"], message: "Monthly charges require an end date" });
+    }
+    if (value.repeatUntil && value.repeatUntil < value.opensOn) {
+      context.addIssue({ code: "custom", path: ["repeatUntil"], message: "Recurrence cannot end before opening" });
+    }
+  });
+
+export type CreateBillingRuleInput = z.infer<typeof createBillingRuleSchema>;
+
 export const chargeListQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),

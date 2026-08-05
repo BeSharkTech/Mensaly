@@ -514,7 +514,9 @@ export class AuthService {
         },
       });
 
-      if (failures >= LOGIN_FAILURE_LIMIT) {
+      // Anonymous failures must not let an attacker lock the real owner out.
+      // A valid credential may pass; invalid attempts remain rate-limited.
+      if (failures >= LOGIN_FAILURE_LIMIT && !passwordMatches) {
         await transaction.auditLog.create({
           data: {
             actorType: AuditActorType.SYSTEM,

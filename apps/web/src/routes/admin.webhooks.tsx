@@ -14,10 +14,14 @@ export const Route = createFileRoute("/admin/webhooks")({
       { title: "Webhooks — Admin Mensaly" },
       {
         name: "description",
-        content: "Caixa de entrada idempotente de webhooks, com tentativas e reprocessamento manual.",
+        content:
+          "Caixa de entrada idempotente de webhooks, com tentativas e reprocessamento manual.",
       },
       { property: "og:title", content: "Webhooks — Admin Mensaly" },
-      { property: "og:description", content: "Eventos recebidos, tentativas e reprocessamento." },
+      {
+        property: "og:description",
+        content: "Eventos recebidos, tentativas e reprocessamento.",
+      },
     ],
   }),
   component: AdminWebhooksPage,
@@ -50,20 +54,34 @@ function AdminWebhooksPage() {
           <tbody>
             {events.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                <td
+                  colSpan={7}
+                  className="px-5 py-12 text-center text-sm text-muted-foreground"
+                >
                   Nenhum evento de webhook recebido ainda.
                 </td>
               </tr>
             ) : (
               events.map((event) => (
-                <tr key={event.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                <tr
+                  key={event.id}
+                  className="border-b border-border last:border-0 hover:bg-muted/50"
+                >
                   <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
                     {event.id.slice(0, 8)}
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{event.provider}</td>
-                  <td className="px-5 py-3 font-medium text-foreground">{event.eventType}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{formatDateTime(event.receivedAt)}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{event.attempts}</td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {event.provider}
+                  </td>
+                  <td className="px-5 py-3 font-medium text-foreground">
+                    {event.eventType}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {formatDateTime(event.receivedAt)}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {event.attempts}
+                  </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={event.status} />
                   </td>
@@ -71,7 +89,10 @@ function AdminWebhooksPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={event.status === "FAILED_PERMANENT" || event.status === "PROCESSED"}
+                      disabled={
+                        event.status === "FAILED_PERMANENT" ||
+                        event.status === "PROCESSED"
+                      }
                       onClick={() => {
                         void reprocessWebhook(event.id)
                           .then(() => toast.success("Webhook reprocessado."))

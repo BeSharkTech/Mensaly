@@ -51,6 +51,8 @@ const defaultPolicies = {
     windowMs: 15 * 60_000,
   },
   publicForm: { id: "public-form", limit: 30, windowMs: 60_000 },
+  publicEnrollmentRead: { id: "public-enrollment-read", limit: 60, windowMs: 60_000 },
+  publicEnrollmentWrite: { id: "public-enrollment-write", limit: 5, windowMs: 15 * 60_000 },
   publicCheckout: { id: "public-checkout", limit: 60, windowMs: 60_000 },
   paymentIntegration: {
     id: "payment-integration",
@@ -89,6 +91,16 @@ const routePolicies: Array<{
     policy: "publicForm",
   },
   {
+    method: "GET",
+    path: /^\/api\/v1\/public\/enrollment\/[^/]+$/,
+    policy: "publicEnrollmentRead",
+  },
+  {
+    method: "POST",
+    path: /^\/api\/v1\/public\/enrollment\/[^/]+\/(?:submissions|photo)$/,
+    policy: "publicEnrollmentWrite",
+  },
+  {
     method: "POST",
     path: /^\/api\/v1\/public\/(?:checkout\/[^/]+\/(?:session|reconcile)|mercadopago-checkout\/[^/]+\/(?:process|reconcile))$/,
     policy: "publicCheckout",
@@ -113,15 +125,14 @@ function policyFor(
   overrides: RateLimitOptions["policies"],
   limitMultiplier: number,
 ): RateLimitPolicy | undefined {
-  if (safeMethods.has(request.method)) {
-    return undefined;
-  }
-
   const path = request.url.split("?")[0] ?? request.url;
   const match = routePolicies.find(
     (entry) =>
       (!entry.method || entry.method === request.method) && entry.path.test(path),
   );
+  if (safeMethods.has(request.method) && !match) {
+    return undefined;
+  }
   const selected = match
     ? defaultPolicies[match.policy]
     : defaultPolicies.mutation;
@@ -130,7 +141,12 @@ function policyFor(
 }
 
 function pseudonymousClientKey(request: FastifyRequest, policyId: string): string {
-  const clientHash = createHash("sha256").update(request.ip).digest("hex");
+  const enrollmentToken = policyId.startsWith("public-enrollment-")
+    ? request.url.split("?")[0]?.split("/")[5] ?? ""
+    : "";
+  const clientHash = createHash("sha256")
+    .update(`${request.ip}:${enrollmentToken}`)
+    .digest("hex");
   return `${policyId}:${clientHash}`;
 }
 

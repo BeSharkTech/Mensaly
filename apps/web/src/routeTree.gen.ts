@@ -8,450 +8,476 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AlunosRouteImport } from './routes/alunos'
-import { Route as CadastroRouteImport } from './routes/cadastro'
-import { Route as CobrancasRouteImport } from './routes/cobrancas'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as DadosAdicionaisRouteImport } from './routes/dados-adicionais'
-import { Route as EnvioRouteImport } from './routes/envio'
-import { Route as EstoqueRouteImport } from './routes/estoque'
-import { Route as EventosRouteImport } from './routes/eventos'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as MensagensRouteImport } from './routes/mensagens'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as PlanosRouteImport } from './routes/planos'
-import { Route as RecuperarSenhaRouteImport } from './routes/recuperar-senha'
-import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as AdminFalhasRouteImport } from './routes/admin.falhas'
-import { Route as AdminOrganizacoesRouteImport } from './routes/admin.organizacoes'
-import { Route as AdminWebhooksRouteImport } from './routes/admin.webhooks'
-import { Route as FormularioBusinessIdRouteImport } from './routes/formulario.$businessId'
-import { Route as PagarTokenRouteImport } from './routes/pagar.$token'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as AlunosRouteImport } from "./routes/alunos";
+import { Route as CadastroRouteImport } from "./routes/cadastro";
+import { Route as CobrancasRouteImport } from "./routes/cobrancas";
+import { Route as ConfiguracoesRouteImport } from "./routes/configuracoes";
+import { Route as DadosAdicionaisRouteImport } from "./routes/dados-adicionais";
+import { Route as PermissoesCadastroRouteImport } from "./routes/permissoes-cadastro";
+import { Route as EnvioRouteImport } from "./routes/envio";
+import { Route as EstoqueRouteImport } from "./routes/estoque";
+import { Route as EventosRouteImport } from "./routes/eventos";
+import { Route as LoginRouteImport } from "./routes/login";
+import { Route as MensagensRouteImport } from "./routes/mensagens";
+import { Route as OnboardingRouteImport } from "./routes/onboarding";
+import { Route as PlanosRouteImport } from "./routes/planos";
+import { Route as RecuperarSenhaRouteImport } from "./routes/recuperar-senha";
+import { Route as RedefinirSenhaRouteImport } from "./routes/redefinir-senha";
+import { Route as AdminIndexRouteImport } from "./routes/admin.index";
+import { Route as AdminFalhasRouteImport } from "./routes/admin.falhas";
+import { Route as AdminOrganizacoesRouteImport } from "./routes/admin.organizacoes";
+import { Route as AdminWebhooksRouteImport } from "./routes/admin.webhooks";
+import { Route as FormularioBusinessIdRouteImport } from "./routes/formulario.$businessId";
+import { Route as CadastroAlunoTokenRouteImport } from "./routes/cadastro-aluno.$token";
+import { Route as PagarTokenRouteImport } from "./routes/pagar.$token";
 
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AlunosRoute = AlunosRouteImport.update({
-  id: '/alunos',
-  path: '/alunos',
+  id: "/alunos",
+  path: "/alunos",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const CadastroRoute = CadastroRouteImport.update({
-  id: '/cadastro',
-  path: '/cadastro',
+  id: "/cadastro",
+  path: "/cadastro",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const CobrancasRoute = CobrancasRouteImport.update({
-  id: '/cobrancas',
-  path: '/cobrancas',
+  id: "/cobrancas",
+  path: "/cobrancas",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
+  id: "/configuracoes",
+  path: "/configuracoes",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const DadosAdicionaisRoute = DadosAdicionaisRouteImport.update({
-  id: '/dados-adicionais',
-  path: '/dados-adicionais',
+  id: "/dados-adicionais",
+  path: "/dados-adicionais",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
+const PermissoesCadastroRoute = PermissoesCadastroRouteImport.update({
+  id: "/permissoes-cadastro",
+  path: "/permissoes-cadastro",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const EnvioRoute = EnvioRouteImport.update({
-  id: '/envio',
-  path: '/envio',
+  id: "/envio",
+  path: "/envio",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const EstoqueRoute = EstoqueRouteImport.update({
-  id: '/estoque',
-  path: '/estoque',
+  id: "/estoque",
+  path: "/estoque",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const EventosRoute = EventosRouteImport.update({
-  id: '/eventos',
-  path: '/eventos',
+  id: "/eventos",
+  path: "/eventos",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const MensagensRoute = MensagensRouteImport.update({
-  id: '/mensagens',
-  path: '/mensagens',
+  id: "/mensagens",
+  path: "/mensagens",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
+  id: "/onboarding",
+  path: "/onboarding",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const PlanosRoute = PlanosRouteImport.update({
-  id: '/planos',
-  path: '/planos',
+  id: "/planos",
+  path: "/planos",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const RecuperarSenhaRoute = RecuperarSenhaRouteImport.update({
-  id: '/recuperar-senha',
-  path: '/recuperar-senha',
+  id: "/recuperar-senha",
+  path: "/recuperar-senha",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
-  id: '/redefinir-senha',
-  path: '/redefinir-senha',
+  id: "/redefinir-senha",
+  path: "/redefinir-senha",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
+  id: "/admin/",
+  path: "/admin/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AdminFalhasRoute = AdminFalhasRouteImport.update({
-  id: '/admin/falhas',
-  path: '/admin/falhas',
+  id: "/admin/falhas",
+  path: "/admin/falhas",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AdminOrganizacoesRoute = AdminOrganizacoesRouteImport.update({
-  id: '/admin/organizacoes',
-  path: '/admin/organizacoes',
+  id: "/admin/organizacoes",
+  path: "/admin/organizacoes",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const AdminWebhooksRoute = AdminWebhooksRouteImport.update({
-  id: '/admin/webhooks',
-  path: '/admin/webhooks',
+  id: "/admin/webhooks",
+  path: "/admin/webhooks",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const FormularioBusinessIdRoute = FormularioBusinessIdRouteImport.update({
-  id: '/formulario/$businessId',
-  path: '/formulario/$businessId',
+  id: "/formulario/$businessId",
+  path: "/formulario/$businessId",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
+const CadastroAlunoTokenRoute = CadastroAlunoTokenRouteImport.update({
+  id: "/cadastro-aluno/$token",
+  path: "/cadastro-aluno/$token",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const PagarTokenRoute = PagarTokenRouteImport.update({
-  id: '/pagar/$token',
-  path: '/pagar/$token',
+  id: "/pagar/$token",
+  path: "/pagar/$token",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/alunos': typeof AlunosRoute
-  '/cadastro': typeof CadastroRoute
-  '/cobrancas': typeof CobrancasRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/dados-adicionais': typeof DadosAdicionaisRoute
-  '/envio': typeof EnvioRoute
-  '/estoque': typeof EstoqueRoute
-  '/eventos': typeof EventosRoute
-  '/login': typeof LoginRoute
-  '/mensagens': typeof MensagensRoute
-  '/onboarding': typeof OnboardingRoute
-  '/planos': typeof PlanosRoute
-  '/recuperar-senha': typeof RecuperarSenhaRoute
-  '/redefinir-senha': typeof RedefinirSenhaRoute
-  '/admin/falhas': typeof AdminFalhasRoute
-  '/admin/organizacoes': typeof AdminOrganizacoesRoute
-  '/admin/webhooks': typeof AdminWebhooksRoute
-  '/formulario/$businessId': typeof FormularioBusinessIdRoute
-  '/pagar/$token': typeof PagarTokenRoute
-  '/admin/': typeof AdminIndexRoute
+  "/": typeof IndexRoute;
+  "/alunos": typeof AlunosRoute;
+  "/cadastro": typeof CadastroRoute;
+  "/cobrancas": typeof CobrancasRoute;
+  "/configuracoes": typeof ConfiguracoesRoute;
+  "/dados-adicionais": typeof DadosAdicionaisRoute;
+  "/envio": typeof EnvioRoute;
+  "/estoque": typeof EstoqueRoute;
+  "/eventos": typeof EventosRoute;
+  "/login": typeof LoginRoute;
+  "/mensagens": typeof MensagensRoute;
+  "/onboarding": typeof OnboardingRoute;
+  "/planos": typeof PlanosRoute;
+  "/recuperar-senha": typeof RecuperarSenhaRoute;
+  "/redefinir-senha": typeof RedefinirSenhaRoute;
+  "/admin/falhas": typeof AdminFalhasRoute;
+  "/admin/organizacoes": typeof AdminOrganizacoesRoute;
+  "/admin/webhooks": typeof AdminWebhooksRoute;
+  "/formulario/$businessId": typeof FormularioBusinessIdRoute;
+  "/cadastro-aluno/$token": typeof CadastroAlunoTokenRoute;
+  "/pagar/$token": typeof PagarTokenRoute;
+  "/admin/": typeof AdminIndexRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/alunos': typeof AlunosRoute
-  '/cadastro': typeof CadastroRoute
-  '/cobrancas': typeof CobrancasRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/dados-adicionais': typeof DadosAdicionaisRoute
-  '/envio': typeof EnvioRoute
-  '/estoque': typeof EstoqueRoute
-  '/eventos': typeof EventosRoute
-  '/login': typeof LoginRoute
-  '/mensagens': typeof MensagensRoute
-  '/onboarding': typeof OnboardingRoute
-  '/planos': typeof PlanosRoute
-  '/recuperar-senha': typeof RecuperarSenhaRoute
-  '/redefinir-senha': typeof RedefinirSenhaRoute
-  '/admin/falhas': typeof AdminFalhasRoute
-  '/admin/organizacoes': typeof AdminOrganizacoesRoute
-  '/admin/webhooks': typeof AdminWebhooksRoute
-  '/formulario/$businessId': typeof FormularioBusinessIdRoute
-  '/pagar/$token': typeof PagarTokenRoute
-  '/admin': typeof AdminIndexRoute
+  "/": typeof IndexRoute;
+  "/alunos": typeof AlunosRoute;
+  "/cadastro": typeof CadastroRoute;
+  "/cobrancas": typeof CobrancasRoute;
+  "/configuracoes": typeof ConfiguracoesRoute;
+  "/dados-adicionais": typeof DadosAdicionaisRoute;
+  "/envio": typeof EnvioRoute;
+  "/estoque": typeof EstoqueRoute;
+  "/eventos": typeof EventosRoute;
+  "/login": typeof LoginRoute;
+  "/mensagens": typeof MensagensRoute;
+  "/onboarding": typeof OnboardingRoute;
+  "/planos": typeof PlanosRoute;
+  "/recuperar-senha": typeof RecuperarSenhaRoute;
+  "/redefinir-senha": typeof RedefinirSenhaRoute;
+  "/admin/falhas": typeof AdminFalhasRoute;
+  "/admin/organizacoes": typeof AdminOrganizacoesRoute;
+  "/admin/webhooks": typeof AdminWebhooksRoute;
+  "/formulario/$businessId": typeof FormularioBusinessIdRoute;
+  "/cadastro-aluno/$token": typeof CadastroAlunoTokenRoute;
+  "/pagar/$token": typeof PagarTokenRoute;
+  "/admin": typeof AdminIndexRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/alunos': typeof AlunosRoute
-  '/cadastro': typeof CadastroRoute
-  '/cobrancas': typeof CobrancasRoute
-  '/configuracoes': typeof ConfiguracoesRoute
-  '/dados-adicionais': typeof DadosAdicionaisRoute
-  '/envio': typeof EnvioRoute
-  '/estoque': typeof EstoqueRoute
-  '/eventos': typeof EventosRoute
-  '/login': typeof LoginRoute
-  '/mensagens': typeof MensagensRoute
-  '/onboarding': typeof OnboardingRoute
-  '/planos': typeof PlanosRoute
-  '/recuperar-senha': typeof RecuperarSenhaRoute
-  '/redefinir-senha': typeof RedefinirSenhaRoute
-  '/admin/falhas': typeof AdminFalhasRoute
-  '/admin/organizacoes': typeof AdminOrganizacoesRoute
-  '/admin/webhooks': typeof AdminWebhooksRoute
-  '/formulario/$businessId': typeof FormularioBusinessIdRoute
-  '/pagar/$token': typeof PagarTokenRoute
-  '/admin/': typeof AdminIndexRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/alunos": typeof AlunosRoute;
+  "/cadastro": typeof CadastroRoute;
+  "/cobrancas": typeof CobrancasRoute;
+  "/configuracoes": typeof ConfiguracoesRoute;
+  "/dados-adicionais": typeof DadosAdicionaisRoute;
+  "/envio": typeof EnvioRoute;
+  "/estoque": typeof EstoqueRoute;
+  "/eventos": typeof EventosRoute;
+  "/login": typeof LoginRoute;
+  "/mensagens": typeof MensagensRoute;
+  "/onboarding": typeof OnboardingRoute;
+  "/planos": typeof PlanosRoute;
+  "/recuperar-senha": typeof RecuperarSenhaRoute;
+  "/redefinir-senha": typeof RedefinirSenhaRoute;
+  "/admin/falhas": typeof AdminFalhasRoute;
+  "/admin/organizacoes": typeof AdminOrganizacoesRoute;
+  "/admin/webhooks": typeof AdminWebhooksRoute;
+  "/formulario/$businessId": typeof FormularioBusinessIdRoute;
+  "/cadastro-aluno/$token": typeof CadastroAlunoTokenRoute;
+  "/pagar/$token": typeof PagarTokenRoute;
+  "/admin/": typeof AdminIndexRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
-    | '/'
-    | '/alunos'
-    | '/cadastro'
-    | '/cobrancas'
-    | '/configuracoes'
-    | '/dados-adicionais'
-    | '/envio'
-    | '/estoque'
-    | '/eventos'
-    | '/login'
-    | '/mensagens'
-    | '/onboarding'
-    | '/planos'
-    | '/recuperar-senha'
-    | '/redefinir-senha'
-    | '/admin/falhas'
-    | '/admin/organizacoes'
-    | '/admin/webhooks'
-    | '/formulario/$businessId'
-    | '/pagar/$token'
-    | '/admin/'
-  fileRoutesByTo: FileRoutesByTo
+    | "/"
+    | "/alunos"
+    | "/cadastro"
+    | "/cobrancas"
+    | "/configuracoes"
+    | "/dados-adicionais"
+    | "/envio"
+    | "/estoque"
+    | "/eventos"
+    | "/login"
+    | "/mensagens"
+    | "/onboarding"
+    | "/planos"
+    | "/recuperar-senha"
+    | "/redefinir-senha"
+    | "/admin/falhas"
+    | "/admin/organizacoes"
+    | "/admin/webhooks"
+    | "/formulario/$businessId"
+    | "/cadastro-aluno/$token"
+    | "/pagar/$token"
+    | "/admin/";
+  fileRoutesByTo: FileRoutesByTo;
   to:
-    | '/'
-    | '/alunos'
-    | '/cadastro'
-    | '/cobrancas'
-    | '/configuracoes'
-    | '/dados-adicionais'
-    | '/envio'
-    | '/estoque'
-    | '/eventos'
-    | '/login'
-    | '/mensagens'
-    | '/onboarding'
-    | '/planos'
-    | '/recuperar-senha'
-    | '/redefinir-senha'
-    | '/admin/falhas'
-    | '/admin/organizacoes'
-    | '/admin/webhooks'
-    | '/formulario/$businessId'
-    | '/pagar/$token'
-    | '/admin'
+    | "/"
+    | "/alunos"
+    | "/cadastro"
+    | "/cobrancas"
+    | "/configuracoes"
+    | "/dados-adicionais"
+    | "/envio"
+    | "/estoque"
+    | "/eventos"
+    | "/login"
+    | "/mensagens"
+    | "/onboarding"
+    | "/planos"
+    | "/recuperar-senha"
+    | "/redefinir-senha"
+    | "/admin/falhas"
+    | "/admin/organizacoes"
+    | "/admin/webhooks"
+    | "/formulario/$businessId"
+    | "/cadastro-aluno/$token"
+    | "/pagar/$token"
+    | "/admin";
   id:
-    | '__root__'
-    | '/'
-    | '/alunos'
-    | '/cadastro'
-    | '/cobrancas'
-    | '/configuracoes'
-    | '/dados-adicionais'
-    | '/envio'
-    | '/estoque'
-    | '/eventos'
-    | '/login'
-    | '/mensagens'
-    | '/onboarding'
-    | '/planos'
-    | '/recuperar-senha'
-    | '/redefinir-senha'
-    | '/admin/falhas'
-    | '/admin/organizacoes'
-    | '/admin/webhooks'
-    | '/formulario/$businessId'
-    | '/pagar/$token'
-    | '/admin/'
-  fileRoutesById: FileRoutesById
+    | "__root__"
+    | "/"
+    | "/alunos"
+    | "/cadastro"
+    | "/cobrancas"
+    | "/configuracoes"
+    | "/dados-adicionais"
+    | "/envio"
+    | "/estoque"
+    | "/eventos"
+    | "/login"
+    | "/mensagens"
+    | "/onboarding"
+    | "/planos"
+    | "/recuperar-senha"
+    | "/redefinir-senha"
+    | "/admin/falhas"
+    | "/admin/organizacoes"
+    | "/admin/webhooks"
+    | "/formulario/$businessId"
+    | "/cadastro-aluno/$token"
+    | "/pagar/$token"
+    | "/admin/";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AlunosRoute: typeof AlunosRoute
-  CadastroRoute: typeof CadastroRoute
-  CobrancasRoute: typeof CobrancasRoute
-  ConfiguracoesRoute: typeof ConfiguracoesRoute
-  DadosAdicionaisRoute: typeof DadosAdicionaisRoute
-  EnvioRoute: typeof EnvioRoute
-  EstoqueRoute: typeof EstoqueRoute
-  EventosRoute: typeof EventosRoute
-  LoginRoute: typeof LoginRoute
-  MensagensRoute: typeof MensagensRoute
-  OnboardingRoute: typeof OnboardingRoute
-  PlanosRoute: typeof PlanosRoute
-  RecuperarSenhaRoute: typeof RecuperarSenhaRoute
-  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
-  AdminFalhasRoute: typeof AdminFalhasRoute
-  AdminOrganizacoesRoute: typeof AdminOrganizacoesRoute
-  AdminWebhooksRoute: typeof AdminWebhooksRoute
-  FormularioBusinessIdRoute: typeof FormularioBusinessIdRoute
-  PagarTokenRoute: typeof PagarTokenRoute
-  AdminIndexRoute: typeof AdminIndexRoute
+  IndexRoute: typeof IndexRoute;
+  AlunosRoute: typeof AlunosRoute;
+  CadastroRoute: typeof CadastroRoute;
+  CobrancasRoute: typeof CobrancasRoute;
+  ConfiguracoesRoute: typeof ConfiguracoesRoute;
+  DadosAdicionaisRoute: typeof DadosAdicionaisRoute;
+  EnvioRoute: typeof EnvioRoute;
+  EstoqueRoute: typeof EstoqueRoute;
+  EventosRoute: typeof EventosRoute;
+  LoginRoute: typeof LoginRoute;
+  MensagensRoute: typeof MensagensRoute;
+  OnboardingRoute: typeof OnboardingRoute;
+  PlanosRoute: typeof PlanosRoute;
+  RecuperarSenhaRoute: typeof RecuperarSenhaRoute;
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute;
+  AdminFalhasRoute: typeof AdminFalhasRoute;
+  AdminOrganizacoesRoute: typeof AdminOrganizacoesRoute;
+  AdminWebhooksRoute: typeof AdminWebhooksRoute;
+  FormularioBusinessIdRoute: typeof FormularioBusinessIdRoute;
+  CadastroAlunoTokenRoute: typeof CadastroAlunoTokenRoute;
+  PagarTokenRoute: typeof PagarTokenRoute;
+  AdminIndexRoute: typeof AdminIndexRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/alunos': {
-      id: '/alunos'
-      path: '/alunos'
-      fullPath: '/alunos'
-      preLoaderRoute: typeof AlunosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro': {
-      id: '/cadastro'
-      path: '/cadastro'
-      fullPath: '/cadastro'
-      preLoaderRoute: typeof CadastroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cobrancas': {
-      id: '/cobrancas'
-      path: '/cobrancas'
-      fullPath: '/cobrancas'
-      preLoaderRoute: typeof CobrancasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dados-adicionais': {
-      id: '/dados-adicionais'
-      path: '/dados-adicionais'
-      fullPath: '/dados-adicionais'
-      preLoaderRoute: typeof DadosAdicionaisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/envio': {
-      id: '/envio'
-      path: '/envio'
-      fullPath: '/envio'
-      preLoaderRoute: typeof EnvioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/estoque': {
-      id: '/estoque'
-      path: '/estoque'
-      fullPath: '/estoque'
-      preLoaderRoute: typeof EstoqueRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/eventos': {
-      id: '/eventos'
-      path: '/eventos'
-      fullPath: '/eventos'
-      preLoaderRoute: typeof EventosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mensagens': {
-      id: '/mensagens'
-      path: '/mensagens'
-      fullPath: '/mensagens'
-      preLoaderRoute: typeof MensagensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/planos': {
-      id: '/planos'
-      path: '/planos'
-      fullPath: '/planos'
-      preLoaderRoute: typeof PlanosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recuperar-senha': {
-      id: '/recuperar-senha'
-      path: '/recuperar-senha'
-      fullPath: '/recuperar-senha'
-      preLoaderRoute: typeof RecuperarSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/redefinir-senha': {
-      id: '/redefinir-senha'
-      path: '/redefinir-senha'
-      fullPath: '/redefinir-senha'
-      preLoaderRoute: typeof RedefinirSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/admin'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/falhas': {
-      id: '/admin/falhas'
-      path: '/admin/falhas'
-      fullPath: '/admin/falhas'
-      preLoaderRoute: typeof AdminFalhasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/organizacoes': {
-      id: '/admin/organizacoes'
-      path: '/admin/organizacoes'
-      fullPath: '/admin/organizacoes'
-      preLoaderRoute: typeof AdminOrganizacoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/webhooks': {
-      id: '/admin/webhooks'
-      path: '/admin/webhooks'
-      fullPath: '/admin/webhooks'
-      preLoaderRoute: typeof AdminWebhooksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/formulario/$businessId': {
-      id: '/formulario/$businessId'
-      path: '/formulario/$businessId'
-      fullPath: '/formulario/$businessId'
-      preLoaderRoute: typeof FormularioBusinessIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pagar/$token': {
-      id: '/pagar/$token'
-      path: '/pagar/$token'
-      fullPath: '/pagar/$token'
-      preLoaderRoute: typeof PagarTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/alunos": {
+      id: "/alunos";
+      path: "/alunos";
+      fullPath: "/alunos";
+      preLoaderRoute: typeof AlunosRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/cadastro": {
+      id: "/cadastro";
+      path: "/cadastro";
+      fullPath: "/cadastro";
+      preLoaderRoute: typeof CadastroRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/cobrancas": {
+      id: "/cobrancas";
+      path: "/cobrancas";
+      fullPath: "/cobrancas";
+      preLoaderRoute: typeof CobrancasRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/configuracoes": {
+      id: "/configuracoes";
+      path: "/configuracoes";
+      fullPath: "/configuracoes";
+      preLoaderRoute: typeof ConfiguracoesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/dados-adicionais": {
+      id: "/dados-adicionais";
+      path: "/dados-adicionais";
+      fullPath: "/dados-adicionais";
+      preLoaderRoute: typeof DadosAdicionaisRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/envio": {
+      id: "/envio";
+      path: "/envio";
+      fullPath: "/envio";
+      preLoaderRoute: typeof EnvioRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/estoque": {
+      id: "/estoque";
+      path: "/estoque";
+      fullPath: "/estoque";
+      preLoaderRoute: typeof EstoqueRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/eventos": {
+      id: "/eventos";
+      path: "/eventos";
+      fullPath: "/eventos";
+      preLoaderRoute: typeof EventosRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/login": {
+      id: "/login";
+      path: "/login";
+      fullPath: "/login";
+      preLoaderRoute: typeof LoginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/mensagens": {
+      id: "/mensagens";
+      path: "/mensagens";
+      fullPath: "/mensagens";
+      preLoaderRoute: typeof MensagensRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/onboarding": {
+      id: "/onboarding";
+      path: "/onboarding";
+      fullPath: "/onboarding";
+      preLoaderRoute: typeof OnboardingRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/planos": {
+      id: "/planos";
+      path: "/planos";
+      fullPath: "/planos";
+      preLoaderRoute: typeof PlanosRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/recuperar-senha": {
+      id: "/recuperar-senha";
+      path: "/recuperar-senha";
+      fullPath: "/recuperar-senha";
+      preLoaderRoute: typeof RecuperarSenhaRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/redefinir-senha": {
+      id: "/redefinir-senha";
+      path: "/redefinir-senha";
+      fullPath: "/redefinir-senha";
+      preLoaderRoute: typeof RedefinirSenhaRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/": {
+      id: "/admin/";
+      path: "/admin";
+      fullPath: "/admin/";
+      preLoaderRoute: typeof AdminIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/falhas": {
+      id: "/admin/falhas";
+      path: "/admin/falhas";
+      fullPath: "/admin/falhas";
+      preLoaderRoute: typeof AdminFalhasRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/organizacoes": {
+      id: "/admin/organizacoes";
+      path: "/admin/organizacoes";
+      fullPath: "/admin/organizacoes";
+      preLoaderRoute: typeof AdminOrganizacoesRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/admin/webhooks": {
+      id: "/admin/webhooks";
+      path: "/admin/webhooks";
+      fullPath: "/admin/webhooks";
+      preLoaderRoute: typeof AdminWebhooksRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/formulario/$businessId": {
+      id: "/formulario/$businessId";
+      path: "/formulario/$businessId";
+      fullPath: "/formulario/$businessId";
+      preLoaderRoute: typeof FormularioBusinessIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/cadastro-aluno/$token": {
+      id: "/cadastro-aluno/$token";
+      path: "/cadastro-aluno/$token";
+      fullPath: "/cadastro-aluno/$token";
+      preLoaderRoute: typeof CadastroAlunoTokenRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/pagar/$token": {
+      id: "/pagar/$token";
+      path: "/pagar/$token";
+      fullPath: "/pagar/$token";
+      preLoaderRoute: typeof PagarTokenRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
@@ -462,6 +488,7 @@ const rootRouteChildren: RootRouteChildren = {
   CobrancasRoute: CobrancasRoute,
   ConfiguracoesRoute: ConfiguracoesRoute,
   DadosAdicionaisRoute: DadosAdicionaisRoute,
+  PermissoesCadastroRoute: PermissoesCadastroRoute,
   EnvioRoute: EnvioRoute,
   EstoqueRoute: EstoqueRoute,
   EventosRoute: EventosRoute,
@@ -475,9 +502,10 @@ const rootRouteChildren: RootRouteChildren = {
   AdminOrganizacoesRoute: AdminOrganizacoesRoute,
   AdminWebhooksRoute: AdminWebhooksRoute,
   FormularioBusinessIdRoute: FormularioBusinessIdRoute,
+  CadastroAlunoTokenRoute: CadastroAlunoTokenRoute,
   PagarTokenRoute: PagarTokenRoute,
   AdminIndexRoute: AdminIndexRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();

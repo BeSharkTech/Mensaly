@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import logo from "@/assets/mensaly-logo.png";
 import { Button } from "@/components/ui/button";
-import {
-  requestEmailVerification,
-  verifyEmail,
-} from "@/lib/auth";
+import { requestEmailVerification, verifyEmail } from "@/lib/auth";
 
 export const Route = createFileRoute("/verificar-email")({
   component: VerifyEmailPage,
@@ -73,7 +70,8 @@ function VerifyEmailPage() {
         {state === "verified" ? (
           <>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sua conta está ativa. Agora você pode entrar e configurar o negócio.
+              Sua conta está ativa. Agora você pode entrar e configurar o
+              negócio.
             </p>
             <Button asChild className="mt-6 w-full">
               <Link to="/login">Entrar</Link>
@@ -86,13 +84,15 @@ function VerifyEmailPage() {
         ) : (
           <>
             <p className="mt-2 text-sm text-muted-foreground">
-              Enviamos um link seguro para {email || "o e-mail cadastrado"}.
-              Ele expira em 24 horas.
+              Enviamos um link seguro para {email || "o e-mail cadastrado"}. Ele
+              expira em 24 horas.
             </p>
             {message ? (
               <p
                 className={`mt-4 text-sm ${
-                  state === "error" ? "text-destructive" : "text-muted-foreground"
+                  state === "error"
+                    ? "text-destructive"
+                    : "text-muted-foreground"
                 }`}
               >
                 {message}
@@ -109,7 +109,10 @@ function VerifyEmailPage() {
               </Button>
             ) : null}
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              <Link to="/login" className="font-medium text-primary hover:underline">
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
                 Voltar para o login
               </Link>
             </p>

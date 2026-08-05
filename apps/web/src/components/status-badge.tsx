@@ -56,7 +56,13 @@ const map: Record<string, { label: string; tone: Tone }> = {
   SYSTEM: { label: "Sistema", tone: "neutral" },
 };
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
+export function StatusBadge({
+  status,
+  className,
+}: {
+  status: string;
+  className?: string;
+}) {
   const entry = map[status] ?? { label: status, tone: "neutral" as Tone };
   return (
     <span

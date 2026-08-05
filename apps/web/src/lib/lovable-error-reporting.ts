@@ -1,5 +1,6 @@
 type LovableErrorOptions = {
-  mechanism?: "manual" | "onerror" | "unhandledrejection" | "react_error_boundary";
+  mechanism?:
+    "manual" | "onerror" | "unhandledrejection" | "react_error_boundary";
   handled?: boolean;
   severity?: "error" | "warning" | "info";
 };
@@ -23,13 +24,24 @@ declare global {
   }
 }
 
-export function reportLovableError(error: unknown, context: Record<string, unknown> = {}) {
+export function safeTelemetryPath(pathname: string): string {
+  return pathname.replace(
+    /^(\/cadastro-aluno\/)[^/]+/,
+    "$1[REDACTED]",
+  );
+}
+
+export function reportLovableError(
+  error: unknown,
+  context: Record<string, unknown> = {},
+) {
   if (typeof window === "undefined") return;
+  const safePath = safeTelemetryPath(window.location.pathname);
   window.__lovableEvents?.captureException?.(
     error,
     {
       source: "react_error_boundary",
-      route: window.location.pathname,
+      route: safePath,
       ...context,
     },
     {
@@ -52,6 +64,6 @@ export function reportLovableError(error: unknown, context: Record<string, unkno
   window.__lovableReportRuntimeError?.({
     message,
     stack: error instanceof Error ? error.stack : undefined,
-    filename: window.location.pathname,
+    filename: safePath,
   });
 }

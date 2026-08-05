@@ -33,8 +33,9 @@ export const updateEventSchema = eventBaseSchema.partial().refine((value) => Obj
 const customFieldBaseSchema = z.object({
   label: z.string().trim().min(1).max(60),
   fieldType: z.enum(["TEXT", "NUMBER", "DATE", "SELECT", "BOOLEAN"]),
+  subject: z.enum(["STUDENT", "GUARDIAN"]).default("STUDENT"),
   options: z.array(z.string().trim().min(1).max(60)).max(100).default([]),
-  required: z.boolean().default(false),
+  required: z.boolean().default(true),
   sortOrder: z.number().int().nonnegative().max(10_000).default(0),
   active: z.boolean().default(true),
 }).strict();

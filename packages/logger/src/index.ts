@@ -20,6 +20,7 @@ const options: pino.LoggerOptions = {
       "*.email",
       "*.phone",
       "*.cpf",
+      "*.rg",
       "*.taxId",
       "*.recipientPhoneSnapshot",
       "*.externalReference",
@@ -30,13 +31,16 @@ const options: pino.LoggerOptions = {
       "*.*.email",
       "*.*.phone",
       "*.*.cpf",
+      "*.*.rg",
       "*.*.taxId",
     ],
     censor: "[REDACTED]",
   },
 };
 
-export function createLogger(destination?: pino.DestinationStream): pino.Logger {
+export function createLogger(
+  destination?: pino.DestinationStream,
+): pino.Logger {
   return pino(options, destination);
 }
 

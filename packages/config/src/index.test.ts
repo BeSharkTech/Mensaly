@@ -97,6 +97,7 @@ describe("environment configuration", () => {
       RESEND_FROM_EMAIL: "noreply@example.test",
       RESEND_WEBHOOK_SECRET: "whsec_test_webhook_secret",
       EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
+      PUBLIC_ENROLLMENT_LINK_SECRET: Buffer.alloc(32, 5).toString("base64"),
     });
     assert.equal(environment.FILE_STORAGE_DRIVER, "s3");
     assert.equal(environment.S3_FORCE_PATH_STYLE, false);

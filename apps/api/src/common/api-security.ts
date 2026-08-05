@@ -8,7 +8,13 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 export function registerApiSecurity(
   fastify: FastifyInstance,
   allowedOrigins: string[],
+  options: { allowLocalDevelopmentOrigins?: boolean } = {},
 ): void {
+  const localDevelopmentOrigins = new Set([
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ]);
   fastify.addHook("onRequest", async (request, reply) => {
     if (
       SAFE_METHODS.has(request.method) ||
@@ -21,7 +27,9 @@ export function registerApiSecurity(
     const originAllowed =
       !origin ||
       allowedOrigins.includes("*") ||
-      allowedOrigins.includes(origin);
+      allowedOrigins.includes(origin) ||
+      (options.allowLocalDevelopmentOrigins === true &&
+        localDevelopmentOrigins.has(origin));
 
     if (originAllowed) {
       return;

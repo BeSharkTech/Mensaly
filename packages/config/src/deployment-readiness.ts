@@ -161,6 +161,7 @@ export function validateDeploymentReadiness(
     "MERCADOPAGO_WEBHOOK_SECRET",
     "PAYMENT_PROVIDER_ENCRYPTION_KEY",
     "PAYMENT_LINK_SECRET",
+    "PUBLIC_ENROLLMENT_LINK_SECRET",
   ] as const) {
     requireSecret(errors, field, environment[field]);
   }
@@ -271,6 +272,7 @@ export function validateSingleVpsReadiness(
     "MERCADOPAGO_WEBHOOK_SECRET",
     "PAYMENT_PROVIDER_ENCRYPTION_KEY",
     "PAYMENT_LINK_SECRET",
+    "PUBLIC_ENROLLMENT_LINK_SECRET",
   ] as const) {
     if (!environment[field]) issue(errors, field, "is required");
     else requireSecret(errors, field, environment[field]);
@@ -291,9 +293,10 @@ export function validateSingleVpsReadiness(
     environment.EMAIL_ENCRYPTION_KEY,
     environment.PAYMENT_PROVIDER_ENCRYPTION_KEY,
     environment.PAYMENT_LINK_SECRET,
+    environment.PUBLIC_ENROLLMENT_LINK_SECRET,
   ].filter((value): value is string => Boolean(value));
   if (new Set(encryptionValues).size !== encryptionValues.length) {
-    issue(errors, "ENCRYPTION_KEYS", "EMAIL_ENCRYPTION_KEY, PAYMENT_PROVIDER_ENCRYPTION_KEY and PAYMENT_LINK_SECRET must be different");
+    issue(errors, "ENCRYPTION_KEYS", "EMAIL_ENCRYPTION_KEY, PAYMENT_PROVIDER_ENCRYPTION_KEY, PAYMENT_LINK_SECRET and PUBLIC_ENROLLMENT_LINK_SECRET must be different");
   }
 
   if (environment.MERCADOPAGO_MODE !== "live") {

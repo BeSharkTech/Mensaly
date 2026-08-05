@@ -6,6 +6,8 @@ import * as adminOrganizations from "./admin.organizacoes";
 import * as adminWebhooks from "./admin.webhooks";
 import * as students from "./alunos";
 import * as registration from "./cadastro";
+import * as publicEnrollment from "./cadastro-aluno.$token";
+import * as enrollmentPermissions from "./permissoes-cadastro";
 import * as charges from "./cobrancas";
 import * as settings from "./configuracoes";
 import * as customData from "./dados-adicionais";
@@ -30,6 +32,8 @@ const routeModules = [
   adminWebhooks,
   students,
   registration,
+  publicEnrollment,
+  enrollmentPermissions,
   charges,
   settings,
   customData,
@@ -50,7 +54,7 @@ const routeModules = [
 
 describe("Lovable route modules", () => {
   it("imports every preserved screen without a module-level crash", () => {
-    expect(routeModules).toHaveLength(22);
+    expect(routeModules).toHaveLength(24);
     routeModules.forEach((module) => expect(module).toHaveProperty("Route"));
   });
 });

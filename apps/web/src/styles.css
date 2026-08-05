@@ -161,7 +161,6 @@
   --sidebar-ring: oklch(0.63 0.21 267);
 }
 
-
 @layer base {
   * {
     border-color: var(--color-border);

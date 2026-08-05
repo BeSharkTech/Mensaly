@@ -74,7 +74,10 @@ export function StripeEmbeddedOnboarding({
         className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
       >
         <div className="flex gap-3">
-          <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+          <AlertCircle
+            className="mt-0.5 size-5 shrink-0 text-destructive"
+            aria-hidden="true"
+          />
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
               Não foi possível carregar a configuração de recebimentos
@@ -89,7 +92,8 @@ export function StripeEmbeddedOnboarding({
               className="mt-3"
               onClick={() => void onRetry()}
             >
-              <RotateCw className="size-4" aria-hidden="true" /> Tentar novamente
+              <RotateCw className="size-4" aria-hidden="true" /> Tentar
+              novamente
             </Button>
           </div>
         </div>

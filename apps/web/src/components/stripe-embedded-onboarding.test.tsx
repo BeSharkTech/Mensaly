@@ -47,13 +47,24 @@ describe("StripeEmbeddedOnboarding", () => {
     initialize.mockReset();
     apiRequest.mockReset();
     onboardingProps.current = undefined;
-    initialize.mockReturnValue({ create: vi.fn(), update: vi.fn(), logout: vi.fn() });
+    initialize.mockReturnValue({
+      create: vi.fn(),
+      update: vi.fn(),
+      logout: vi.fn(),
+    });
   });
 
   it("uses the initial Account Session once and requests a fresh secret on refresh", async () => {
-    apiRequest.mockResolvedValue({ ...session, clientSecret: "as_test_refreshed" });
+    apiRequest.mockResolvedValue({
+      ...session,
+      clientSecret: "as_test_refreshed",
+    });
     render(
-      <StripeEmbeddedOnboarding session={session} onExit={vi.fn()} onRetry={vi.fn()} />,
+      <StripeEmbeddedOnboarding
+        session={session}
+        onExit={vi.fn()}
+        onRetry={vi.fn()}
+      />,
     );
 
     const options = initialize.mock.calls[0]?.[0] as {
@@ -62,7 +73,9 @@ describe("StripeEmbeddedOnboarding", () => {
     };
     expect(options.publishableKey).toBe("pk_test_mensaly");
     await expect(options.fetchClientSecret()).resolves.toBe("as_test_initial");
-    await expect(options.fetchClientSecret()).resolves.toBe("as_test_refreshed");
+    await expect(options.fetchClientSecret()).resolves.toBe(
+      "as_test_refreshed",
+    );
     expect(apiRequest).toHaveBeenCalledTimes(1);
     expect(apiRequest).toHaveBeenCalledWith(
       "/payment-integrations/stripe/onboarding-session",
@@ -75,10 +88,16 @@ describe("StripeEmbeddedOnboarding", () => {
     const onExit = vi.fn();
     const onRetry = vi.fn();
     render(
-      <StripeEmbeddedOnboarding session={session} onExit={onExit} onRetry={onRetry} />,
+      <StripeEmbeddedOnboarding
+        session={session}
+        onExit={onExit}
+        onRetry={onRetry}
+      />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Preparando formulário seguro");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Preparando formulário seguro",
+    );
     await user.click(screen.getByRole("button", { name: "carregado" }));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "sair" }));
@@ -94,11 +113,16 @@ describe("StripeEmbeddedOnboarding", () => {
 
   it("collects only current requirements and hides the prefilled description", () => {
     render(
-      <StripeEmbeddedOnboarding session={session} onExit={vi.fn()} onRetry={vi.fn()} />,
+      <StripeEmbeddedOnboarding
+        session={session}
+        onExit={vi.fn()}
+        onRetry={vi.fn()}
+      />,
     );
 
     expect(
-      (onboardingProps.current as { collectionOptions: unknown }).collectionOptions,
+      (onboardingProps.current as { collectionOptions: unknown })
+        .collectionOptions,
     ).toEqual({
       fields: "currently_due",
       futureRequirements: "omit",

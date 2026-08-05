@@ -16,6 +16,8 @@ import type { AuthenticatedContext } from "../authorization/authorization-contex
 import { PrismaService } from "../infrastructure/database/prisma.service";
 import type {
   ChargeListQuery,
+  CreateBillingRuleInput,
+  CreateManualChargeInput,
   CreateManualPaymentInput,
   GenerateChargesInput,
 } from "./financial.dto";
@@ -120,12 +122,18 @@ export class FinancialService {
           dueDay: number;
         }>
       >(Prisma.sql`
-        SELECT "id", "amountCents", "discountCents", "dueDay"
-        FROM "enrollment"
-        WHERE "organizationId" = ${orgId}::uuid
-          AND "status" = ${EnrollmentStatus.ACTIVE}::"EnrollmentStatus"
-          AND "startDate" <= ${monthEnd(referenceMonth)}
-          AND ("endDate" IS NULL OR "endDate" >= ${referenceMonth})
+        SELECT e."id", e."amountCents", e."discountCents", e."dueDay"
+        FROM "enrollment" e
+        INNER JOIN "student" s
+          ON s."organizationId" = e."organizationId" AND s."id" = e."studentId"
+        INNER JOIN "plan" p
+          ON p."organizationId" = e."organizationId" AND p."id" = e."planId"
+        WHERE e."organizationId" = ${orgId}::uuid
+          AND e."status" = ${EnrollmentStatus.ACTIVE}::"EnrollmentStatus"
+          AND s."status" = 'ACTIVE'::"StudentStatus"
+          AND p."status" = 'ACTIVE'::"PlanStatus"
+          AND e."startDate" <= ${monthEnd(referenceMonth)}
+          AND (e."endDate" IS NULL OR e."endDate" >= ${referenceMonth})
         FOR SHARE
       `);
       const generated = [];
@@ -133,15 +141,16 @@ export class FinancialService {
         generated.push(
           await tx.charge.upsert({
             where: {
-              organizationId_enrollmentId_referenceMonth: {
+              organizationId_enrollmentId_cycleKey: {
                 organizationId: orgId,
                 enrollmentId: enrollment.id,
-                referenceMonth,
+                cycleKey: `legacy:${input.referenceMonth}`,
               },
             },
             create: {
               organizationId: orgId,
               enrollmentId: enrollment.id,
+              cycleKey: `legacy:${input.referenceMonth}`,
               referenceMonth,
               dueDate: dueDate(referenceMonth, enrollment.dueDay),
               amountCents: enrollment.amountCents,
@@ -179,6 +188,270 @@ export class FinancialService {
     };
   }
 
+  async createManualCharge(
+    auth: AuthenticatedContext,
+    input: CreateManualChargeInput,
+    metadata: FinancialAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    const referenceMonth = monthStart(input.referenceMonth);
+    return this.prisma.client.$transaction(async (tx) => {
+      const enrollment = await tx.enrollment.findFirst({
+        where: {
+          organizationId: orgId,
+          studentId: input.studentId,
+          status: EnrollmentStatus.ACTIVE,
+          startDate: { lte: monthEnd(referenceMonth) },
+          OR: [{ endDate: null }, { endDate: { gte: referenceMonth } }],
+          student: { status: "ACTIVE" },
+          plan: { status: "ACTIVE" },
+        },
+        select: {
+          id: true,
+          amountCents: true,
+          discountCents: true,
+          dueDay: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!enrollment) {
+        throw new NotFoundException({
+          code: "ACTIVE_ENROLLMENT_NOT_FOUND",
+          message: "The selected student has no active enrollment",
+        });
+      }
+
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`charge-generation:${orgId}:${input.referenceMonth}`}))`,
+      );
+      const existing = await tx.charge.findUnique({
+        where: {
+          organizationId_enrollmentId_cycleKey: {
+            organizationId: orgId,
+            enrollmentId: enrollment.id,
+            cycleKey: `legacy:${input.referenceMonth}`,
+          },
+        },
+      });
+      if (existing) return { charge: existing, created: false };
+
+      const charge = await tx.charge.create({
+        data: {
+          organizationId: orgId,
+          enrollmentId: enrollment.id,
+          cycleKey: `legacy:${input.referenceMonth}`,
+          referenceMonth,
+          dueDate: dueDate(referenceMonth, enrollment.dueDay),
+          amountCents: enrollment.amountCents,
+          discountCents: enrollment.discountCents,
+          finalAmountCents: enrollment.amountCents - enrollment.discountCents,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: orgId,
+          actorUserId: auth.userId,
+          actorType: AuditActorType.USER,
+          action: "charge.manual_created",
+          entityType: "Charge",
+          entityId: charge.id,
+          after: { studentId: input.studentId, enrollmentId: enrollment.id, referenceMonth: input.referenceMonth },
+          ...auditMetadata(metadata),
+        },
+      });
+      return { charge, created: true };
+    });
+  }
+
+  async billingRules(auth: AuthenticatedContext) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.billingRule.findMany({
+      where: { organizationId: orgId },
+      include: {
+        targets: {
+          include: { student: { select: { id: true, name: true } } },
+          orderBy: { student: { name: "asc" } },
+        },
+        _count: { select: { charges: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async createBillingRule(
+    auth: AuthenticatedContext,
+    input: CreateBillingRuleInput,
+    idempotencyKey: string,
+    metadata: FinancialAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    const studentIds = [...new Set(input.studentIds)];
+    return this.prisma.client.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`billing-rule:${orgId}:${idempotencyKey}`}))`);
+      const existing = await tx.billingRule.findUnique({
+        where: { organizationId_idempotencyKey: { organizationId: orgId, idempotencyKey } },
+        include: { targets: { select: { studentId: true } } },
+      });
+      if (existing) {
+        const existingStudents = existing.targets.map(({ studentId }) => studentId).sort();
+        const requestedStudents = [...studentIds].sort();
+        const sameRequest =
+          existing.name === input.name &&
+          existing.sourceType === input.sourceType &&
+          existing.sourceId === input.sourceId &&
+          existing.frequency === input.frequency &&
+          existing.opensOn.toISOString().slice(0, 10) === input.opensOn &&
+          existing.expiresOn.toISOString().slice(0, 10) === input.expiresOn &&
+          (existing.repeatUntil?.toISOString().slice(0, 10) ?? null) === (input.repeatUntil ?? null) &&
+          existingStudents.length === requestedStudents.length &&
+          existingStudents.every((studentId, index) => studentId === requestedStudents[index]);
+        if (!sameRequest) {
+          throw new ConflictException({
+            code: "IDEMPOTENCY_KEY_REUSED",
+            message: "The idempotency key was already used with different billing rule data",
+          });
+        }
+        return { rule: existing, chargesCreated: 0, replayed: true };
+      }
+      const source = input.sourceType === "PLAN"
+        ? await tx.plan.findFirst({ where: { id: input.sourceId, organizationId: orgId, status: "ACTIVE" }, select: { id: true, name: true, amountCents: true } })
+        : input.sourceType === "PRODUCT"
+          ? await tx.product.findFirst({ where: { id: input.sourceId, organizationId: orgId, status: "ACTIVE" }, select: { id: true, name: true, priceCents: true } })
+          : await tx.event.findFirst({ where: { id: input.sourceId, organizationId: orgId, status: "ACTIVE" }, select: { id: true, name: true, priceCents: true } });
+      if (!source) {
+        throw new NotFoundException({ code: "BILLING_SOURCE_NOT_FOUND", message: "The selected billing source was not found" });
+      }
+      const amountCents = "amountCents" in source ? source.amountCents : source.priceCents;
+      const enrollments = await tx.enrollment.findMany({
+        where: {
+          organizationId: orgId,
+          studentId: { in: studentIds },
+          status: EnrollmentStatus.ACTIVE,
+          student: { status: "ACTIVE" },
+          plan: { status: "ACTIVE" },
+          ...(input.sourceType === "PLAN" ? { planId: input.sourceId } : {}),
+        },
+        select: { id: true, studentId: true },
+      });
+      if (new Set(enrollments.map((item) => item.studentId)).size !== studentIds.length) {
+        throw new BadRequestException({
+          code: "BILLING_TARGET_INVALID",
+          message: input.sourceType === "PLAN"
+            ? "Every selected student must have an active enrollment in the selected plan"
+            : "Every selected student must have an active enrollment",
+        });
+      }
+      const rule = await tx.billingRule.create({
+        data: {
+          organizationId: orgId,
+          name: input.name,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          sourceNameSnapshot: source.name,
+          amountCents,
+          idempotencyKey,
+          frequency: input.frequency,
+          opensOn: new Date(`${input.opensOn}T00:00:00.000Z`),
+          expiresOn: new Date(`${input.expiresOn}T00:00:00.000Z`),
+          ...(input.repeatUntil ? { repeatUntil: new Date(`${input.repeatUntil}T00:00:00.000Z`) } : {}),
+        },
+      });
+      await tx.billingRuleTarget.createMany({
+        data: studentIds.map((studentId) => ({ organizationId: orgId, billingRuleId: rule.id, studentId })),
+      });
+      const created = await this.materializeBillingRule(tx, rule, new Date());
+      await tx.auditLog.create({
+        data: {
+          organizationId: orgId,
+          actorUserId: auth.userId,
+          actorType: AuditActorType.USER,
+          action: "billing_rule.created",
+          entityType: "BillingRule",
+          entityId: rule.id,
+          after: { sourceType: rule.sourceType, sourceId: rule.sourceId, frequency: rule.frequency, targetCount: studentIds.length, chargesCreated: created },
+          ...auditMetadata(metadata),
+        },
+      });
+      return { rule, chargesCreated: created, replayed: false };
+    });
+  }
+
+  async deactivateBillingRule(auth: AuthenticatedContext, id: string, metadata: FinancialAuditMetadata = {}) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (tx) => {
+      const current = await tx.billingRule.findFirst({ where: { id, organizationId: orgId } });
+      if (!current) throw new NotFoundException({ code: "BILLING_RULE_NOT_FOUND", message: "Billing rule was not found" });
+      const rule = await tx.billingRule.update({ where: { id }, data: { status: "INACTIVE" } });
+      await tx.auditLog.create({ data: { organizationId: orgId, actorUserId: auth.userId, actorType: AuditActorType.USER, action: "billing_rule.deactivated", entityType: "BillingRule", entityId: id, ...auditMetadata(metadata) } });
+      return rule;
+    });
+  }
+
+  async processBillingRules(auth: AuthenticatedContext, metadata: FinancialAuditMetadata = {}) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`billing-rules:${orgId}`}))`);
+      const rules = await tx.billingRule.findMany({ where: { organizationId: orgId, status: "ACTIVE" } });
+      let created = 0;
+      for (const rule of rules) created += await this.materializeBillingRule(tx, rule, new Date());
+      await tx.auditLog.create({ data: { organizationId: orgId, actorUserId: auth.userId, actorType: AuditActorType.USER, action: "billing_rule.processing_requested", entityType: "BillingRule", after: { created }, ...auditMetadata(metadata) } });
+      return { created };
+    });
+  }
+
+  private async materializeBillingRule(
+    tx: Prisma.TransactionClient,
+    rule: { id: string; organizationId: string; sourceType: "PLAN" | "PRODUCT" | "EVENT"; sourceId: string; amountCents: number; frequency: "MONTHLY" | "ONCE"; opensOn: Date; expiresOn: Date; repeatUntil: Date | null },
+    now: Date,
+  ): Promise<number> {
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    let cycleKey: string;
+    let referenceMonth: Date;
+    let expiresAt: Date;
+    if (rule.frequency === "ONCE") {
+      if (today < rule.opensOn) return 0;
+      cycleKey = `rule:${rule.id}:once`;
+      referenceMonth = new Date(Date.UTC(rule.opensOn.getUTCFullYear(), rule.opensOn.getUTCMonth(), 1));
+      expiresAt = rule.expiresOn;
+    } else {
+      if (today < rule.opensOn || (rule.repeatUntil && today > rule.repeatUntil)) return 0;
+      const year = today.getUTCFullYear();
+      const month = today.getUTCMonth();
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      const opensAt = new Date(Date.UTC(year, month, Math.min(rule.opensOn.getUTCDate(), lastDay)));
+      if (today < opensAt) return 0;
+      const monthOffset = (rule.expiresOn.getUTCFullYear() * 12 + rule.expiresOn.getUTCMonth()) - (rule.opensOn.getUTCFullYear() * 12 + rule.opensOn.getUTCMonth());
+      const dueMonth = month + Math.max(0, monthOffset);
+      const dueLastDay = new Date(Date.UTC(year, dueMonth + 1, 0)).getUTCDate();
+      expiresAt = new Date(Date.UTC(year, dueMonth, Math.min(rule.expiresOn.getUTCDate(), dueLastDay)));
+      referenceMonth = new Date(Date.UTC(year, month, 1));
+      cycleKey = `rule:${rule.id}:${year}-${String(month + 1).padStart(2, "0")}`;
+    }
+    const targets = await tx.billingRuleTarget.findMany({ where: { organizationId: rule.organizationId, billingRuleId: rule.id }, select: { studentId: true } });
+    const enrollments = await tx.enrollment.findMany({
+      where: {
+        organizationId: rule.organizationId,
+        studentId: { in: targets.map((target) => target.studentId) },
+        status: EnrollmentStatus.ACTIVE,
+        student: { status: "ACTIVE" },
+        plan: { status: "ACTIVE" },
+        ...(rule.sourceType === "PLAN" ? { planId: rule.sourceId } : {}),
+      },
+      distinct: ["studentId"],
+      orderBy: { createdAt: "desc" },
+      select: { id: true, amountCents: true, discountCents: true },
+    });
+    const result = await tx.charge.createMany({
+      data: enrollments.map((enrollment) => {
+        const amountCents = rule.sourceType === "PLAN" ? enrollment.amountCents : rule.amountCents;
+        const discountCents = rule.sourceType === "PLAN" ? enrollment.discountCents : 0;
+        return { organizationId: rule.organizationId, enrollmentId: enrollment.id, billingRuleId: rule.id, cycleKey, referenceMonth, dueDate: expiresAt, amountCents, discountCents, finalAmountCents: amountCents - discountCents };
+      }),
+      skipDuplicates: true,
+    });
+    return result.count;
+  }
+
   async charges(auth: AuthenticatedContext, query: ChargeListQuery) {
     const orgId = organizationId(auth);
     const referenceMonth = query.referenceMonth
@@ -193,6 +466,7 @@ export class FinancialService {
       this.prisma.client.charge.findMany({
         where,
         include: {
+          billingRule: true,
           enrollment: {
             include: { student: true, guardian: true, plan: true },
           },
@@ -210,6 +484,7 @@ export class FinancialService {
     const item = await this.prisma.client.charge.findFirst({
       where: { id, organizationId: organizationId(auth) },
       include: {
+        billingRule: true,
         enrollment: {
           include: { student: true, guardian: true, plan: true },
         },
