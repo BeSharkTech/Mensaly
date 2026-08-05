@@ -11,7 +11,7 @@
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "bullmq": "^5.81.2"
+    "bullmq": "^6.0.5"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
