@@ -54,6 +54,8 @@ describe("HTTP API foundation", () => {
       await app.init();
       const fastify = app.getHttpAdapter().getInstance();
 
+      assert.equal(fastify.initialConfig.maxParamLength, 256);
+
       const live = await fastify.inject({
         method: "GET",
         url: "/api/v1/health/live",
@@ -135,6 +137,16 @@ describe("HTTP API foundation", () => {
         url: "/api/v1/auth/logout",
       });
       assert.equal(csrfAllowed.statusCode, 204);
+
+      const csrfAllowedFromLocalDevelopment = await fastify.inject({
+        headers: {
+          cookie: "mensaly_session=browser-session",
+          origin: "http://localhost:5173",
+        },
+        method: "POST",
+        url: "/api/v1/auth/logout",
+      });
+      assert.equal(csrfAllowedFromLocalDevelopment.statusCode, 204);
 
       const openApi = await fastify.inject({
         method: "GET",
@@ -513,6 +525,31 @@ describe("HTTP API foundation", () => {
     }
   });
 
+  it("does not let failed attempts lock out the owner with the correct password", async () => {
+    const app = await createApiApplication(testEnvironment());
+    const email = `lockout-${randomUUID()}@api.example.test`;
+    const password = "correct-horse-battery-staple";
+    registrationTestEmails.add(email);
+    loginAttemptEntities.add(email);
+
+    try {
+      await app.init();
+      const fastify = app.getHttpAdapter().getInstance();
+      assert.equal((await fastify.inject({method:"POST",url:"/api/v1/auth/register",payload:{name:"Lockout Owner",email,password}})).statusCode,201);
+      await getPrismaClient().user.update({where:{email},data:{emailVerified:true,status:"ACTIVE"}});
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        assert.equal((await fastify.inject({method:"POST",url:"/api/v1/auth/login",payload:{email,password:"wrong-password"}})).statusCode,401);
+      }
+      const ownerLogin = await fastify.inject({method:"POST",url:"/api/v1/auth/login",payload:{email,password}});
+      assert.equal(ownerLogin.statusCode,200);
+      assert.ok(firstHeader(ownerLogin.headers["set-cookie"]));
+      const attackerRetry = await fastify.inject({method:"POST",url:"/api/v1/auth/login",payload:{email,password:"wrong-password"}});
+      assert.equal(attackerRetry.statusCode,429);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("resets a password while revoking sessions", async () => {
     const app = await createApiApplication(testEnvironment());
     const email = `recovery-${randomUUID()}@api.example.test`;
@@ -835,6 +872,17 @@ describe("HTTP API foundation", () => {
           required: true,
         },
       });
+      const guardianField = await fastify.inject({
+        headers,
+        method: "POST",
+        url: "/api/v1/workspace/custom-fields",
+        payload: {
+          label: "Contato alternativo",
+          fieldType: "TEXT",
+          subject: "GUARDIAN",
+          required: false,
+        },
+      });
       const product = await fastify.inject({
         headers,
         method: "POST",
@@ -860,6 +908,7 @@ describe("HTTP API foundation", () => {
         },
       });
       assert.equal(field.statusCode, 201);
+      assert.equal(guardianField.statusCode, 201);
       assert.equal(product.statusCode, 201);
       assert.equal(event.statusCode, 201);
       assert.equal((await fastify.inject({
@@ -867,6 +916,21 @@ describe("HTTP API foundation", () => {
         method: "PATCH",
         url: `/api/v1/workspace/student-field-values/${student.json().id}`,
         payload: { values: { [field.json().id]: "A" } },
+      })).statusCode, 200);
+
+      const wrongSubject = await fastify.inject({
+        headers,
+        method: "PATCH",
+        url: `/api/v1/workspace/student-field-values/${student.json().id}`,
+        payload: { values: { [guardianField.json().id]: "should fail" } },
+      });
+      assert.equal(wrongSubject.statusCode, 400);
+      assert.equal(wrongSubject.json().error.code, "CUSTOM_FIELD_SUBJECT_INVALID");
+      assert.equal((await fastify.inject({
+        headers,
+        method: "PATCH",
+        url: `/api/v1/workspace/guardian-field-values/${guardian.json().id}`,
+        payload: { values: { [guardianField.json().id]: "11988887777" } },
       })).statusCode, 200);
 
       const broadcast = await fastify.inject({
@@ -900,31 +964,47 @@ describe("HTTP API foundation", () => {
       assert.equal(workspace.statusCode, 200);
       assert.equal(workspace.json().products.length, 1);
       assert.equal(workspace.json().events.length, 1);
+      assert.equal(workspace.json().guardianFieldValues[guardian.json().id][guardianField.json().id], "11988887777");
       assert.equal(workspace.json().broadcastSends[0].status, "QUEUED");
 
       const publicForm = await fastify.inject({
         method: "GET",
         url: `/api/v1/public/forms/${organizationId}`,
       });
-      assert.equal(publicForm.statusCode, 200);
-      assert.equal(publicForm.json().fields.length, 1);
-      const missingRequired = await fastify.inject({
+      assert.equal(publicForm.statusCode, 410);
+      assert.equal(publicForm.json().error.code, "LEGACY_PUBLIC_FORM_RETIRED");
+      const retiredSubmission = await fastify.inject({
         method: "POST",
         url: `/api/v1/public/forms/${organizationId}/responses`,
-        payload: { cpf: "52998224725", values: {} },
+        payload: { cpf: "52998224725", values: { [field.json().id]: "B" } },
       });
-      assert.equal(missingRequired.statusCode, 400);
-      assert.equal(missingRequired.json().error.code, "CUSTOM_FIELD_REQUIRED");
-      const submitted = await fastify.inject({
-        method: "POST",
-        url: `/api/v1/public/forms/${organizationId}/responses`,
-        payload: {
-          cpf: "52998224725",
-          values: { [field.json().id]: "B" },
-        },
+      assert.equal(retiredSubmission.statusCode, 410);
+      assert.equal(retiredSubmission.json().error.code, "LEGACY_PUBLIC_FORM_RETIRED");
+
+      const updatedProduct = await fastify.inject({
+        headers,
+        method: "PATCH",
+        url: `/api/v1/workspace/products/${product.json().id}`,
+        payload: { stockQuantity: 5 },
       });
-      assert.equal(submitted.statusCode, 201);
-      assert.equal(submitted.json().saved, 1);
+      assert.equal(updatedProduct.statusCode, 200);
+      assert.equal(updatedProduct.json().stockQuantity, 5);
+      const updatedEvent = await fastify.inject({
+        headers,
+        method: "PATCH",
+        url: `/api/v1/workspace/events/${event.json().id}`,
+        payload: { location: "Quadra 2" },
+      });
+      assert.equal(updatedEvent.statusCode, 200);
+      assert.equal(updatedEvent.json().location, "Quadra 2");
+      assert.equal((await fastify.inject({headers,method:"DELETE",url:`/api/v1/workspace/products/${product.json().id}`})).statusCode,204);
+      assert.equal((await fastify.inject({headers,method:"DELETE",url:`/api/v1/workspace/events/${event.json().id}`})).statusCode,204);
+      assert.equal((await fastify.inject({headers,method:"DELETE",url:`/api/v1/workspace/custom-fields/${field.json().id}`})).statusCode,204);
+      assert.equal((await fastify.inject({headers,method:"DELETE",url:`/api/v1/workspace/custom-fields/${guardianField.json().id}`})).statusCode,204);
+      const emptyWorkspace = await fastify.inject({headers,method:"GET",url:"/api/v1/workspace"});
+      assert.equal(emptyWorkspace.json().products.length,0);
+      assert.equal(emptyWorkspace.json().events.length,0);
+      assert.equal(emptyWorkspace.json().customFields.length,0);
     } finally {
       await app.close();
     }
@@ -942,7 +1022,7 @@ describe("HTTP API foundation", () => {
       assert.equal((await fastify.inject({ method:"POST",url:"/api/v1/auth/register",payload:{name:"Operational Owner",email,password} })).statusCode,201);
       await getPrismaClient().user.update({where:{email},data:{emailVerified:true,status:"ACTIVE"}});
       const login=await fastify.inject({method:"POST",url:"/api/v1/auth/login",payload:{email,password}}); const cookie=firstHeader(login.headers["set-cookie"])?.split(";")[0]; assert.ok(cookie);
-      const organization=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/organization",payload:{name:"Operational School",taxId:"33333333333",phone:"11999999999"}}); assert.equal(organization.statusCode,201);
+      const organization=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/organization",payload:{name:"Operational School",taxId:`33${Date.now().toString().slice(-9)}`,phone:"11999999999"}}); assert.equal(organization.statusCode,201);
       const organizationId = organization.json().data.id as string;
       const plan=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/plans",payload:{name:"Mensal",amountCents:15000,dueDay:10}}); assert.equal(plan.statusCode,201);
       const operationalService=app.get(OperationalService);
@@ -954,6 +1034,15 @@ describe("HTTP API foundation", () => {
       const repeatedGuardianLink=await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${student.json().id}/guardians/${guardian.json().id}`,payload:{relationship:"Responsavel"}}); assert.equal(repeatedGuardianLink.statusCode,201); assert.equal(repeatedGuardianLink.json().id,guardianLink.json().id);
       assert.equal(await getPrismaClient().studentGuardian.count({where:{organizationId,studentId:student.json().id,guardianId:guardian.json().id}}),1);
       const enrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-01-01"}}); assert.equal(enrollment.statusCode,201); assert.equal(enrollment.json().amountCents,15000);
+      const billingRulePayload={name:"Taxa de uniforme",sourceType:"PLAN",sourceId:plan.json().id,frequency:"ONCE",opensOn:"2026-01-01",expiresOn:"2026-01-20",studentIds:[student.json().id]};
+      const billingRuleHeaders={cookie,"idempotency-key":"billing-rule:uniform-test"};
+      const billingRule=await fastify.inject({headers:billingRuleHeaders,method:"POST",url:"/api/v1/billing-rules",payload:billingRulePayload}); assert.equal(billingRule.statusCode,201); assert.equal(billingRule.json().data.chargesCreated,1); assert.equal(billingRule.json().data.replayed,false);
+      const replayedBillingRule=await fastify.inject({headers:billingRuleHeaders,method:"POST",url:"/api/v1/billing-rules",payload:billingRulePayload}); assert.equal(replayedBillingRule.statusCode,201); assert.equal(replayedBillingRule.json().data.rule.id,billingRule.json().data.rule.id); assert.equal(replayedBillingRule.json().data.replayed,true);
+      const reusedBillingRuleKey=await fastify.inject({headers:billingRuleHeaders,method:"POST",url:"/api/v1/billing-rules",payload:{...billingRulePayload,name:"Outra cobrança"}}); assert.equal(reusedBillingRuleKey.statusCode,409); assert.equal(reusedBillingRuleKey.json().error.code,"IDEMPOTENCY_KEY_REUSED");
+      assert.equal(await getPrismaClient().billingRule.count({where:{organizationId}}),1);
+      assert.equal(await getPrismaClient().charge.count({where:{billingRuleId:billingRule.json().data.rule.id}}),1);
+      const listedBillingRules=await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/billing-rules"}); assert.equal(listedBillingRules.statusCode,200); assert.equal(listedBillingRules.json().data[0].targets[0].student.id,student.json().id);
+      const duplicateActiveEnrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-01-02"}}); assert.equal(duplicateActiveEnrollment.statusCode,409); assert.equal(duplicateActiveEnrollment.json().error.code,"ACTIVE_ENROLLMENT_EXISTS");
       const invalidPhone=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Invalid Phone",phone:"--------",taxId:"12345678909"}}); assert.equal(invalidPhone.statusCode,400); assert.equal(invalidPhone.json().error.code,"PHONE_INVALID");
       const invalidTax=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Invalid Tax",phone:"11999990000",taxId:"..........."}}); assert.equal(invalidTax.statusCode,400); assert.equal(invalidTax.json().error.code,"CPF_INVALID");
       const invalidDateRange=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2026-02-01",endDate:"2026-01-31"}}); assert.equal(invalidDateRange.statusCode,400);
@@ -1003,8 +1092,10 @@ describe("HTTP API foundation", () => {
       await getPrismaClient().user.update({where:{email:otherEmail},data:{emailVerified:true,status:"ACTIVE"}});
       const otherLogin=await fastify.inject({method:"POST",url:"/api/v1/auth/login",payload:{email:otherEmail,password}});
       const otherCookie=firstHeader(otherLogin.headers["set-cookie"])?.split(";")[0]; assert.ok(otherCookie);
-      const otherOrganization=await fastify.inject({headers:{cookie:otherCookie},method:"POST",url:"/api/v1/organization",payload:{name:"Financial Scope B",taxId:"55555555555",phone:"11999999998"}}); assert.equal(otherOrganization.statusCode,201);
+      const otherOrganization=await fastify.inject({headers:{cookie:otherCookie},method:"POST",url:"/api/v1/organization",payload:{name:"Financial Scope B",taxId:`55${Date.now().toString().slice(-9)}`,phone:"11999999998"}}); assert.equal(otherOrganization.statusCode,201);
       const otherOrganizationId=otherOrganization.json().data.id as string;
+      const otherRules=await fastify.inject({headers:{cookie:otherCookie},method:"GET",url:"/api/v1/billing-rules"}); assert.equal(otherRules.statusCode,200); assert.equal(otherRules.json().data.length,0);
+      const crossTenantRule=await fastify.inject({headers:{cookie:otherCookie,"idempotency-key":"billing-rule:cross-tenant"},method:"POST",url:"/api/v1/billing-rules",payload:billingRulePayload}); assert.equal(crossTenantRule.statusCode,404); assert.equal(crossTenantRule.json().error.code,"BILLING_SOURCE_NOT_FOUND");
       await assert.rejects(
         getPrismaClient().studentGuardian.create({data:{organizationId:otherOrganizationId,studentId:student.json().id,guardianId:guardian.json().id}}),
         (error:unknown)=>typeof error==="object"&&error!==null&&"code" in error&&error.code==="P2003",
@@ -1060,6 +1151,38 @@ describe("HTTP API foundation", () => {
       assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/guardians?search=Maria"})).json().total,1);
       assert.equal((await fastify.inject({headers:{cookie},method:"GET",url:"/api/v1/enrollments?search=Ana"})).json().total,1);
       assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/enrollments/${enrollment.json().id}`,payload:{status:"ENDED",endDate:"2026-12-31"}})).statusCode,200);
+
+      const guardianCountBeforeRollback = await getPrismaClient().guardian.count({where:{organizationId}});
+      const atomicConflict = await fastify.inject({
+        headers:{cookie},
+        method:"POST",
+        url:"/api/v1/enrollments/manual",
+        payload:{
+          student:{name:"Duplicate Ana",cpf:"11111111111"},
+          guardian:{name:"Must Roll Back",phone:"11977776666",taxId:"12345678909"},
+          relationship:"Responsavel",
+          planId:plan.json().id,
+          startDate:"2026-06-01",
+        },
+      });
+      assert.equal(atomicConflict.statusCode,409);
+      assert.equal(atomicConflict.json().error.code,"MANUAL_ENROLLMENT_CONFLICT");
+      assert.equal(await getPrismaClient().guardian.count({where:{organizationId}}),guardianCountBeforeRollback);
+
+      const resumedEnrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:student.json().id,guardianId:guardian.json().id,planId:plan.json().id,startDate:"2027-01-01"}}); assert.equal(resumedEnrollment.statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/students/${student.json().id}`,payload:{status:"INACTIVE"}})).statusCode,200);
+      assert.equal((await getPrismaClient().enrollment.findUniqueOrThrow({where:{id:resumedEnrollment.json().id}})).status,"CANCELLED");
+      await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/charges/generate",payload:{referenceMonth:"2027-02"}});
+      assert.equal(await getPrismaClient().charge.count({where:{enrollmentId:resumedEnrollment.json().id,referenceMonth:new Date("2027-02-01T00:00:00.000Z")}}),0);
+
+      const planStudent=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/students",payload:{name:"Plan Lifecycle",rg:"RG998877"}}); assert.equal(planStudent.statusCode,201);
+      const planGuardian=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/guardians",payload:{name:"Plan Guardian",phone:"11966665555",taxId:"98765432100"}}); assert.equal(planGuardian.statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"POST",url:`/api/v1/students/${planStudent.json().id}/guardians/${planGuardian.json().id}`,payload:{relationship:"Responsavel"}})).statusCode,201);
+      const planEnrollment=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/enrollments",payload:{studentId:planStudent.json().id,guardianId:planGuardian.json().id,planId:plan.json().id,startDate:"2027-01-01"}}); assert.equal(planEnrollment.statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"PATCH",url:`/api/v1/plans/${plan.json().id}`,payload:{status:"INACTIVE"}})).statusCode,200);
+      assert.equal((await getPrismaClient().enrollment.findUniqueOrThrow({where:{id:planEnrollment.json().id}})).status,"CANCELLED");
+      await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/charges/generate",payload:{referenceMonth:"2027-03"}});
+      assert.equal(await getPrismaClient().charge.count({where:{enrollmentId:planEnrollment.json().id,referenceMonth:new Date("2027-03-01T00:00:00.000Z")}}),0);
       const operationalAudit=await getPrismaClient().auditLog.findMany({where:{organizationId,action:{in:["plan.created","student.created","guardian.created","student_guardian.linked","enrollment.created","enrollment.updated"]}}});
       assert.equal(operationalAudit.length>=7,true);
       assert.equal(operationalAudit.every((entry)=>entry.correlationId!==null),true);
@@ -1948,12 +2071,14 @@ after(async () => {
   await prisma.messageTemplate.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.payment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.charge.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.billingRule.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.reminderConfiguration.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.enrollment.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.studentGuardian.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.broadcastSend.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.broadcastMessage.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.studentFieldValue.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
+  await prisma.guardianFieldValue.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.customField.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.product.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });
   await prisma.event.deleteMany({ where: { organizationId: { in: organizations.map((organization) => organization.id) } } });

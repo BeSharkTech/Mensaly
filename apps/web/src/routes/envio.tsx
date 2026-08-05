@@ -1,6 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { CalendarDays, ClipboardList, Clock, Copy, ExternalLink, FileText, Megaphone, Package, Pencil, Plus, Repeat, Search, Send, Trash2, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CalendarDays,
+  ClipboardList,
+  Clock,
+  Copy,
+  ExternalLink,
+  FileText,
+  Megaphone,
+  Package,
+  Pencil,
+  Plus,
+  Repeat,
+  Search,
+  Send,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -34,7 +50,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/api";
 import {
   useDashboardData,
@@ -42,7 +57,12 @@ import {
   type BroadcastTarget,
 } from "@/lib/data";
 import { formatCents } from "@/lib/format";
+import {
+  publicEnrollmentLinkForOrigin,
+  type PublicEnrollmentFormSettings,
+} from "@/lib/public-enrollment";
 import { useAppState } from "@/lib/store";
+import { insertMessageTag, normalizeMessageEditorValue } from "@/lib/message-tags";
 
 export const Route = createFileRoute("/envio")({
   head: () => ({
@@ -56,7 +76,8 @@ export const Route = createFileRoute("/envio")({
       { property: "og:title", content: "Envio de mensagens — Mensaly" },
       {
         property: "og:description",
-        content: "Mensagens personalizadas atribuídas a planos e produtos, enviadas para os alunos escolhidos.",
+        content:
+          "Mensagens personalizadas atribuídas a planos e produtos, enviadas para os alunos escolhidos.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -76,7 +97,10 @@ const emptyForm = {
 
 function formatSchedule(iso: string | null) {
   if (!iso) return "";
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(iso).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }
 
 const weekdayLabels = [
@@ -125,13 +149,25 @@ function nextOccurrence(message: BroadcastMessage): Date | null {
     return message.scheduledFor ? new Date(message.scheduledFor) : null;
   }
   if (message.scheduleType === "DAILY") {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute);
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hour,
+      minute,
+    );
     if (date <= now) date.setDate(date.getDate() + 1);
     return withinLimit(date);
   }
   if (message.scheduleType === "WEEKLY") {
     const target = message.weekday ?? 1;
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute);
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hour,
+      minute,
+    );
     let delta = (target - date.getDay() + 7) % 7;
     if (delta === 0 && date <= now) delta = 7;
     date.setDate(date.getDate() + delta);
@@ -187,7 +223,9 @@ export function whatsappManualLink(phone: string, body: string) {
         ? digits
         : null;
 
-  return normalized ? `https://wa.me/${normalized}?text=${encodeURIComponent(body)}` : null;
+  return normalized
+    ? `https://wa.me/${normalized}?text=${encodeURIComponent(body)}`
+    : null;
 }
 
 export function renderMessageForStudent(
@@ -198,6 +236,103 @@ export function renderMessageForStudent(
     .replaceAll(/\[aluno\]/gi, values.studentName.trim())
     .replaceAll(/\[responsavel\]/gi, values.guardianName.trim())
     .replaceAll(/\[link\]/gi, values.paymentLink);
+}
+
+const messageTags = [
+  { token: "[aluno]", label: "Nome do aluno" },
+  { token: "[responsavel]", label: "Nome do responsável" },
+  { token: "[link]", label: "Link do pagamento" },
+] as const;
+
+function messageTagLabel(token: string) {
+  return messageTags.find((item) => item.token === token)?.label ?? token;
+}
+
+function serializeMessageEditor(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+  if (!(node instanceof HTMLElement)) return "";
+  if (node.dataset.messageTag) return node.dataset.messageTag;
+  if (node.tagName === "BR") return "\n";
+  const content = Array.from(node.childNodes).map(serializeMessageEditor).join("");
+  return /^(DIV|P)$/.test(node.tagName) ? `${content}\n` : content;
+}
+
+function createTagChip(token: string) {
+  const chip = document.createElement("span");
+  chip.dataset.messageTag = token;
+  chip.contentEditable = "false";
+  chip.className = "text-primary";
+  chip.textContent = messageTagLabel(token);
+  return chip;
+}
+
+function populateMessageEditor(editor: HTMLDivElement, value: string) {
+  editor.replaceChildren();
+  const matcher = /\[(aluno|responsavel|link)\]/gi;
+  let cursor = 0;
+  for (const match of value.matchAll(matcher)) {
+    const index = match.index ?? 0;
+    if (index > cursor) editor.append(document.createTextNode(value.slice(cursor, index)));
+    const token = `[${match[1].toLowerCase()}]`;
+    editor.append(createTagChip(token));
+    cursor = index + match[0].length;
+  }
+  if (cursor < value.length) editor.append(document.createTextNode(value.slice(cursor)));
+}
+
+export function MessageEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const lastEmittedValueRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    // A digitação já alterou o DOM do contenteditable. Recriá-lo nesse ciclo
+    // move o cursor para o início, especialmente quando há chips de tags.
+    if (lastEmittedValueRef.current === value) {
+      lastEmittedValueRef.current = null;
+      return;
+    }
+    if (normalizeMessageEditorValue(serializeMessageEditor(editor)) !== value) {
+      populateMessageEditor(editor, value);
+    }
+  }, [value]);
+
+  function sync() {
+    const editor = editorRef.current;
+    if (editor) {
+      const nextValue = normalizeMessageEditorValue(serializeMessageEditor(editor));
+      lastEmittedValueRef.current = nextValue;
+      onChange(nextValue);
+    }
+  }
+
+  function insertTag(token: (typeof messageTags)[number]["token"]) {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (!range || !editor.contains(range.commonAncestorContainer)) {
+      onChange(insertMessageTag(value, token, value.length, value.length).value);
+      return;
+    }
+    range.deleteContents();
+    const chip = createTagChip(token);
+    range.insertNode(chip);
+    range.setStartAfter(chip);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    sync();
+  }
+
+  return <div className="space-y-3">
+    <div className="flex flex-wrap gap-2" aria-label="Inserir tag na mensagem">
+      {messageTags.map((tag) => <Button key={tag.token} type="button" variant="outline" size="sm" className="min-h-11 text-primary" onClick={() => insertTag(tag.token)}>{tag.label}</Button>)}
+    </div>
+    <div id="body" ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" aria-label="Mensagem" data-placeholder="Adicione o texto da mensagem" onInput={sync} className="min-h-[120px] whitespace-pre-wrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring empty:before:pointer-events-none empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground" />
+  </div>;
 }
 
 function SendPage() {
@@ -211,13 +346,25 @@ function SendPage() {
   const [deleting, setDeleting] = useState<BroadcastMessage | null>(null);
   const [sending, setSending] = useState<BroadcastMessage | null>(null);
   const [openingStudentId, setOpeningStudentId] = useState<string | null>(null);
+  const [publicForm, setPublicForm] =
+    useState<PublicEnrollmentFormSettings | null>(null);
   const set = (key: keyof typeof form, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const businessIdForForm = state.business?.id ?? "";
+  useEffect(() => {
+    void apiRequest<PublicEnrollmentFormSettings>(
+      "/workspace/public-enrollment-form",
+    )
+      .then(setPublicForm)
+      .catch(() => setPublicForm(null));
+  }, []);
+
   const formUrl =
-    businessIdForForm && typeof window !== "undefined"
-      ? `${window.location.origin}/formulario/${businessIdForForm}`
+    publicForm?.configured && publicForm.active
+      ? publicEnrollmentLinkForOrigin(
+          publicForm.link,
+          typeof window === "undefined" ? undefined : window.location.origin,
+        )
       : "";
 
   function insertFormLink() {
@@ -241,8 +388,10 @@ function SendPage() {
 
   const planName = (id: string | null) =>
     data.plans.find((plan) => plan.id === id)?.name ?? "Plano removido";
-  const product = (id: string | null) => data.products.find((item) => item.id === id) ?? null;
-  const eventItem = (id: string | null) => data.events.find((item) => item.id === id) ?? null;
+  const product = (id: string | null) =>
+    data.products.find((item) => item.id === id) ?? null;
+  const eventItem = (id: string | null) =>
+    data.events.find((item) => item.id === id) ?? null;
 
   const term = query.trim().toLowerCase();
   const messages = useMemo(
@@ -263,7 +412,9 @@ function SendPage() {
   const eligibleStudents = useMemo(() => {
     if (!sending) return [];
     if (sending.targetType === "PLAN" && sending.planId) {
-      return data.students.filter((student) => student.planId === sending.planId);
+      return data.students.filter(
+        (student) => student.planId === sending.planId,
+      );
     }
     return data.students;
   }, [sending, data.students]);
@@ -317,10 +468,15 @@ function SendPage() {
     const payload = buildManualBroadcastPayload(form, formUrl);
 
     try {
-      await apiRequest(editing ? `/workspace/broadcasts/${editing.id}` : "/workspace/broadcasts", {
-        method: editing ? "PATCH" : "POST",
-        body: payload,
-      });
+      await apiRequest(
+        editing
+          ? `/workspace/broadcasts/${editing.id}`
+          : "/workspace/broadcasts",
+        {
+          method: editing ? "PATCH" : "POST",
+          body: payload,
+        },
+      );
     } catch {
       setSaving(false);
       toast.error("Não foi possível salvar a mensagem.");
@@ -335,7 +491,9 @@ function SendPage() {
   async function handleDelete() {
     if (!deleting) return;
     try {
-      await apiRequest(`/workspace/broadcasts/${deleting.id}`, { method: "DELETE" });
+      await apiRequest(`/workspace/broadcasts/${deleting.id}`, {
+        method: "DELETE",
+      });
     } catch {
       toast.error("Não foi possível excluir a mensagem.");
       return;
@@ -365,7 +523,10 @@ function SendPage() {
     try {
       const charge = needsPaymentLink
         ? data.charges
-            .filter((item) => item.studentId === student.id && item.status === "PENDING")
+            .filter(
+              (item) =>
+                item.studentId === student.id && item.status === "PENDING",
+            )
             .sort((left, right) => left.dueDate.localeCompare(right.dueDate))[0]
         : null;
       if (needsPaymentLink && !charge) {
@@ -374,7 +535,12 @@ function SendPage() {
         return;
       }
       const paymentLink = charge
-        ? (await apiRequest<{ url: string }>(`/charges/${charge.id}/mercadopago-checkout-link`, { method: "POST" })).url
+        ? (
+            await apiRequest<{ url: string }>(
+              `/charges/${charge.id}/mercadopago-checkout-link`,
+              { method: "POST" },
+            )
+          ).url
         : "";
       const body = renderMessageForStudent(sending.body, {
         studentName: student.name,
@@ -391,7 +557,11 @@ function SendPage() {
       else window.open(href, "_blank", "noopener,noreferrer");
     } catch (error) {
       popup?.close();
-      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o link de pagamento.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o link de pagamento.",
+      );
     } finally {
       setOpeningStudentId(null);
     }
@@ -409,7 +579,6 @@ function SendPage() {
     ).length;
   }
 
-
   return (
     <AppShell>
       <PageHeader
@@ -423,9 +592,13 @@ function SendPage() {
       />
 
       <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-sm font-medium text-foreground">Envio manual pelo WhatsApp</p>
+        <p className="text-sm font-medium text-foreground">
+          Envio manual pelo WhatsApp
+        </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Ao clicar em abrir WhatsApp, escolha um aluno e abra a conversa do responsável com a mensagem já preenchida. A Mensaly não envia mensagens automaticamente nesta versão de teste.
+          Ao clicar em abrir WhatsApp, escolha um aluno e abra a conversa do
+          responsável com a mensagem já preenchida. A Mensaly não envia
+          mensagens automaticamente nesta versão de teste.
         </p>
       </div>
 
@@ -444,9 +617,12 @@ function SendPage() {
       {messages.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <Megaphone className="mx-auto size-8 text-muted-foreground" />
-          <p className="mt-3 text-sm font-medium text-foreground">Nenhuma mensagem criada</p>
+          <p className="mt-3 text-sm font-medium text-foreground">
+            Nenhuma mensagem criada
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Crie mensagens atribuídas a planos ou produtos para enviar aos alunos.
+            Crie mensagens atribuídas a planos ou produtos para enviar aos
+            alunos.
           </p>
           <Button className="mt-4" onClick={openCreate}>
             <Plus className="size-4" /> Nova mensagem
@@ -464,7 +640,9 @@ function SendPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h2 className="truncate text-sm font-semibold text-foreground">{message.name}</h2>
+                    <h2 className="truncate text-sm font-semibold text-foreground">
+                      {message.name}
+                    </h2>
                     <Badge variant="secondary" className="mt-1 gap-1">
                       {message.targetType === "PLAN" ? (
                         <ClipboardList className="size-3" />
@@ -489,10 +667,20 @@ function SendPage() {
                     </Badge>
                   </div>
                   <div className="flex shrink-0 gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(message)} aria-label="Editar">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEdit(message)}
+                      aria-label="Editar"
+                    >
                       <Pencil className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => setDeleting(message)} aria-label="Excluir">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDeleting(message)}
+                      aria-label="Excluir"
+                    >
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
@@ -512,8 +700,12 @@ function SendPage() {
                       </span>
                     )}
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-foreground">{linkedProduct.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatCents(linkedProduct.priceCents)}</p>
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {linkedProduct.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatCents(linkedProduct.priceCents)}
+                      </p>
                     </div>
                   </div>
                 ) : null}
@@ -532,16 +724,22 @@ function SendPage() {
                       </span>
                     )}
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-foreground">{linkedEvent.name}</p>
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {linkedEvent.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {formatSchedule(linkedEvent.startsAt)}
-                        {linkedEvent.location ? ` · ${linkedEvent.location}` : ""}
+                        {linkedEvent.location
+                          ? ` · ${linkedEvent.location}`
+                          : ""}
                       </p>
                     </div>
                   </div>
                 ) : null}
 
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</p>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {message.body}
+                </p>
 
                 {message.scheduleType !== "MANUAL" ? (
                   <Badge variant="outline" className="w-fit gap-1">
@@ -557,11 +755,13 @@ function SendPage() {
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Users className="size-3" /> {sendsOf(message.id)} envio(s)
+                      <Users className="size-3" /> {sendsOf(message.id)}{" "}
+                      envio(s)
                     </span>
                     {scheduledOf(message.id) > 0 ? (
                       <span className="flex items-center gap-1">
-                        <Clock className="size-3" /> {scheduledOf(message.id)} programado(s)
+                        <Clock className="size-3" /> {scheduledOf(message.id)}{" "}
+                        programado(s)
                       </span>
                     ) : null}
                   </span>
@@ -570,7 +770,6 @@ function SendPage() {
                     <Send className="size-4" />
                     Abrir WhatsApp
                   </Button>
-
                 </div>
               </article>
             );
@@ -582,7 +781,9 @@ function SendPage() {
         <DialogContent className="sm:max-w-lg">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle>{editing ? "Editar mensagem" : "Nova mensagem"}</DialogTitle>
+              <DialogTitle>
+                {editing ? "Editar mensagem" : "Nova mensagem"}
+              </DialogTitle>
               <DialogDescription>
                 Personalize o texto e atribua a mensagem a um plano ou produto.
               </DialogDescription>
@@ -603,7 +804,9 @@ function SendPage() {
                 <Label htmlFor="target">Atribuir a</Label>
                 <Select
                   value={form.targetType}
-                  onValueChange={(value) => set("targetType", value as BroadcastTarget)}
+                  onValueChange={(value) =>
+                    set("targetType", value as BroadcastTarget)
+                  }
                 >
                   <SelectTrigger id="target">
                     <SelectValue />
@@ -613,7 +816,9 @@ function SendPage() {
                     <SelectItem value="PLAN">Plano</SelectItem>
                     <SelectItem value="PRODUCT">Produto</SelectItem>
                     <SelectItem value="EVENT">Evento</SelectItem>
-                    <SelectItem value="FORM">Formulário de dados do aluno</SelectItem>
+                    <SelectItem value="FORM">
+                      Formulário de dados do aluno
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -621,7 +826,10 @@ function SendPage() {
               {form.targetType === "PLAN" ? (
                 <div className="space-y-2">
                   <Label htmlFor="plan">Plano</Label>
-                  <Select value={form.planId} onValueChange={(value) => set("planId", value)}>
+                  <Select
+                    value={form.planId}
+                    onValueChange={(value) => set("planId", value)}
+                  >
                     <SelectTrigger id="plan">
                       <SelectValue placeholder="Escolha o plano" />
                     </SelectTrigger>
@@ -639,7 +847,10 @@ function SendPage() {
               {form.targetType === "PRODUCT" ? (
                 <div className="space-y-2">
                   <Label htmlFor="product">Produto</Label>
-                  <Select value={form.productId} onValueChange={(value) => set("productId", value)}>
+                  <Select
+                    value={form.productId}
+                    onValueChange={(value) => set("productId", value)}
+                  >
                     <SelectTrigger id="product">
                       <SelectValue placeholder="Escolha o produto" />
                     </SelectTrigger>
@@ -657,7 +868,10 @@ function SendPage() {
               {form.targetType === "EVENT" ? (
                 <div className="space-y-2">
                   <Label htmlFor="event">Evento</Label>
-                  <Select value={form.eventId} onValueChange={(value) => set("eventId", value)}>
+                  <Select
+                    value={form.eventId}
+                    onValueChange={(value) => set("eventId", value)}
+                  >
                     <SelectTrigger id="event">
                       <SelectValue placeholder="Escolha o evento" />
                     </SelectTrigger>
@@ -675,16 +889,28 @@ function SendPage() {
               {form.targetType === "FORM" ? (
                 <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
                   <p className="flex items-center gap-2 text-xs font-medium text-foreground">
-                    <FileText className="size-4" /> Link do formulário de dados do aluno
+                    <FileText className="size-4" /> Link do formulário de dados
+                    do aluno
                   </p>
                   <p className="break-all text-xs text-muted-foreground">
-                    {formUrl || "Conclua o cadastro do negócio para gerar o link."}
+                    {formUrl ||
+                      "Conclua o cadastro do negócio para gerar o link."}
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={insertFormLink}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={insertFormLink}
+                    >
                       <Plus className="size-4" /> Inserir link na mensagem
                     </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={copyFormLink}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={copyFormLink}
+                    >
                       <Copy className="size-4" /> Copiar link
                     </Button>
                   </div>
@@ -693,30 +919,31 @@ function SendPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="body">Mensagem</Label>
-                <Textarea
-                  id="body"
-                  rows={5}
-                  value={form.body}
-                  onChange={(event) => set("body", event.target.value)}
-                  placeholder="Adicione o texto da mensagem"
-                />
+                <MessageEditor value={form.body} onChange={(body) => set("body", body)} />
                 <p className="text-xs text-muted-foreground">
-                  Tags: <code>[aluno]</code>, <code>[responsavel]</code> e <code>[link]</code>. O link é gerado para a cobrança pendente do aluno ao abrir o WhatsApp.
+                  Tags: <code>[aluno]</code>, <code>[responsavel]</code> e{" "}
+                  <code>[link]</code>. O link é gerado para a cobrança pendente
+                  do aluno ao abrir o WhatsApp.
                 </p>
               </div>
 
               <div className="rounded-lg border border-border p-3">
-                <p className="text-sm font-medium text-foreground">Envio manual pelo WhatsApp</p>
+                <p className="text-sm font-medium text-foreground">
+                  Envio manual pelo WhatsApp
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  A Mensaly prepara a mensagem individual. O envio só acontece quando você escolhe o
-                  aluno e confirma a abertura do WhatsApp.
+                  A Mensaly prepara a mensagem individual. O envio só acontece
+                  quando você escolhe o aluno e confirma a abertura do WhatsApp.
                 </p>
               </div>
             </div>
 
-
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
@@ -727,7 +954,10 @@ function SendPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={sending !== null} onOpenChange={(value) => (value ? null : setSending(null))}>
+      <Dialog
+        open={sending !== null}
+        onOpenChange={(value) => (value ? null : setSending(null))}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Abrir conversa no WhatsApp</DialogTitle>
@@ -741,7 +971,6 @@ function SendPage() {
                   }.`
                 : ""}
             </DialogDescription>
-
           </DialogHeader>
 
           <div className="space-y-3 py-2">
@@ -759,7 +988,9 @@ function SendPage() {
 
             <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
               {eligibleStudents.length === 0 ? (
-                <p className="p-3 text-sm text-muted-foreground">Nenhum aluno disponível.</p>
+                <p className="p-3 text-sm text-muted-foreground">
+                  Nenhum aluno disponível.
+                </p>
               ) : (
                 eligibleStudents.map((student) => {
                   return (
@@ -768,12 +999,18 @@ function SendPage() {
                       className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/60"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm text-foreground">{student.name}</span>
+                        <span className="block truncate text-sm text-foreground">
+                          {student.name}
+                        </span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {student.plan} · {guardianPhone(student.guardianId) || "Sem telefone"}
+                          {student.plan} ·{" "}
+                          {guardianPhone(student.guardianId) || "Sem telefone"}
                         </span>
                       </span>
-                      {whatsappManualLink(guardianPhone(student.guardianId), "teste") ? (
+                      {whatsappManualLink(
+                        guardianPhone(student.guardianId),
+                        "teste",
+                      ) ? (
                         <Button
                           size="sm"
                           variant="outline"
@@ -782,10 +1019,17 @@ function SendPage() {
                           aria-label={`Abrir WhatsApp de ${student.name}`}
                         >
                           <ExternalLink className="size-4" />
-                          {openingStudentId === student.id ? "Gerando..." : "WhatsApp"}
+                          {openingStudentId === student.id
+                            ? "Gerando..."
+                            : "WhatsApp"}
                         </Button>
                       ) : (
-                        <Button size="sm" variant="outline" disabled title="Cadastre um WhatsApp válido para o responsável.">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title="Cadastre um WhatsApp válido para o responsável."
+                        >
                           Sem WhatsApp
                         </Button>
                       )}
@@ -797,24 +1041,34 @@ function SendPage() {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setSending(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSending(null)}
+            >
               Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleting !== null} onOpenChange={(value) => (value ? null : setDeleting(null))}>
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(value) => (value ? null : setDeleting(null))}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir mensagem</AlertDialogTitle>
             <AlertDialogDescription>
-              A mensagem “{deleting?.name}” e o histórico de envios serão removidos.
+              A mensagem “{deleting?.name}” e o histórico de envios serão
+              removidos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Excluir</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>
+              Excluir
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

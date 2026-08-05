@@ -102,6 +102,9 @@ export async function createApiApplication(
   configureAdminInsights(environment);
   const adapter = new FastifyAdapter({
     bodyLimit: Math.max(1_048_576, environment.FILE_MAX_SIZE_BYTES + 65_536),
+    // Signed public enrollment tokens are intentionally non-enumerable and
+    // exceed Fastify's default 100-character route parameter limit.
+    maxParamLength: 256,
     trustProxy:
       environment.TRUST_PROXY_HOPS > 0
         ? environment.TRUST_PROXY_HOPS
@@ -116,7 +119,9 @@ export async function createApiApplication(
     },
   });
   registerRequestContext(adapter.getInstance());
-  registerApiSecurity(adapter.getInstance(), environment.CORS_ORIGINS);
+  registerApiSecurity(adapter.getInstance(), environment.CORS_ORIGINS, {
+    allowLocalDevelopmentOrigins: environment.NODE_ENV !== "production",
+  });
   registerRateLimit(adapter.getInstance(), {
     store: new RedisRateLimitStore(
       environment.REDIS_URL,

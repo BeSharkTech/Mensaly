@@ -34,7 +34,7 @@ export const linkGuardianSchema = z
   })
   .strict();
 
-const planFieldsSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000).optional(), amountCents: amount, chargeOpenDay: dueDay.default(1), chargeOpenTime: chargeOpenTime.default("00:00"), dueDay, frequency: z.literal("MONTHLY").default("MONTHLY") }).strict();
+const planFieldsSchema = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(1000).optional(), amountCents: amount, chargeOpenDay: dueDay.default(1), chargeOpenTime: chargeOpenTime.default("00:00"), dueDay: dueDay.default(10), frequency: z.literal("MONTHLY").default("MONTHLY") }).strict();
 const validChargeWindow = (value: { chargeOpenDay?: number; dueDay?: number }) =>
   value.chargeOpenDay === undefined || value.dueDay === undefined || value.chargeOpenDay <= value.dueDay;
 export const createPlanSchema = planFieldsSchema.refine(validChargeWindow, { path: ["chargeOpenDay"], message: "Charge opening day cannot be after due day" });
@@ -43,10 +43,41 @@ export const updatePlanSchema = planFieldsSchema
   .extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() })
   .refine((value) => Object.keys(value).length > 0)
   .refine(validChargeWindow, { path: ["chargeOpenDay"], message: "Charge opening day cannot be after due day" });
-export const createStudentSchema = z.object({ name: z.string().trim().min(2).max(120), cpf, birthDate: z.string().date().optional(), email: z.string().trim().email().max(255).optional(), phone: z.string().trim().max(32).optional(), notes: z.string().trim().max(2000).optional() }).strict();
-export const updateStudentSchema = createStudentSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() }).refine((value) => Object.keys(value).length > 0);
+const studentFieldsSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120),
+    cpf: cpf.optional(),
+    rg: z.string().trim().min(5).max(30).optional(),
+    birthDate: z.string().date().optional(),
+    email: z.string().trim().email().max(255).optional(),
+    phone: z.string().trim().max(32).optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+export const createStudentSchema = studentFieldsSchema
+  .extend({ photoFileId: id.optional() })
+  .strict()
+  .refine((value) => Boolean(value.cpf || value.rg), {
+    path: ["cpf"],
+    message: "CPF or RG is required",
+  });
+export const updateStudentSchema = studentFieldsSchema
+  .partial()
+  .extend({
+    cpf: cpf.nullable().optional(),
+    rg: z.string().trim().min(5).max(30).nullable().optional(),
+    photoFileId: id.nullable().optional(),
+    status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0);
 export const createGuardianSchema = z.object({ name: z.string().trim().min(2).max(120), phone: z.string().trim().min(8).max(32), email: z.string().trim().email().max(255).optional(), taxId: cpf }).strict();
-export const updateGuardianSchema = createGuardianSchema.partial().extend({ status: z.enum(["ACTIVE", "INACTIVE"]).optional() }).refine((value) => Object.keys(value).length > 0);
+export const updateGuardianSchema = createGuardianSchema
+  .partial()
+  .extend({
+    email: z.string().trim().email().max(255).nullable().optional(),
+    status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0);
 export const createEnrollmentSchema = z
   .object({
     studentId: id,
@@ -78,6 +109,16 @@ export const createEnrollmentSchema = z
       value.discountCents < value.amountCents,
     { path: ["discountCents"], message: "Discount must be lower than amount" },
   );
+export const createStudentEnrollmentSchema = z
+  .object({
+    student: createStudentSchema,
+    guardian: createGuardianSchema,
+    relationship: z.string().trim().min(1).max(80).optional(),
+    planId: id,
+    amountCents: amount.optional(),
+    startDate: date,
+  })
+  .strict();
 export const updateEnrollmentSchema = z
   .object({
     amountCents: amount.optional(),
@@ -99,8 +140,9 @@ export class UpdateStudentDto { static readonly schema = updateStudentSchema; }
 export class CreateGuardianDto { static readonly schema = createGuardianSchema; }
 export class UpdateGuardianDto { static readonly schema = updateGuardianSchema; }
 export class CreateEnrollmentDto { static readonly schema = createEnrollmentSchema; }
+export class CreateStudentEnrollmentDto { static readonly schema = createStudentEnrollmentSchema; }
 export class UpdateEnrollmentDto { static readonly schema = updateEnrollmentSchema; }
-export type CreatePlanInput = z.infer<typeof createPlanSchema>; export type UpdatePlanInput = z.infer<typeof updatePlanSchema>; export type CreateStudentInput = z.infer<typeof createStudentSchema>; export type UpdateStudentInput = z.infer<typeof updateStudentSchema>; export type CreateGuardianInput = z.infer<typeof createGuardianSchema>; export type UpdateGuardianInput = z.infer<typeof updateGuardianSchema>; export type CreateEnrollmentInput = z.infer<typeof createEnrollmentSchema>; export type UpdateEnrollmentInput = z.infer<typeof updateEnrollmentSchema>;
+export type CreatePlanInput = z.infer<typeof createPlanSchema>; export type UpdatePlanInput = z.infer<typeof updatePlanSchema>; export type CreateStudentInput = z.infer<typeof createStudentSchema>; export type UpdateStudentInput = z.infer<typeof updateStudentSchema>; export type CreateGuardianInput = z.infer<typeof createGuardianSchema>; export type UpdateGuardianInput = z.infer<typeof updateGuardianSchema>; export type CreateEnrollmentInput = z.infer<typeof createEnrollmentSchema>; export type CreateStudentEnrollmentInput = z.infer<typeof createStudentEnrollmentSchema>; export type UpdateEnrollmentInput = z.infer<typeof updateEnrollmentSchema>;
 export type OperationalListInput = z.infer<typeof operationalListSchema>;
 export type EnrollmentListInput = z.infer<typeof enrollmentListSchema>;
 export type LinkGuardianInput = z.infer<typeof linkGuardianSchema>;

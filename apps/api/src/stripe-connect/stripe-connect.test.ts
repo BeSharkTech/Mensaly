@@ -295,6 +295,7 @@ describe("Stripe Connect foundation", () => {
         data: {
           organizationId: organization.id,
           enrollmentId: enrollment.id,
+          cycleKey: "test:stripe-connect",
           referenceMonth: new Date("2026-08-01T00:00:00.000Z"),
           dueDate: new Date("2026-08-05T00:00:00.000Z"),
           amountCents: 12_000,

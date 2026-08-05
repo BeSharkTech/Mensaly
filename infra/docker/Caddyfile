@@ -12,7 +12,10 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 	}
 
-	reverse_proxy web:3000
+	reverse_proxy web:3000 {
+		header_up -X-Real-IP
+		header_up X-Real-IP {remote_host}
+	}
 }
 
 {$PUBLIC_API_HOST} {

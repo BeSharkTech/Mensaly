@@ -21,7 +21,9 @@ describe("API response contracts", () => {
       ),
     );
 
-    await expect(apiEnvelopeRequest<Array<{ id: string }>>("/charges")).resolves.toEqual({
+    await expect(
+      apiEnvelopeRequest<Array<{ id: string }>>("/charges"),
+    ).resolves.toEqual({
       data: [{ id: "charge-1" }],
       meta: { page: 1, limit: 100, total: 1, pages: 1 },
     });
@@ -38,7 +40,9 @@ describe("API response contracts", () => {
       ),
     );
 
-    await expect(apiRequest<{ id: string; name: string }>("/plans/plan-1")).resolves.toEqual({
+    await expect(
+      apiRequest<{ id: string; name: string }>("/plans/plan-1"),
+    ).resolves.toEqual({
       id: "plan-1",
       name: "Mensal",
     });
@@ -58,9 +62,10 @@ describe("API response contracts", () => {
       ),
     );
 
-    const error = await apiRequest("/students", { method: "POST", body: {} }).catch(
-      (caught: unknown) => caught,
-    );
+    const error = await apiRequest("/students", {
+      method: "POST",
+      body: {},
+    }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApiRequestError);
     expect(error).toMatchObject({
       message: "Invalid request data",

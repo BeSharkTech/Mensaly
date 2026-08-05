@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, CheckCheck, Paperclip, Phone, Search, Send, Smile, Video } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  Paperclip,
+  Phone,
+  Search,
+  Send,
+  Smile,
+  Video,
+} from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -21,7 +30,8 @@ export const Route = createFileRoute("/mensagens")({
       { property: "og:title", content: "Mensagens — Mensaly" },
       {
         property: "og:description",
-        content: "Converse com os responsáveis dos alunos direto pelo painel Mensaly.",
+        content:
+          "Converse com os responsáveis dos alunos direto pelo painel Mensaly.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -92,7 +102,8 @@ function MessagesPage() {
     chat.student.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
 
-  const active = chats.find((chat) => chat.student.id === activeId) ?? filtered[0] ?? null;
+  const active =
+    chats.find((chat) => chat.student.id === activeId) ?? filtered[0] ?? null;
 
   return (
     <AppShell>
@@ -178,7 +189,10 @@ function MessagesPage() {
                       {active.student.name}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {active.student.guardian || active.student.plan || "Responsável"} · online
+                      {active.student.guardian ||
+                        active.student.plan ||
+                        "Responsável"}{" "}
+                      · online
                     </p>
                   </div>
                 </div>
@@ -234,7 +248,11 @@ function MessagesPage() {
               <footer className="flex items-center gap-2 border-t border-border p-3">
                 <Smile className="size-5 shrink-0 text-muted-foreground" />
                 <Paperclip className="size-5 shrink-0 text-muted-foreground" />
-                <Input placeholder="Digite uma mensagem" disabled className="flex-1" />
+                <Input
+                  placeholder="Digite uma mensagem"
+                  disabled
+                  className="flex-1"
+                />
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Send className="size-4" />
                 </span>

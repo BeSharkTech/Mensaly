@@ -20,10 +20,14 @@ export const Route = createFileRoute("/admin/organizacoes")({
       { title: "Organizações — Admin Mensaly" },
       {
         name: "description",
-        content: "Lista de escolas na plataforma, com responsável, volume de alunos e situação.",
+        content:
+          "Lista de escolas na plataforma, com responsável, volume de alunos e situação.",
       },
       { property: "og:title", content: "Organizações — Admin Mensaly" },
-      { property: "og:description", content: "Escolas na plataforma e sua situação." },
+      {
+        property: "og:description",
+        content: "Escolas na plataforma e sua situação.",
+      },
     ],
   }),
   component: AdminOrganizationsPage,
@@ -42,7 +46,10 @@ function AdminOrganizationsPage() {
 
       <div className="relative w-full max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Buscar por nome ou e-mail do responsável" className="pl-9" />
+        <Input
+          placeholder="Buscar por nome ou e-mail do responsável"
+          className="pl-9"
+        />
       </div>
 
       <div className="card-surface overflow-x-auto">
@@ -60,17 +67,31 @@ function AdminOrganizationsPage() {
           <tbody>
             {organizations.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                <td
+                  colSpan={6}
+                  className="px-5 py-12 text-center text-sm text-muted-foreground"
+                >
                   Nenhuma organização cadastrada ainda.
                 </td>
               </tr>
             ) : (
               organizations.map((org) => (
-                <tr key={org.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                  <td className="px-5 py-3 font-medium text-foreground">{org.name}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{org.owner}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{org.students}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{formatDate(org.createdAt)}</td>
+                <tr
+                  key={org.id}
+                  className="border-b border-border last:border-0 hover:bg-muted/50"
+                >
+                  <td className="px-5 py-3 font-medium text-foreground">
+                    {org.name}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {org.owner}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {org.students}
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">
+                    {formatDate(org.createdAt)}
+                  </td>
                   <td className="px-5 py-3">
                     <StatusBadge status={org.status} />
                   </td>
@@ -87,7 +108,9 @@ function AdminOrganizationsPage() {
                                   `${formatDateTime(entry.createdAt)} — ${entry.action} — ${entry.actor?.name ?? "Sistema"}`,
                               )
                               .join("\n");
-                            window.alert(history || "Nenhum histórico registrado.");
+                            window.alert(
+                              history || "Nenhum histórico registrado.",
+                            );
                           })
                           .catch((error: unknown) =>
                             toast.error(
@@ -105,11 +128,16 @@ function AdminOrganizationsPage() {
                       size="sm"
                       onClick={() => {
                         const status = window
-                          .prompt("Novo status: ACTIVE, INACTIVE ou BLOCKED", org.status)
+                          .prompt(
+                            "Novo status: ACTIVE, INACTIVE ou BLOCKED",
+                            org.status,
+                          )
                           ?.trim()
                           .toUpperCase();
                         if (!status) return;
-                        if (!["ACTIVE", "INACTIVE", "BLOCKED"].includes(status)) {
+                        if (
+                          !["ACTIVE", "INACTIVE", "BLOCKED"].includes(status)
+                        ) {
                           toast.error("Use ACTIVE, INACTIVE ou BLOCKED.");
                           return;
                         }

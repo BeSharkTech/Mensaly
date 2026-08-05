@@ -65,13 +65,15 @@ type ApiPlan = {
 
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 
-async function page<T>(path: string): Promise<Page<T>> {
+async function fetchPage<T>(path: string, pageNumber: number): Promise<Page<T>> {
   const result = await apiEnvelopeRequest<T[] | Partial<Page<T>>>(path, {
-    query: { page: 1, pageSize: 100 },
+    query: { page: pageNumber, pageSize: 100 },
   });
   const meta = result.meta ?? {};
   const legacyPage =
-    !Array.isArray(result.data) && result.data && typeof result.data === "object"
+    !Array.isArray(result.data) &&
+    result.data &&
+    typeof result.data === "object"
       ? result.data
       : null;
   const items = Array.isArray(result.data)
@@ -86,7 +88,7 @@ async function page<T>(path: string): Promise<Page<T>> {
         ? meta.page
         : typeof legacyPage?.page === "number"
           ? legacyPage.page
-          : 1,
+          : pageNumber,
     pageSize:
       typeof meta.limit === "number"
         ? meta.limit
@@ -101,6 +103,22 @@ async function page<T>(path: string): Promise<Page<T>> {
         : typeof legacyPage?.total === "number"
           ? legacyPage.total
           : items.length,
+  };
+}
+
+async function page<T>(path: string): Promise<Page<T>> {
+  const first = await fetchPage<T>(path, 1);
+  const totalPages = Math.ceil(first.total / Math.max(1, first.pageSize));
+  if (totalPages <= 1) return first;
+
+  const remaining = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchPage<T>(path, index + 2),
+    ),
+  );
+  return {
+    ...first,
+    items: [first, ...remaining].flatMap((result) => result.items),
   };
 }
 
@@ -163,9 +181,7 @@ export async function loadState(): Promise<AppState> {
   }
 
   const organization = await ownOrganization();
-  const planPage = organization
-    ? await page<ApiPlan>("/plans")
-    : { items: [] };
+  const planPage = organization ? await page<ApiPlan>("/plans") : { items: [] };
 
   const brand = organization?.brand ?? {};
   return {
@@ -225,7 +241,15 @@ export async function saveOnboarding(input: {
   if (!user) throw new Error("Sessão expirada. Entre novamente.");
 
   const existingOrganization = await ownOrganization();
-  const pendingInput = { ...input, onboardingComplete: false };
+  // Reabrir o onboarding apenas para conectar recebimentos nas configurações
+  // não pode expulsar uma conta que já concluiu a ativação.
+  const pendingInput = {
+    ...input,
+    onboardingComplete:
+      existingOrganization?.brand?.onboardingComplete === true
+        ? true
+        : false,
+  };
   if (existingOrganization) {
     await apiRequest("/organization", {
       method: "PATCH",
@@ -242,7 +266,9 @@ export async function saveOnboarding(input: {
     ? await page<ApiPlan>("/plans")
     : { items: [] };
   const submittedIds = new Set(
-    input.plans.filter((plan) => /^[0-9a-f-]{36}$/i.test(plan.id)).map((plan) => plan.id),
+    input.plans
+      .filter((plan) => /^[0-9a-f-]{36}$/i.test(plan.id))
+      .map((plan) => plan.id),
   );
 
   await Promise.all([
@@ -297,7 +323,8 @@ export async function saveBusinessSettings(input: {
   brandColor: string;
 }) {
   const state = await loadState();
-  if (!state.account || !state.business) throw new Error("Sessão expirada. Entre novamente.");
+  if (!state.account || !state.business)
+    throw new Error("Sessão expirada. Entre novamente.");
   await apiRequest("/organization", {
     method: "PATCH",
     body: organizationPayload({
@@ -319,12 +346,12 @@ function bindAuthListener() {
   authListenerBound = true;
   onAuthChange(() => {
     resetDashboardData();
-    void stateStore.refresh();
+    void stateStore.refresh().catch(() => undefined);
   });
 }
 
 export function useAppState() {
   bindAuthListener();
-  const { value, loaded } = useCacheStore(stateStore);
-  return { state: value, hydrated: loaded, refresh: stateStore.refresh };
+  const { value, loaded, error } = useCacheStore(stateStore);
+  return { state: value, hydrated: loaded, error, refresh: stateStore.refresh };
 }

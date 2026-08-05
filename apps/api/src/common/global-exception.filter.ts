@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { getCorrelationId } from "./correlation";
+import { getCorrelationId, safeRequestPath } from "./correlation";
 import { reportUnhandledException } from "./observability";
 import { currentAuthContext } from "../authorization/authorization-context";
 
@@ -35,6 +35,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<FastifyRequest>();
     const reply = http.getResponse<FastifyReply>();
     const correlationId = getCorrelationId(request);
+    const path = safeRequestPath(request.url);
     const isHttpException = exception instanceof HttpException;
     const status = isHttpException
       ? exception.getStatus()
@@ -48,17 +49,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           : "Request failed";
     const code =
       typeof payload.code === "string" ? payload.code : defaultCode(status);
-    const details = Array.isArray(payload.details) ? payload.details : undefined;
+    const details = Array.isArray(payload.details)
+      ? payload.details
+      : undefined;
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       logger.error(
-        { correlationId, err: exception, method: request.method, path: request.url },
+        { correlationId, err: exception, method: request.method, path },
         "request failed",
       );
       reportUnhandledException(exception, {
         correlationId,
         method: request.method,
-        path: request.url,
+        path,
         organizationId: currentAuthContext(request)?.organizationId,
       });
     }
@@ -71,7 +74,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       },
       correlationId,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path,
     });
   }
 }

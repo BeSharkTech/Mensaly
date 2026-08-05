@@ -59,10 +59,9 @@ function queueRecorder(
 }
 
 async function createFixture(
-  options: { chargeOpenDay?: number; chargeOpenTime?: string; dueDay?: number } = {},
+  options: { chargeOpenDay?: number; dueDay?: number } = {},
 ) {
   const chargeOpenDay = options.chargeOpenDay ?? 1;
-  const chargeOpenTime = options.chargeOpenTime ?? "00:00";
   const dueDay = options.dueDay ?? 10;
   if (organizationIds.length > 0) {
     await prisma.organization.updateMany({
@@ -120,7 +119,6 @@ async function createFixture(
       name: "Mensal",
       amountCents: 12000,
       chargeOpenDay,
-      chargeOpenTime,
       dueDay,
     },
   });
@@ -150,10 +148,31 @@ async function createFixture(
       amountCents: 12000,
       discountCents: 1000,
       chargeOpenDay,
-      chargeOpenTime,
       dueDay,
       startDate: new Date("2026-01-01"),
       planNameSnapshot: plan.name,
+    },
+  });
+  const billingRule = await prisma.billingRule.create({
+    data: {
+      organizationId: organization.id,
+      name: "Mensalidade",
+      sourceType: "PLAN",
+      sourceId: plan.id,
+      sourceNameSnapshot: plan.name,
+      amountCents: plan.amountCents,
+      idempotencyKey: `test:scheduled-tasks:${suffix}`,
+      frequency: "MONTHLY",
+      opensOn: new Date(Date.UTC(2026, 0, chargeOpenDay)),
+      expiresOn: new Date(Date.UTC(2026, 0, dueDay)),
+      repeatUntil: new Date("2099-12-31T00:00:00.000Z"),
+    },
+  });
+  await prisma.billingRuleTarget.create({
+    data: {
+      organizationId: organization.id,
+      billingRuleId: billingRule.id,
+      studentId: student.id,
     },
   });
   return {
@@ -162,6 +181,7 @@ async function createFixture(
     configuration,
     rule,
     enrollment,
+    billingRule,
   };
 }
 
@@ -276,26 +296,25 @@ describe("scheduled tasks integration", () => {
     );
   });
 
-  it("waits for the configured local opening time", async () => {
+  it("waits for the configured local opening date", async () => {
     const fixture = await createFixture({
       chargeOpenDay: 10,
-      chargeOpenTime: "09:00",
       dueDay: 15,
     });
     const recorder = queueRecorder();
-    const beforeTime = new ScheduledTasksService(prisma, recorder.queue, {
-      // 08:59 in America/Sao_Paulo.
-      now: () => new Date("2026-07-10T11:59:00.000Z"),
+    const beforeDate = new ScheduledTasksService(prisma, recorder.queue, {
+      // 23:59 on July 9 in America/Sao_Paulo.
+      now: () => new Date("2026-07-10T02:59:00.000Z"),
       lookaheadMs: 15 * 24 * 60 * 60 * 1000,
     });
-    const atTime = new ScheduledTasksService(prisma, recorder.queue, {
-      // 09:00 in America/Sao_Paulo.
-      now: () => new Date("2026-07-10T12:00:00.000Z"),
+    const onDate = new ScheduledTasksService(prisma, recorder.queue, {
+      // 00:00 on July 10 in America/Sao_Paulo.
+      now: () => new Date("2026-07-10T03:00:00.000Z"),
       lookaheadMs: 15 * 24 * 60 * 60 * 1000,
     });
 
-    assert.equal((await beforeTime.reconcile()).chargesCreated, 0);
-    assert.equal((await atTime.reconcile()).chargesCreated, 1);
+    assert.equal((await beforeDate.reconcile()).chargesCreated, 0);
+    assert.equal((await onDate.reconcile()).chargesCreated, 1);
     assert.equal(
       await prisma.charge.count({ where: { organizationId: fixture.organization.id } }),
       1,
@@ -429,6 +448,8 @@ describe("scheduled tasks integration", () => {
       data: {
         organizationId: fixture.organization.id,
         enrollmentId: fixture.enrollment.id,
+        billingRuleId: fixture.billingRule.id,
+        cycleKey: `rule:${fixture.billingRule.id}:2026-07`,
         referenceMonth,
         dueDate: new Date("2026-07-10T00:00:00.000Z"),
         amountCents: 12000,
@@ -589,6 +610,12 @@ after(async () => {
     where: { organizationId: organizations },
   });
   await prisma.charge.deleteMany({ where: { organizationId: organizations } });
+  await prisma.billingRuleTarget.deleteMany({
+    where: { organizationId: organizations },
+  });
+  await prisma.billingRule.deleteMany({
+    where: { organizationId: organizations },
+  });
   await prisma.enrollment.deleteMany({
     where: { organizationId: organizations },
   });

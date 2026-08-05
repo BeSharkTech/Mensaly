@@ -50,11 +50,13 @@ describe("whatsappManualLink", () => {
 
 describe("renderMessageForStudent", () => {
   it("replaces every supported tag without changing the saved template", () => {
-    expect(renderMessageForStudent("Olá [aluno]! Fale com [responsavel]: [link]", {
-      studentName: "Marcos",
-      guardianName: "Patrícia",
-      paymentLink: "https://app.mensaly.online/pagar/token",
-    })).toBe(
+    expect(
+      renderMessageForStudent("Olá [aluno]! Fale com [responsavel]: [link]", {
+        studentName: "Marcos",
+        guardianName: "Patrícia",
+        paymentLink: "https://app.mensaly.online/pagar/token",
+      }),
+    ).toBe(
       "Olá Marcos! Fale com Patrícia: https://app.mensaly.online/pagar/token",
     );
   });

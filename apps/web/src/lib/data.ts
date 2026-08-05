@@ -12,6 +12,7 @@ import type {
 export type Guardian = {
   id: string;
   name: string;
+  taxId: string;
   email: string;
   phone: string;
   status: "ACTIVE" | "INACTIVE";
@@ -22,6 +23,7 @@ export type Student = {
   id: string;
   name: string;
   cpf: string;
+  rg: string;
   birthDate: string | null;
   guardian: string;
   guardianId: string | null;
@@ -29,6 +31,7 @@ export type Student = {
   planId: string | null;
   enrollmentId: string | null;
   status: "ACTIVE" | "INACTIVE";
+  photoFileId?: string | null;
 };
 
 export type CustomFieldType = "TEXT" | "NUMBER" | "DATE" | "SELECT" | "BOOLEAN";
@@ -36,6 +39,7 @@ export type CustomField = {
   id: string;
   label: string;
   type: CustomFieldType;
+  subject: "STUDENT" | "GUARDIAN";
   options: string[];
   required: boolean;
   sortOrder: number;
@@ -163,7 +167,8 @@ export type EventItem = {
   createdAt: string;
 };
 export type BroadcastTarget = "GENERAL" | "PLAN" | "PRODUCT" | "EVENT" | "FORM";
-export type BroadcastScheduleType = "MANUAL" | "ONCE" | "DAILY" | "WEEKLY" | "MONTHLY";
+export type BroadcastScheduleType =
+  "MANUAL" | "ONCE" | "DAILY" | "WEEKLY" | "MONTHLY";
 export type BroadcastMessage = {
   id: string;
   name: string;
@@ -223,6 +228,7 @@ export type DashboardData = {
   broadcasts: BroadcastMessage[];
   broadcastSends: BroadcastSend[];
   studentFieldValues: StudentFieldValues;
+  guardianFieldValues: StudentFieldValues;
   overview: {
     monthlyBilledCents: number;
     monthlyReceivedCents: number;
@@ -259,6 +265,7 @@ export const emptyData: DashboardData = {
   broadcasts: [],
   broadcastSends: [],
   studentFieldValues: {},
+  guardianFieldValues: {},
   overview: {
     monthlyBilledCents: 0,
     monthlyReceivedCents: 0,
@@ -277,7 +284,12 @@ export const emptyData: DashboardData = {
 
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 type RawAdminOverview = {
-  organizations: { total: number; active: number; inactive: number; blocked: number };
+  organizations: {
+    total: number;
+    active: number;
+    inactive: number;
+    blocked: number;
+  };
   activeStudents: number;
   charges: number;
   confirmedAmountCents: number;
@@ -340,12 +352,15 @@ type RawStudent = {
   id: string;
   name: string;
   cpf: string | null;
+  rg: string | null;
   birthDate?: string | null;
   status: "ACTIVE" | "INACTIVE";
+  photoFile?: { id: string; contentType: string } | null;
 };
 type RawGuardian = {
   id: string;
   name: string;
+  taxId: string;
   email: string | null;
   phone: string;
   status: "ACTIVE" | "INACTIVE";
@@ -372,6 +387,7 @@ type RawCharge = {
   discountCents: number;
   finalAmountCents: number;
   status: ChargeStatus;
+  billingRule: { sourceNameSnapshot: string } | null;
   enrollment: RawEnrollment;
 };
 type RawTemplate = {
@@ -423,6 +439,7 @@ type RawEvolution = {
 type WorkspaceData = {
   customFields: CustomField[];
   studentFieldValues: StudentFieldValues;
+  guardianFieldValues: StudentFieldValues;
   products: Product[];
   events: EventItem[];
   broadcasts: BroadcastMessage[];
@@ -437,18 +454,21 @@ async function optional<T>(request: Promise<T>, fallback: T): Promise<T> {
   try {
     return await request;
   } catch (error) {
-    if (error instanceof ApiRequestError && error.status === 404) return fallback;
+    if (error instanceof ApiRequestError && error.status === 404)
+      return fallback;
     throw error;
   }
 }
 
-async function page<T>(path: string): Promise<Page<T>> {
+async function fetchPage<T>(path: string, pageNumber: number): Promise<Page<T>> {
   const result = await apiEnvelopeRequest<T[] | Partial<Page<T>>>(path, {
-    query: { page: 1, pageSize: 100 },
+    query: { page: pageNumber, pageSize: 100 },
   });
   const meta = result.meta ?? {};
   const legacyPage =
-    !Array.isArray(result.data) && result.data && typeof result.data === "object"
+    !Array.isArray(result.data) &&
+    result.data &&
+    typeof result.data === "object"
       ? result.data
       : null;
   const items = Array.isArray(result.data)
@@ -463,7 +483,7 @@ async function page<T>(path: string): Promise<Page<T>> {
         ? meta.page
         : typeof legacyPage?.page === "number"
           ? legacyPage.page
-          : 1,
+          : pageNumber,
     pageSize:
       typeof meta.limit === "number"
         ? meta.limit
@@ -481,11 +501,40 @@ async function page<T>(path: string): Promise<Page<T>> {
   };
 }
 
+async function page<T>(path: string): Promise<Page<T>> {
+  const first = await fetchPage<T>(path, 1);
+  const totalPages = Math.ceil(first.total / Math.max(1, first.pageSize));
+  if (totalPages <= 1) return first;
+
+  const remaining = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchPage<T>(path, index + 2),
+    ),
+  );
+  return {
+    ...first,
+    items: [first, ...remaining].flatMap((result) => result.items),
+  };
+}
+
 function isoDate(value: string) {
   return value.slice(0, 10);
 }
 
-const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MONTH_LABELS = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
 
 async function loadAdminDashboardData(): Promise<DashboardData> {
   const [overview, organizations, failures, webhookEvents] = await Promise.all([
@@ -498,13 +547,16 @@ async function loadAdminDashboardData(): Promise<DashboardData> {
       query: { page: 1, pageSize: 100 },
     }),
   ]);
-  const names = new Map(organizations.map((organization) => [organization.id, organization.name]));
+  const names = new Map(
+    organizations.map((organization) => [organization.id, organization.name]),
+  );
   const failureRows: Failure[] = [
     ...failures.messages.map((failure) => ({
       id: `message-${failure.id}`,
       type: "Mensagem",
       reference: failure.id.slice(0, 8),
-      organization: names.get(failure.organizationId) ?? failure.organizationId.slice(0, 8),
+      organization:
+        names.get(failure.organizationId) ?? failure.organizationId.slice(0, 8),
       code: failure.lastErrorCode ?? failure.status,
       occurredAt: failure.lastAttemptAt ?? new Date(0).toISOString(),
       retryable: failure.status === "FAILED_RETRYABLE",
@@ -513,7 +565,8 @@ async function loadAdminDashboardData(): Promise<DashboardData> {
       id: `webhook-${failure.id}`,
       type: "Webhook",
       reference: failure.id.slice(0, 8),
-      organization: names.get(failure.organizationId) ?? failure.organizationId.slice(0, 8),
+      organization:
+        names.get(failure.organizationId) ?? failure.organizationId.slice(0, 8),
       code: failure.lastErrorCode ?? failure.status,
       occurredAt: failure.failedAt ?? new Date(0).toISOString(),
       retryable: failure.status === "FAILED_RETRYABLE",
@@ -531,7 +584,9 @@ async function loadAdminDashboardData(): Promise<DashboardData> {
       status: organization.status,
       createdAt: organization.createdAt,
     })),
-    failures: failureRows.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
+    failures: failureRows.sort((a, b) =>
+      b.occurredAt.localeCompare(a.occurredAt),
+    ),
     webhookEvents: webhookEvents.map((event) => ({
       id: event.id,
       provider: event.provider,
@@ -542,7 +597,8 @@ async function loadAdminDashboardData(): Promise<DashboardData> {
     })),
     overview: {
       ...emptyData.overview,
-      monthlyBilledCents: overview.confirmedAmountCents + overview.pendingAmountCents,
+      monthlyBilledCents:
+        overview.confirmedAmountCents + overview.pendingAmountCents,
       monthlyReceivedCents: overview.confirmedAmountCents,
       openChargesCents: overview.pendingAmountCents,
       activeStudents: overview.activeStudents,
@@ -623,6 +679,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     optional(apiRequest<WorkspaceData>("/workspace"), {
       customFields: [],
       studentFieldValues: {},
+      guardianFieldValues: {},
       products: [],
       events: [],
       broadcasts: [],
@@ -651,6 +708,12 @@ export async function loadDashboardData(): Promise<DashboardData> {
   ]);
 
   const activeEnrollment = new Map<string, RawEnrollment>();
+  const latestEnrollment = new Map<string, RawEnrollment>();
+  list(enrollmentPage.items).forEach((enrollment) => {
+    if (!latestEnrollment.has(enrollment.studentId)) {
+      latestEnrollment.set(enrollment.studentId, enrollment);
+    }
+  });
   list(enrollmentPage.items)
     .filter((enrollment) => enrollment.status === "ACTIVE")
     .forEach((enrollment) => {
@@ -659,59 +722,70 @@ export async function loadDashboardData(): Promise<DashboardData> {
       }
     });
 
-  const students: Student[] = list(studentPage.items).filter((student) => student.status === "ACTIVE").map((student) => {
-    const enrollment = activeEnrollment.get(student.id);
-    return {
-      id: student.id,
-      name: student.name,
-      cpf: student.cpf ?? "",
-      birthDate: student.birthDate ?? null,
-      guardian: enrollment?.guardian.name ?? "—",
-      guardianId: enrollment?.guardianId ?? null,
-      plan: enrollment?.plan.name ?? "—",
-      planId: enrollment?.planId ?? null,
-      enrollmentId: enrollment?.id ?? null,
+  const students: Student[] = list(studentPage.items)
+    .map((student) => {
+      const enrollment =
+        activeEnrollment.get(student.id) ?? latestEnrollment.get(student.id);
+      return {
+        id: student.id,
+        name: student.name,
+        cpf: student.cpf ?? "",
+        rg: student.rg ?? "",
+        birthDate: student.birthDate ?? null,
+        guardian: enrollment?.guardian.name ?? "—",
+        guardianId: enrollment?.guardianId ?? null,
+        plan: enrollment?.plan.name ?? "—",
+        planId: enrollment?.planId ?? null,
+        enrollmentId: enrollment?.id ?? null,
       status: student.status,
-    };
-  });
+      photoFileId: student.photoFile?.id ?? null,
+      };
+    });
 
   const guardians: Guardian[] = list(guardianPage.items).map((guardian) => ({
     id: guardian.id,
     name: guardian.name,
+    taxId: guardian.taxId,
     email: guardian.email ?? "",
     phone: guardian.phone,
     status: guardian.status,
     studentsCount: list(enrollmentPage.items).filter(
-      (enrollment) => enrollment.guardianId === guardian.id && enrollment.status === "ACTIVE",
+      (enrollment) =>
+        enrollment.guardianId === guardian.id && enrollment.status === "ACTIVE",
     ).length,
   }));
-  const enrollments: Enrollment[] = list(enrollmentPage.items).map((enrollment) => ({
-    id: enrollment.id,
-    student: enrollment.student.name,
-    plan: enrollment.plan.name,
-    startDate: isoDate(enrollment.startDate),
-    endDate: enrollment.endDate ? isoDate(enrollment.endDate) : null,
-    discountCents: enrollment.discountCents,
-    status: enrollment.status,
-  }));
-  const plans: PlanRow[] = list(planPage.items).filter((plan) => plan.status === "ACTIVE").map((plan) => ({
-    id: plan.id,
-    name: plan.name,
-    description: plan.description ?? "Plano mensal",
-    amountCents: plan.amountCents,
-    chargeOpenDay: plan.chargeOpenDay,
-    chargeOpenTime: plan.chargeOpenTime,
-    dueDay: plan.dueDay,
-    status: plan.status,
-    enrollments: list(enrollmentPage.items).filter(
-      (enrollment) => enrollment.planId === plan.id && enrollment.status === "ACTIVE",
-    ).length,
-  }));
+  const enrollments: Enrollment[] = list(enrollmentPage.items).map(
+    (enrollment) => ({
+      id: enrollment.id,
+      student: enrollment.student.name,
+      plan: enrollment.plan.name,
+      startDate: isoDate(enrollment.startDate),
+      endDate: enrollment.endDate ? isoDate(enrollment.endDate) : null,
+      discountCents: enrollment.discountCents,
+      status: enrollment.status,
+    }),
+  );
+  const plans: PlanRow[] = list(planPage.items)
+    .filter((plan) => plan.status === "ACTIVE")
+    .map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      description: plan.description ?? "Plano mensal",
+      amountCents: plan.amountCents,
+      chargeOpenDay: plan.chargeOpenDay,
+      chargeOpenTime: plan.chargeOpenTime,
+      dueDay: plan.dueDay,
+      status: plan.status,
+      enrollments: list(enrollmentPage.items).filter(
+        (enrollment) =>
+          enrollment.planId === plan.id && enrollment.status === "ACTIVE",
+      ).length,
+    }));
   const charges: Charge[] = list(chargePage.items).map((charge) => ({
     id: charge.id,
     studentId: charge.enrollment.studentId,
     student: charge.enrollment.student.name,
-    plan: charge.enrollment.plan.name,
+    plan: charge.billingRule?.sourceNameSnapshot ?? charge.enrollment.plan.name,
     referenceMonth: isoDate(charge.referenceMonth).slice(0, 7),
     dueDate: isoDate(charge.dueDate),
     amountCents: charge.amountCents,
@@ -719,19 +793,24 @@ export async function loadDashboardData(): Promise<DashboardData> {
     finalAmountCents: charge.finalAmountCents,
     status: charge.status,
   }));
-  const templates: MessageTemplate[] = list(templatePage.items).map((template) => ({
-    ...template,
-    timing: "BEFORE_DUE",
-  }));
-  const schedules: MessageSchedule[] = list(schedulePage.items).map((schedule) => ({
-    id: schedule.id,
-    recipient: schedule.recipientNameSnapshot || schedule.recipientPhoneSnapshot,
-    student: schedule.recipientNameSnapshot,
-    template: schedule.template.name,
-    scheduledFor: schedule.scheduledFor,
-    status: schedule.status,
-    attempts: schedule.attemptCount,
-  }));
+  const templates: MessageTemplate[] = list(templatePage.items).map(
+    (template) => ({
+      ...template,
+      timing: "BEFORE_DUE",
+    }),
+  );
+  const schedules: MessageSchedule[] = list(schedulePage.items).map(
+    (schedule) => ({
+      id: schedule.id,
+      recipient:
+        schedule.recipientNameSnapshot || schedule.recipientPhoneSnapshot,
+      student: schedule.recipientNameSnapshot,
+      template: schedule.template.name,
+      scheduledFor: schedule.scheduledFor,
+      status: schedule.status,
+      attempts: schedule.attemptCount,
+    }),
+  );
   const files: StoredFile[] = list(filePage.items).map((file) => ({
     id: file.id,
     originalName: file.originalName,
@@ -740,7 +819,9 @@ export async function loadDashboardData(): Promise<DashboardData> {
     status: file.status,
     createdAt: file.createdAt,
   }));
-  const payments: Payment[] = (Array.isArray(rawPayments) ? rawPayments : []).map((payment) => ({
+  const payments: Payment[] = (
+    Array.isArray(rawPayments) ? rawPayments : []
+  ).map((payment) => ({
     id: payment.id,
     chargeId: payment.chargeId,
     student: payment.charge.enrollment.student.name,
@@ -753,10 +834,14 @@ export async function loadDashboardData(): Promise<DashboardData> {
 
   const today = new Date().toISOString().slice(0, 10);
   const reference = currentReferenceMonth();
-  const monthCharges = charges.filter((charge) => charge.referenceMonth === reference);
-  const openCharges = monthCharges.filter((charge) => charge.status === "PENDING");
+  const monthCharges = charges.filter(
+    (charge) => charge.referenceMonth === reference,
+  );
+  const openCharges = monthCharges.filter(
+    (charge) => charge.status === "PENDING",
+  );
   const overdue = openCharges.filter((charge) => charge.dueDate < today);
-  const sum = <T,>(rows: T[], pick: (row: T) => number) =>
+  const sum = <T>(rows: T[], pick: (row: T) => number) =>
     rows.reduce((total, row) => total + pick(row), 0);
   const failures: Failure[] = schedules
     .filter((message) => message.status.startsWith("FAILED"))
@@ -790,7 +875,9 @@ export async function loadDashboardData(): Promise<DashboardData> {
             segment: organization.brand?.segment ?? "",
             city: organization.address?.city ?? "",
             students: students.length,
-            status: organization.brand?.onboardingComplete ? "ACTIVE" : "PENDING",
+            status: organization.brand?.onboardingComplete
+              ? "ACTIVE"
+              : "PENDING",
             createdAt: organization.createdAt,
           },
         ]
@@ -798,6 +885,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     failures,
     customFields: list(workspace?.customFields),
     studentFieldValues: workspace?.studentFieldValues ?? {},
+    guardianFieldValues: workspace?.guardianFieldValues ?? {},
     products: list(workspace?.products),
     events: list(workspace?.events),
     broadcasts: list(workspace?.broadcasts),
@@ -809,20 +897,25 @@ export async function loadDashboardData(): Promise<DashboardData> {
       overdueChargesCents: sum(overdue, (charge) => charge.finalAmountCents),
       overdueChargesCount: rawOverview.overdueCharges,
       activeStudents: rawOverview.activeStudents,
-      activeEnrollments: enrollments.filter((enrollment) => enrollment.status === "ACTIVE").length,
+      activeEnrollments: enrollments.filter(
+        (enrollment) => enrollment.status === "ACTIVE",
+      ).length,
       messagesDelivered: schedules.filter(
-        (message) => message.status === "DELIVERED" || message.status === "READ",
+        (message) =>
+          message.status === "DELIVERED" || message.status === "READ",
       ).length,
       messageFailures: failures.length,
       messagesQueued: schedules.filter((message) =>
         ["SCHEDULED", "QUEUED", "PROCESSING"].includes(message.status),
       ).length,
     },
-    monthlyEvolution: (Array.isArray(rawEvolution) ? rawEvolution : []).map((item) => ({
-      month: MONTH_LABELS[Number(item.month.slice(5, 7)) - 1] ?? item.month,
-      billed: item.expectedAmountCents / 100_000,
-      received: item.receivedAmountCents / 100_000,
-    })),
+    monthlyEvolution: (Array.isArray(rawEvolution) ? rawEvolution : []).map(
+      (item) => ({
+        month: MONTH_LABELS[Number(item.month.slice(5, 7)) - 1] ?? item.month,
+        billed: item.expectedAmountCents / 100_000,
+        received: item.receivedAmountCents / 100_000,
+      }),
+    ),
     referenceMonth: rawOverview.referenceMonth || reference,
   };
 }
@@ -830,8 +923,13 @@ export async function loadDashboardData(): Promise<DashboardData> {
 const dashboardStore = createCacheStore(loadDashboardData, emptyData);
 
 export function useDashboardData() {
-  const { value, loaded } = useCacheStore(dashboardStore);
-  return { data: value, loading: !loaded, refresh: dashboardStore.refresh };
+  const { value, loaded, error } = useCacheStore(dashboardStore);
+  return {
+    data: value,
+    loading: !loaded,
+    error,
+    refresh: dashboardStore.refresh,
+  };
 }
 
 export function resetDashboardData() {
@@ -850,11 +948,13 @@ export async function updateOrganizationStatus(
 }
 
 export async function organizationHistory(organizationId: string) {
-  return apiRequest<Array<{
-    action: string;
-    createdAt: string;
-    actor: { name: string; email: string } | null;
-  }>>(`/admin/organizations/${organizationId}/history`, {
+  return apiRequest<
+    Array<{
+      action: string;
+      createdAt: string;
+      actor: { name: string; email: string } | null;
+    }>
+  >(`/admin/organizations/${organizationId}/history`, {
     query: { page: 1, pageSize: 20 },
   });
 }

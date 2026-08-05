@@ -47,13 +47,7 @@ describe("authentication pages", () => {
     );
     verifyEmail.mockResolvedValue(undefined);
 
-    render(
-      createElement(
-        StrictMode,
-        null,
-        createElement(Route.component),
-      ),
-    );
+    render(createElement(StrictMode, null, createElement(Route.component)));
 
     await waitFor(() => expect(verifyEmail).toHaveBeenCalledTimes(1));
     expect(verifyEmail).toHaveBeenCalledWith("local-token");
@@ -79,7 +73,9 @@ describe("authentication pages", () => {
     expect(email).toHaveValue("maria@example.test");
     expect(password).toHaveValue("Senha-Segura-2026!");
 
-    await user.click(screen.getByRole("button", { name: "Criar conta e continuar" }));
+    await user.click(
+      screen.getByRole("button", { name: "Criar conta e continuar" }),
+    );
 
     await waitFor(() =>
       expect(register).toHaveBeenCalledWith({

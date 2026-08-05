@@ -43,6 +43,11 @@ import { getCorrelationId } from "../common/correlation";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import {
   chargeListQuerySchema,
+  type CreateBillingRuleInput,
+  createBillingRuleSchema,
+  CreateManualChargeDto,
+  type CreateManualChargeInput,
+  createManualChargeSchema,
   CreateManualPaymentDto,
   type ChargeListQuery,
   type CreateManualPaymentInput,
@@ -106,6 +111,32 @@ const paymentBodySchema = {
   },
 } as const;
 
+const manualChargeBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["studentId"] as string[],
+  properties: {
+    studentId: { type: "string", format: "uuid" },
+    referenceMonth: { type: "string", pattern: "^(?:20\\d{2}|[3-9]\\d{3})-(0[1-9]|1[0-2])$" },
+  },
+} as const;
+
+const billingRuleBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name", "sourceType", "sourceId", "frequency", "opensOn", "expiresOn", "studentIds"] as string[],
+  properties: {
+    name: { type: "string", minLength: 2, maxLength: 120 },
+    sourceType: { type: "string", enum: ["PLAN", "PRODUCT", "EVENT"] as string[] },
+    sourceId: { type: "string", format: "uuid" },
+    frequency: { type: "string", enum: ["MONTHLY", "ONCE"] as string[] },
+    opensOn: { type: "string", format: "date" },
+    expiresOn: { type: "string", format: "date" },
+    repeatUntil: { type: "string", format: "date", nullable: true },
+    studentIds: { type: "array", minItems: 1, maxItems: 2000, items: { type: "string", format: "uuid" } },
+  },
+} as const;
+
 @ApiTags("Financial")
 @ApiCookieAuth("sessionCookie")
 @Controller({ path: "", version: "1" })
@@ -148,6 +179,65 @@ export class FinancialController {
         requestMetadata(request),
       ),
     };
+  }
+
+  @Post("charges/manual")
+  @ApiOperation({ summary: "Creates the current monthly charge for one active student" })
+  @ApiBody({ schema: manualChargeBodySchema })
+  @ApiCreatedResponse({ description: "Charge created or the existing monthly charge reused" })
+  @ApiNotFoundResponse({ description: "Student has no active enrollment in this organization" })
+  async createManualCharge(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Body(new ZodValidationPipe(createManualChargeSchema))
+    input: CreateManualChargeDto,
+    @Req() request: FastifyRequest,
+  ): Promise<{ data: unknown }> {
+    return {
+      data: await this.financial.createManualCharge(
+        auth,
+        input as unknown as CreateManualChargeInput,
+        requestMetadata(request),
+      ),
+    };
+  }
+
+  @Get("billing-rules")
+  @ApiOperation({ summary: "Lists billing rules and their selected students" })
+  async billingRules(@CurrentAuth() auth: AuthenticatedContext): Promise<{ data: unknown }> {
+    return { data: await this.financial.billingRules(auth) };
+  }
+
+  @Post("billing-rules")
+  @ApiOperation({ summary: "Creates a monthly or one-time billing rule" })
+  @ApiHeader({ name: "Idempotency-Key", required: true, description: "Unique key for safely retrying this billing rule creation" })
+  @ApiBody({ schema: billingRuleBodySchema })
+  @ApiCreatedResponse({ description: "Billing rule created and eligible charges materialized" })
+  async createBillingRule(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Body(new ZodValidationPipe(createBillingRuleSchema)) input: CreateBillingRuleInput,
+    @Headers("idempotency-key") rawIdempotencyKey: string | undefined,
+    @Req() request: FastifyRequest,
+  ): Promise<{ data: unknown }> {
+    return { data: await this.financial.createBillingRule(auth, input, idempotencyKey(rawIdempotencyKey), requestMetadata(request)) };
+  }
+
+  @Post("billing-rules/process")
+  @ApiOperation({ summary: "Materializes every billing rule eligible today" })
+  async processBillingRules(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Req() request: FastifyRequest,
+  ): Promise<{ data: unknown }> {
+    return { data: await this.financial.processBillingRules(auth, requestMetadata(request)) };
+  }
+
+  @Post("billing-rules/:id/deactivate")
+  @ApiOperation({ summary: "Stops future charges from one billing rule" })
+  async deactivateBillingRule(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Req() request: FastifyRequest,
+  ): Promise<{ data: unknown }> {
+    return { data: await this.financial.deactivateBillingRule(auth, id, requestMetadata(request)) };
   }
 
   @Get("charges")

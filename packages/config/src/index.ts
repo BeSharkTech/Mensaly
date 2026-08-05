@@ -194,6 +194,7 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     MERCADOPAGO_WEBHOOK_SECRET: optionalNonEmptyStringSchema,
     PAYMENT_PROVIDER_ENCRYPTION_KEY: emailEncryptionKeySchema,
     PAYMENT_LINK_SECRET: emailEncryptionKeySchema,
+    PUBLIC_ENROLLMENT_LINK_SECRET: emailEncryptionKeySchema,
   })
   .superRefine((environment, context) => {
     if (
@@ -250,6 +251,9 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
     }
     if (environment.NODE_ENV === "production" && !environment.EMAIL_ENCRYPTION_KEY) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["EMAIL_ENCRYPTION_KEY"], message: "production requires an email encryption key" });
+    }
+    if (environment.NODE_ENV === "production" && !environment.PUBLIC_ENROLLMENT_LINK_SECRET) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["PUBLIC_ENROLLMENT_LINK_SECRET"], message: "production requires a public enrollment link secret" });
     }
     if (environment.STRIPE_CONNECT_MODE !== "disabled") {
       for (const field of [
@@ -339,6 +343,19 @@ export const apiEnvironmentSchema = baseEnvironmentSchema
         code: z.ZodIssueCode.custom,
         path: ["PAYMENT_PROVIDER_ENCRYPTION_KEY"],
         message: "must be different from PAYMENT_LINK_SECRET",
+      });
+    }
+    const distinctSecrets = [
+      environment.EMAIL_ENCRYPTION_KEY,
+      environment.PAYMENT_PROVIDER_ENCRYPTION_KEY,
+      environment.PAYMENT_LINK_SECRET,
+      environment.PUBLIC_ENROLLMENT_LINK_SECRET,
+    ].filter((value): value is string => Boolean(value));
+    if (new Set(distinctSecrets).size !== distinctSecrets.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PUBLIC_ENROLLMENT_LINK_SECRET"],
+        message: "all encryption and signed-link secrets must be different",
       });
     }
   })

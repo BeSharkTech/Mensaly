@@ -30,6 +30,7 @@ const SUPPORTED_TYPES = new Set([
   "image/png",
 ]);
 const CLEANUP_LEASE_MS = 5 * 60 * 1000;
+const PUBLIC_UPLOAD_ORPHAN_MS = 24 * 60 * 60 * 1000;
 
 export type FileAuditMetadata = {
   correlationId?: string;
@@ -198,6 +199,112 @@ export class FilesService {
     }
   }
 
+  async uploadPublicStudentPhoto(
+    organizationId: string,
+    input: { filename: string; contentType: string; body: Buffer },
+    auditContext: FileAuditMetadata = {},
+  ) {
+    const originalName = basename(input.filename.trim());
+    if (
+      !originalName ||
+      originalName.length > 255 ||
+      originalName.includes("\0")
+    ) {
+      throw new BadRequestException({
+        code: "INVALID_FILE_NAME",
+        message: "File name is invalid",
+      });
+    }
+    if (
+      input.body.length === 0 ||
+      input.body.length > this.sizeLimit
+    ) {
+      throw new BadRequestException({
+        code: "INVALID_FILE_SIZE",
+        message: `File size must be between 1 and ${this.sizeLimit} bytes`,
+      });
+    }
+    if (
+      !["image/jpeg", "image/png"].includes(input.contentType) ||
+      !validSignature(input.contentType, input.body)
+    ) {
+      throw new BadRequestException({
+        code: "INVALID_STUDENT_PHOTO",
+        message: "Envie uma foto válida em JPG ou PNG.",
+      });
+    }
+
+    const id = randomUUID();
+    // The storage adapter deliberately accepts only organization/id keys,
+    // preventing user-controlled paths from reaching the filesystem or object key.
+    const storageKey = `${organizationId}/${id}`;
+    const checksumSha256 = createHash("sha256")
+      .update(input.body)
+      .digest("hex");
+    const fileMetadata = await this.prisma.client.storedFile.create({
+      data: {
+        id,
+        organizationId,
+        uploadedByUserId: null,
+        storageKey,
+        originalName,
+        contentType: input.contentType,
+        sizeBytes: input.body.length,
+        checksumSha256,
+      },
+    });
+    try {
+      await this.storage.put(storageKey, input.body);
+      const active = await this.prisma.client.$transaction(async (tx) => {
+        await tx.storedFile.update({
+          where: { id },
+          data: { status: StoredFileStatus.ACTIVE },
+        });
+        const file = await tx.storedFile.findUniqueOrThrow({ where: { id } });
+        await tx.auditLog.create({
+          data: {
+            organizationId,
+            actorType: AuditActorType.SYSTEM,
+            action: "public_enrollment.student_photo_uploaded",
+            entityType: "StoredFile",
+            entityId: id,
+            after: {
+              contentType: input.contentType,
+              sizeBytes: input.body.length,
+              checksumSha256,
+            },
+            ...auditMetadata(auditContext),
+          },
+        });
+        return file;
+      });
+      return view(active);
+    } catch {
+      await Promise.allSettled([
+        this.storage.delete(storageKey),
+        this.prisma.client.storedFile.update({
+          where: { id: fileMetadata.id },
+          data: { status: StoredFileStatus.FAILED },
+        }),
+      ]);
+      throw new ServiceUnavailableException({
+        code: "FILE_STORAGE_UNAVAILABLE",
+        message: "The photo could not be persisted",
+      });
+    }
+  }
+
+  async deletePublicStudentPhotoObject(input: {
+    organizationId: string;
+    id: string;
+    storageKey: string;
+  }): Promise<void> {
+    // The caller has already locked and validated the pending submission.
+    // This method intentionally removes only the object; the caller deletes the
+    // database metadata in the same transaction as the submission.
+    await this.storage.delete(input.storageKey);
+  }
+
   async list(auth: AuthenticatedContext, query: FileList) {
     const orgId = organizationId(auth);
     const where = {
@@ -319,6 +426,7 @@ export class FilesService {
   ) {
     const orgId = organizationId(auth);
     const cutoff = new Date(Date.now() - CLEANUP_LEASE_MS);
+    const publicUploadCutoff = new Date(Date.now() - PUBLIC_UPLOAD_ORPHAN_MS);
     const candidates = await this.prisma.client.storedFile.findMany({
       where: {
         organizationId: orgId,
@@ -332,6 +440,13 @@ export class FilesService {
               ],
             },
             updatedAt: { lte: cutoff },
+          },
+          {
+            status: StoredFileStatus.ACTIVE,
+            uploadedByUserId: null,
+            createdAt: { lte: publicUploadCutoff },
+            studentPhoto: null,
+            publicEnrollmentPhotos: { none: {} },
           },
         ],
       },

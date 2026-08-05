@@ -6,7 +6,11 @@ import {
   usePathname,
   useRouter as useNextRouter,
 } from "next/navigation";
-import { useCallback, type AnchorHTMLAttributes, type ComponentType } from "react";
+import {
+  useCallback,
+  type AnchorHTMLAttributes,
+  type ComponentType,
+} from "react";
 
 type RouteConfig = {
   component: ComponentType;

@@ -56,7 +56,11 @@ export function BrandColorPicker({
           className="w-32 font-mono"
           maxLength={7}
         />
-        {!valid ? <span className="text-xs text-destructive">Use o formato #RRGGBB</span> : null}
+        {!valid ? (
+          <span className="text-xs text-destructive">
+            Use o formato #RRGGBB
+          </span>
+        ) : null}
       </div>
 
       {preview && valid ? (
@@ -67,7 +71,9 @@ export function BrandColorPicker({
           >
             Botão principal
           </span>
-          <span className="text-xs text-muted-foreground">Prévia da cor escolhida</span>
+          <span className="text-xs text-muted-foreground">
+            Prévia da cor escolhida
+          </span>
         </div>
       ) : null}
     </div>

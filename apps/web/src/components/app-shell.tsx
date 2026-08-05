@@ -3,7 +3,6 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Users,
-  
   ClipboardList,
   Receipt,
   Building2,
@@ -38,17 +37,17 @@ const clientNav: { group: string; items: NavItem[] }[] = [
     group: "Operações",
     items: [
       { to: "/alunos", label: "Alunos", icon: GraduationCap },
-      { to: "/dados-adicionais", label: "Dados adicionais", icon: ListPlus },
+      { to: "/dados-adicionais", label: "Cadastrar alunos", icon: ListPlus },
       { to: "/planos", label: "Planos", icon: ClipboardList },
       { to: "/estoque", label: "Estoque", icon: Package },
       { to: "/eventos", label: "Eventos", icon: CalendarDays },
-
-      
     ],
   },
   {
     group: "Financeiro",
-    items: [{ to: "/cobrancas", label: "Cobranças e pagamentos", icon: Receipt }],
+    items: [
+      { to: "/cobrancas", label: "Cobranças e pagamentos", icon: Receipt },
+    ],
   },
   {
     group: "Comunicação",
@@ -56,9 +55,7 @@ const clientNav: { group: string; items: NavItem[] }[] = [
   },
   {
     group: "Conta",
-    items: [
-      { to: "/configuracoes", label: "Configurações", icon: Settings },
-    ],
+    items: [{ to: "/configuracoes", label: "Configurações", icon: Settings }],
   },
 ];
 
@@ -82,10 +79,12 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const nav = variant === "admin" ? adminNav : clientNav;
   const navigate = useNavigate();
-  const { state, hydrated } = useAppState();
+  const { state, hydrated, error, refresh } = useAppState();
 
   useEffect(() => {
     if (!hydrated) return;
@@ -94,7 +93,13 @@ export function AppShell({
       return;
     }
     if (!state.onboardingComplete) navigate({ to: "/onboarding" });
-  }, [hydrated, state.account, state.session, state.onboardingComplete, navigate]);
+  }, [
+    hydrated,
+    state.account,
+    state.session,
+    state.onboardingComplete,
+    navigate,
+  ]);
 
   const userName = state.account?.name ?? "";
   const userInitials = state.account ? initials(state.account.name) : "";
@@ -102,7 +107,32 @@ export function AppShell({
   const businessLogo = state.business?.logoDataUrl ?? null;
   useBrandColor(state.business?.brandColor);
 
-  if (!hydrated || !state.account || !state.session || !state.onboardingComplete) {
+  if (!hydrated && error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="card-surface max-w-md space-y-4 p-6 text-center">
+          <h1 className="text-lg font-semibold">Serviço temporariamente indisponível</h1>
+          <p className="text-sm text-muted-foreground">
+            Seus dados não foram apagados. Tente carregar novamente.
+          </p>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground"
+            onClick={() => void refresh().catch(() => undefined)}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (
+    !hydrated ||
+    !state.account ||
+    !state.session ||
+    !state.onboardingComplete
+  ) {
     return <div className="min-h-screen bg-background" />;
   }
 

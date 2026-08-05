@@ -13,10 +13,14 @@ export const Route = createFileRoute("/recuperar-senha")({
       { title: "Recuperar senha — Mensaly" },
       {
         name: "description",
-        content: "Receba um link seguro para redefinir a senha da sua conta Mensaly.",
+        content:
+          "Receba um link seguro para redefinir a senha da sua conta Mensaly.",
       },
       { property: "og:title", content: "Recuperar senha — Mensaly" },
-      { property: "og:description", content: "Receba um link seguro para redefinir sua senha." },
+      {
+        property: "og:description",
+        content: "Receba um link seguro para redefinir sua senha.",
+      },
     ],
   }),
   component: PasswordResetPage,
@@ -36,7 +40,11 @@ function PasswordResetPage() {
       await requestPasswordReset(email.trim());
     } catch (resetError) {
       setLoading(false);
-      setError(resetError instanceof Error ? resetError.message : "Não foi possível enviar o link.");
+      setError(
+        resetError instanceof Error
+          ? resetError.message
+          : "Não foi possível enviar o link.",
+      );
       return;
     }
     setLoading(false);
@@ -47,10 +55,13 @@ function PasswordResetPage() {
     <div className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
       <img src={logo.src} alt="Mensaly" className="mb-8 h-8 w-auto" />
       <div className="card-surface w-full max-w-md p-8">
-        <h1 className="text-xl font-semibold text-foreground">Recuperar senha</h1>
+        <h1 className="text-xl font-semibold text-foreground">
+          Recuperar senha
+        </h1>
         {sent ? (
           <p className="mt-2 text-sm text-muted-foreground">
-            Se existir uma conta com <strong className="text-foreground">{email}</strong>, o link de
+            Se existir uma conta com{" "}
+            <strong className="text-foreground">{email}</strong>, o link de
             redefinição chegará em instantes.
           </p>
         ) : (
@@ -69,7 +80,9 @@ function PasswordResetPage() {
                   placeholder="Digite seu e-mail"
                 />
               </div>
-              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {error ? (
+                <p className="text-sm text-destructive">{error}</p>
+              ) : null}
               <Button className="w-full" type="submit" disabled={loading}>
                 {loading ? "Enviando..." : "Enviar link"}
               </Button>
@@ -77,7 +90,10 @@ function PasswordResetPage() {
           </>
         )}
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
             Voltar para o login
           </Link>
         </p>
@@ -85,4 +101,3 @@ function PasswordResetPage() {
     </div>
   );
 }
-

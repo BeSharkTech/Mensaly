@@ -22,6 +22,8 @@ const compactPolicies = {
     windowMs: 1_000,
   },
   "public-form": { id: "public-form", limit: 1, windowMs: 1_000 },
+  "public-enrollment-read": { id: "public-enrollment-read", limit: 1, windowMs: 1_000 },
+  "public-enrollment-write": { id: "public-enrollment-write", limit: 1, windowMs: 1_000 },
   "public-checkout": { id: "public-checkout", limit: 1, windowMs: 1_000 },
   "payment-integration": {
     id: "payment-integration",
@@ -44,6 +46,8 @@ function testApplication(
   app.post("/api/v1/auth/login", async () => ({ ok: true }));
   app.post("/api/v1/auth/register", async () => ({ ok: true }));
   app.post("/api/v1/public/forms/:organizationId/responses", async () => ({ ok: true }));
+  app.get("/api/v1/public/enrollment/:token", async () => ({ ok: true }));
+  app.post("/api/v1/public/enrollment/:token/submissions", async () => ({ ok: true }));
   app.post("/api/v1/public/checkout/:token/session", async () => ({ ok: true }));
   app.post("/api/v1/public/mercadopago-checkout/:token/process", async () => ({ ok: true }));
   app.post("/api/v1/webhooks/stripe", async () => ({ ok: true }));
@@ -181,9 +185,24 @@ describe("request rate limiting", () => {
         method: "POST",
         url: "/api/v1/public/forms/company/responses",
       });
+      const enrollmentRead = await app.inject({
+        method: "GET",
+        url: "/api/v1/public/enrollment/form-a",
+      });
+      const enrollmentWrite = await app.inject({
+        method: "POST",
+        url: "/api/v1/public/enrollment/form-a/submissions",
+      });
+      const otherEnrollmentWrite = await app.inject({
+        method: "POST",
+        url: "/api/v1/public/enrollment/form-b/submissions",
+      });
       const webhook = await app.inject({ method: "POST", url: "/api/v1/webhooks/stripe" });
       const mercadoPago = await app.inject({ method: "POST", url: "/api/v1/webhooks/mercadopago" });
       assert.match(String(form.headers["ratelimit-policy"] ?? ""), /name="public-form"/);
+      assert.match(String(enrollmentRead.headers["ratelimit-policy"] ?? ""), /name="public-enrollment-read"/);
+      assert.match(String(enrollmentWrite.headers["ratelimit-policy"] ?? ""), /name="public-enrollment-write"/);
+      assert.equal(otherEnrollmentWrite.statusCode, 200);
       assert.match(String(webhook.headers["ratelimit-policy"] ?? ""), /name="webhook"/);
       assert.match(String(mercadoPago.headers["ratelimit-policy"] ?? ""), /name="webhook"/);
     } finally {

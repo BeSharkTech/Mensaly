@@ -58,6 +58,8 @@ const bodyRequiredOperations = new Set([
   "PATCH /api/v1/guardians/{id}",
   "POST /api/v1/enrollments",
   "PATCH /api/v1/enrollments/{id}",
+  "POST /api/v1/charges/manual",
+  "POST /api/v1/billing-rules",
 ]);
 
 const publicOperations = new Set([
@@ -78,6 +80,9 @@ const publicOperations = new Set([
   "POST /api/v1/public/mercadopago-checkout/{token}/reconcile",
   "GET /api/v1/public/forms/{organizationId}",
   "POST /api/v1/public/forms/{organizationId}/responses",
+  "GET /api/v1/public/enrollment/{token}",
+  "POST /api/v1/public/enrollment/{token}/photo",
+  "POST /api/v1/public/enrollment/{token}/submissions",
   "POST /api/v1/webhooks/stripe",
 ]);
 
@@ -165,7 +170,7 @@ describe("frozen OpenAPI v1 contract", () => {
           operationIds.add(operation.operationId ?? "");
         }
       }
-      assert.equal(operationCount, 100);
+      assert.equal(operationCount, 117);
       assert.equal(
         Object.keys(live.paths).some((path) => path.includes("stripe")),
         false,

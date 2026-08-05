@@ -91,6 +91,23 @@ enum ChargeStatus {
   WAIVED
 }
 
+enum BillingRuleSourceType {
+  PLAN
+  PRODUCT
+  EVENT
+}
+
+enum BillingRuleFrequency {
+  MONTHLY
+  ONCE
+}
+
+enum BillingRuleStatus {
+  ACTIVE
+  INACTIVE
+  ENDED
+}
+
 enum PaymentStatus {
   PENDING_RECONCILIATION
   CONFIRMED
@@ -197,6 +214,16 @@ enum StoredFileStatus {
   FAILED
 }
 
+enum CustomFieldSubject {
+  STUDENT
+  GUARDIAN
+}
+
+enum PublicEnrollmentSubmissionStatus {
+  PENDING
+  APPROVED
+}
+
 model User {
   id            String     @id @default(uuid()) @db.Uuid
   name          String     @db.VarChar(120)
@@ -294,6 +321,8 @@ model Organization {
   guardians              Guardian[]
   enrollments            Enrollment[]
   charges                Charge[]
+  billingRules           BillingRule[]
+  billingRuleTargets     BillingRuleTarget[]
   payments               Payment[]
   reminderConfiguration  ReminderConfiguration?
   messageTemplates       MessageTemplate[]
@@ -303,6 +332,7 @@ model Organization {
   files                  StoredFile[]
   customFields           CustomField[]
   studentFieldValues     StudentFieldValue[]
+  guardianFieldValues    GuardianFieldValue[]
   products               Product[]
   events                 Event[]
   broadcastMessages      BroadcastMessage[]
@@ -313,6 +343,8 @@ model Organization {
   mercadoPagoConnection  MercadoPagoConnection?
   mercadoPagoOAuthStates MercadoPagoOAuthState[]
   mercadoPagoCheckouts   MercadoPagoCheckout[]
+  publicEnrollmentForm   PublicEnrollmentForm?
+  publicEnrollmentSubmissions PublicEnrollmentSubmission[]
 
   @@index([status])
   @@map("organization")
@@ -321,7 +353,7 @@ model Organization {
 model StoredFile {
   id               String           @id @default(uuid()) @db.Uuid
   organizationId   String           @db.Uuid
-  uploadedByUserId String           @db.Uuid
+  uploadedByUserId String?          @db.Uuid
   storageProvider  String           @default("LOCAL") @db.VarChar(40)
   storageKey       String           @unique @db.VarChar(255)
   originalName     String           @db.VarChar(255)
@@ -333,7 +365,9 @@ model StoredFile {
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
   organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  uploadedBy       User             @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  uploadedBy       User?            @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  studentPhoto     Student?         @relation("StudentPhoto")
+  publicEnrollmentPhotos PublicEnrollmentSubmission[] @relation("PublicEnrollmentPhoto")
 
   @@unique([organizationId, id])
   @@index([organizationId, status, createdAt])
@@ -409,6 +443,8 @@ model Charge {
   id                   String                @id @default(uuid()) @db.Uuid
   organizationId       String                @db.Uuid
   enrollmentId         String                @db.Uuid
+  billingRuleId        String?               @db.Uuid
+  cycleKey             String                @default("") @db.VarChar(160)
   referenceMonth       DateTime              @db.Date
   dueDate              DateTime              @db.Date
   amountCents          Int
@@ -422,12 +458,13 @@ model Charge {
   updatedAt            DateTime              @updatedAt @db.Timestamptz(3)
   organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   enrollment           Enrollment            @relation(fields: [organizationId, enrollmentId], references: [organizationId, id], onDelete: Restrict)
+  billingRule          BillingRule?           @relation(fields: [organizationId, billingRuleId], references: [organizationId, id], onDelete: Restrict)
   payments             Payment[]
   messageSchedules     MessageSchedule[]
   stripeCheckouts      StripeCheckout[]
   mercadoPagoCheckouts MercadoPagoCheckout[]
 
-  @@unique([organizationId, enrollmentId, referenceMonth])
+  @@unique([organizationId, enrollmentId, cycleKey])
   @@unique([organizationId, id])
   @@index([organizationId, status, dueDate])
   @@index([organizationId, referenceMonth, status])
@@ -608,10 +645,12 @@ model Student {
   organizationId String              @db.Uuid
   name           String              @db.VarChar(120)
   cpf            String?             @db.VarChar(11)
+  rg             String?             @db.VarChar(20)
   birthDate      DateTime?           @db.Date
   email          String?             @db.Citext
   phone          String?             @db.VarChar(20)
   notes          String?             @db.VarChar(2000)
+  photoFileId    String?             @unique @db.Uuid
   status         StudentStatus       @default(ACTIVE)
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
@@ -619,9 +658,13 @@ model Student {
   guardianLinks  StudentGuardian[]
   enrollments    Enrollment[]
   fieldValues    StudentFieldValue[]
+  publicEnrollmentSubmissions PublicEnrollmentSubmission[]
+  billingRuleTargets BillingRuleTarget[]
+  photoFile      StoredFile?         @relation("StudentPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, id])
   @@unique([organizationId, cpf])
+  @@unique([organizationId, rg])
   @@index([organizationId, status, name])
   @@map("student")
 }
@@ -640,9 +683,10 @@ model Guardian {
   studentLinks    StudentGuardian[]
   enrollments     Enrollment[]
   stripeCustomers StripeCustomer[]
+  publicEnrollmentSubmissions PublicEnrollmentSubmission[]
+  fieldValues      GuardianFieldValue[]
 
   @@unique([organizationId, id])
-  @@unique([organizationId, taxId])
   @@index([organizationId, status, name])
   @@map("guardian")
 }
@@ -687,6 +731,7 @@ model Enrollment {
   guardian         Guardian         @relation(fields: [organizationId, guardianId], references: [organizationId, id], onDelete: Restrict)
   plan             Plan             @relation(fields: [organizationId, planId], references: [organizationId, id], onDelete: Restrict)
   charges          Charge[]
+  publicEnrollmentSubmission PublicEnrollmentSubmission?
 
   @@unique([organizationId, id])
   @@index([organizationId, status])
@@ -907,6 +952,7 @@ model CustomField {
   organizationId String              @db.Uuid
   label          String              @db.VarChar(60)
   fieldType      String              @db.VarChar(20)
+  subject        CustomFieldSubject  @default(STUDENT)
   options        Json
   required       Boolean             @default(false)
   sortOrder      Int                 @default(0)
@@ -915,6 +961,7 @@ model CustomField {
   updatedAt      DateTime            @updatedAt @db.Timestamptz(3)
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   values         StudentFieldValue[]
+  guardianValues GuardianFieldValue[]
 
   @@unique([organizationId, id])
   @@index([organizationId, active, sortOrder])
@@ -936,6 +983,120 @@ model StudentFieldValue {
   @@unique([organizationId, studentId, fieldId])
   @@index([organizationId, fieldId])
   @@map("student_field_value")
+}
+
+model BillingRule {
+  id                 String               @id @default(uuid()) @db.Uuid
+  organizationId     String               @db.Uuid
+  name               String               @db.VarChar(120)
+  sourceType         BillingRuleSourceType
+  sourceId           String               @db.Uuid
+  sourceNameSnapshot String               @db.VarChar(120)
+  amountCents        Int
+  idempotencyKey     String               @db.VarChar(128)
+  frequency          BillingRuleFrequency
+  opensOn            DateTime             @db.Date
+  expiresOn          DateTime             @db.Date
+  repeatUntil        DateTime?            @db.Date
+  status             BillingRuleStatus    @default(ACTIVE)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  targets            BillingRuleTarget[]
+  charges            Charge[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, opensOn])
+  @@map("billing_rule")
+}
+
+model BillingRuleTarget {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  billingRuleId  String       @db.Uuid
+  studentId      String       @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  billingRule    BillingRule  @relation(fields: [organizationId, billingRuleId], references: [organizationId, id], onDelete: Cascade)
+  student        Student      @relation(fields: [organizationId, studentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, billingRuleId, studentId])
+  @@index([organizationId, studentId])
+  @@map("billing_rule_target")
+}
+
+model GuardianFieldValue {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  guardianId     String       @db.Uuid
+  fieldId        String       @db.Uuid
+  value          String       @db.VarChar(500)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  guardian       Guardian     @relation(fields: [organizationId, guardianId], references: [organizationId, id], onDelete: Restrict)
+  field          CustomField  @relation(fields: [organizationId, fieldId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, guardianId, fieldId])
+  @@index([organizationId, fieldId])
+  @@map("guardian_field_value")
+}
+
+model PublicEnrollmentForm {
+  id                   String                       @id @default(uuid()) @db.Uuid
+  organizationId       String                       @unique @db.Uuid
+  nonce                String                       @db.VarChar(64)
+  active               Boolean                      @default(true)
+  fieldConfiguration   Json
+  privacyNoticeVersion String                       @default("2026-08-01") @db.VarChar(40)
+  createdAt            DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                     @updatedAt @db.Timestamptz(3)
+  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  submissions          PublicEnrollmentSubmission[]
+
+  @@unique([organizationId, id])
+  @@index([active, updatedAt])
+  @@map("public_enrollment_form")
+}
+
+model PublicEnrollmentSubmission {
+  id                    String               @id @default(uuid()) @db.Uuid
+  organizationId        String               @db.Uuid
+  formId                 String               @db.Uuid
+  status                PublicEnrollmentSubmissionStatus @default(PENDING)
+  studentId              String?              @db.Uuid
+  guardianId             String?              @db.Uuid
+  enrollmentId           String?              @unique @db.Uuid
+  studentCpf             String?              @db.VarChar(11)
+  studentRg              String?              @db.VarChar(20)
+  guardianCpf            String?              @db.VarChar(11)
+  studentPayload         Json?
+  guardianPayload        Json?
+  planId                 String?              @db.Uuid
+  customFieldValues      Json?
+  photoFileId            String?              @db.Uuid
+  idempotencyKey         String               @db.VarChar(128)
+  requestHash            String               @db.VarChar(64)
+  consentVersion         String               @db.VarChar(40)
+  consentedAt            DateTime             @db.Timestamptz(3)
+  ipHash                 String               @db.VarChar(64)
+  createdAt              DateTime             @default(now()) @db.Timestamptz(3)
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  form                   PublicEnrollmentForm @relation(fields: [organizationId, formId], references: [organizationId, id], onDelete: Restrict)
+  student                Student?             @relation(fields: [organizationId, studentId], references: [organizationId, id], onDelete: Restrict)
+  guardian               Guardian?            @relation(fields: [organizationId, guardianId], references: [organizationId, id], onDelete: Restrict)
+  enrollment             Enrollment?          @relation(fields: [organizationId, enrollmentId], references: [organizationId, id], onDelete: Restrict)
+  photoFile              StoredFile?          @relation("PublicEnrollmentPhoto", fields: [photoFileId], references: [id], onDelete: Restrict)
+
+  @@unique([formId, idempotencyKey])
+  @@unique([organizationId, enrollmentId])
+  @@unique([organizationId, studentCpf])
+  @@unique([organizationId, studentRg])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([studentId, createdAt])
+  @@map("public_enrollment_submission")
 }
 
 model Product {

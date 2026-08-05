@@ -26,7 +26,11 @@ export async function currentUser(): Promise<SessionUser | null> {
   }
 }
 
-export async function register(input: { name: string; email: string; password: string }) {
+export async function register(input: {
+  name: string;
+  email: string;
+  password: string;
+}) {
   return apiRequest<{ devVerificationToken?: string }>("/auth/register", {
     method: "POST",
     body: input,

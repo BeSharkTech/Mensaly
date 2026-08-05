@@ -15,10 +15,14 @@ export const Route = createFileRoute("/login")({
       { title: "Entrar — Mensaly" },
       {
         name: "description",
-        content: "Acesse o painel Mensaly para gerenciar mensalidades, matrículas e lembretes.",
+        content:
+          "Acesse o painel Mensaly para gerenciar mensalidades, matrículas e lembretes.",
       },
       { property: "og:title", content: "Entrar — Mensaly" },
-      { property: "og:description", content: "Acesse o painel da sua escola no Mensaly." },
+      {
+        property: "og:description",
+        content: "Acesse o painel da sua escola no Mensaly.",
+      },
     ],
   }),
   component: LoginPage,
@@ -50,8 +54,7 @@ function LoginPage() {
     } catch (signInError) {
       if (
         signInError instanceof Error &&
-        signInError.message ===
-          "Email verification is required before login"
+        signInError.message === "Email verification is required before login"
       ) {
         setLoading(false);
         navigate({
@@ -104,7 +107,10 @@ function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                <Link to="/recuperar-senha" className="text-xs font-medium text-primary hover:underline">
+                <Link
+                  to="/recuperar-senha"
+                  className="text-xs font-medium text-primary hover:underline"
+                >
                   Esqueci minha senha
                 </Link>
               </div>
@@ -118,14 +124,21 @@ function LoginPage() {
               />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button className="h-12 w-full text-base" type="submit" disabled={loading}>
+            <Button
+              className="h-12 w-full text-base"
+              type="submit"
+              disabled={loading}
+            >
               {loading ? "Entrando..." : "Entrar"}
             </Button>
           </form>
 
           <p className="mt-6 text-sm text-muted-foreground">
             Ainda não tem conta?{" "}
-            <Link to="/cadastro" className="font-medium text-primary hover:underline">
+            <Link
+              to="/cadastro"
+              className="font-medium text-primary hover:underline"
+            >
               Criar conta
             </Link>
           </p>

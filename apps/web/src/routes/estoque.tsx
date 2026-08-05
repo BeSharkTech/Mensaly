@@ -51,7 +51,8 @@ export const Route = createFileRoute("/estoque")({
       { property: "og:title", content: "Estoque de produtos — Mensaly" },
       {
         property: "og:description",
-        content: "Controle os produtos vendidos pela sua operação em um só lugar.",
+        content:
+          "Controle os produtos vendidos pela sua operação em um só lugar.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -180,13 +181,18 @@ function StockPage() {
         });
         toast.success("Produto atualizado.");
       } else {
-        await apiRequest("/workspace/products", { method: "POST", body: payload });
+        await apiRequest("/workspace/products", {
+          method: "POST",
+          body: payload,
+        });
         toast.success("Produto cadastrado.");
       }
       setOpen(false);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar.",
+      );
     } finally {
       setSaving(false);
     }
@@ -196,12 +202,16 @@ function StockPage() {
     if (!deleting) return;
     setRemoving(true);
     try {
-      await apiRequest(`/workspace/products/${deleting.id}`, { method: "DELETE" });
+      await apiRequest(`/workspace/products/${deleting.id}`, {
+        method: "DELETE",
+      });
       toast.success("Produto excluído.");
       setDeleting(null);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível excluir.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível excluir.",
+      );
     } finally {
       setRemoving(false);
     }
@@ -230,7 +240,8 @@ function StockPage() {
           />
         </div>
         <p className="text-sm text-muted-foreground">
-          {data.products.length} produto(s) · valor em estoque {formatCents(totalValue)}
+          {data.products.length} produto(s) · valor em estoque{" "}
+          {formatCents(totalValue)}
         </p>
       </div>
 
@@ -267,7 +278,9 @@ function StockPage() {
               <div className="space-y-3 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate font-medium text-foreground">{product.name}</h2>
+                    <h2 className="truncate font-medium text-foreground">
+                      {product.name}
+                    </h2>
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {product.description || "Sem descrição"}
                     </p>
@@ -283,7 +296,11 @@ function StockPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openEdit(product)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEdit(product)}
+                  >
                     <Pencil className="size-4" /> Editar
                   </Button>
                   <Button
@@ -304,7 +321,9 @@ function StockPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? "Editar produto" : "Novo produto"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Editar produto" : "Novo produto"}
+            </DialogTitle>
             <DialogDescription>
               Informe nome, valor, descrição e a foto que aparece no catálogo.
             </DialogDescription>
@@ -314,7 +333,11 @@ function StockPage() {
             <div className="flex items-center gap-4">
               <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
                 {image ? (
-                  <img src={image} alt="Pré-visualização do produto" className="size-full object-cover" />
+                  <img
+                    src={image}
+                    alt="Pré-visualização do produto"
+                    className="size-full object-cover"
+                  />
                 ) : (
                   <ImagePlus className="size-6 text-muted-foreground" />
                 )}
@@ -327,8 +350,13 @@ function StockPage() {
                   className="hidden"
                   onChange={handleImage}
                 />
-                <Button type="button" variant="outline" onClick={() => fileInput.current?.click()}>
-                  <ImagePlus className="size-4" /> {image ? "Trocar foto" : "Adicionar foto"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <ImagePlus className="size-4" />{" "}
+                  {image ? "Trocar foto" : "Adicionar foto"}
                 </Button>
                 {image ? (
                   <Button
@@ -340,7 +368,9 @@ function StockPage() {
                     Remover foto
                   </Button>
                 ) : null}
-                <p className="text-xs text-muted-foreground">PNG ou JPG de até 1,5 MB.</p>
+                <p className="text-xs text-muted-foreground">
+                  PNG ou JPG de até 1,5 MB.
+                </p>
               </div>
             </div>
 
@@ -391,7 +421,10 @@ function StockPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="productStatus">Situação</Label>
-                <Select value={form.status} onValueChange={(value) => set("status", value)}>
+                <Select
+                  value={form.status}
+                  onValueChange={(value) => set("status", value)}
+                >
                   <SelectTrigger id="productStatus">
                     <SelectValue />
                   </SelectTrigger>
@@ -404,18 +437,30 @@ function StockPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={saving}
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Salvando..." : editing ? "Salvar alterações" : "Cadastrar produto"}
+                {saving
+                  ? "Salvando..."
+                  : editing
+                    ? "Salvar alterações"
+                    : "Cadastrar produto"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleting !== null} onOpenChange={(value) => !value && setDeleting(null)}>
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(value) => !value && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir produto</AlertDialogTitle>

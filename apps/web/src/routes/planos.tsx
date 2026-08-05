@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { CircleOff, MoreHorizontal, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -44,19 +44,24 @@ export const Route = createFileRoute("/planos")({
       { title: "Planos — Mensaly" },
       {
         name: "description",
-        content: "Planos mensais da escola, valores em reais, dia de vencimento e matrículas ativas.",
+        content:
+          "Planos da escola, valores em reais e matrículas ativas.",
       },
       { property: "og:title", content: "Planos — Mensaly" },
       {
         property: "og:description",
-        content: "Valores, dia de vencimento e matrículas por plano.",
+        content: "Valores e matrículas por plano.",
       },
     ],
   }),
   component: PlansPage,
 });
 
-const emptyForm = { name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" };
+const emptyForm = {
+  name: "",
+  description: "",
+  amount: "",
+};
 
 function toCents(value: string) {
   const normalized = value.replace(/\./g, "").replace(",", ".").trim();
@@ -95,9 +100,6 @@ function PlansPage() {
       name: plan.name,
       description: plan.description === "Plano mensal" ? "" : plan.description,
       amount: fromCents(plan.amountCents),
-      chargeOpenDay: String(plan.chargeOpenDay),
-      chargeOpenTime: plan.chargeOpenTime,
-      dueDay: String(plan.dueDay),
     });
     setOpen(true);
   }
@@ -113,29 +115,11 @@ function PlansPage() {
       toast.error("Informe um valor válido.");
       return;
     }
-    const dueDay = Number(form.dueDay);
-    if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
-      toast.error("O dia de vencimento deve ficar entre 1 e 31.");
-      return;
-    }
-    const chargeOpenDay = Number(form.chargeOpenDay);
-    if (!Number.isInteger(chargeOpenDay) || chargeOpenDay < 1 || chargeOpenDay > dueDay) {
-      toast.error("O dia de abertura deve ficar entre 1 e o dia de vencimento.");
-      return;
-    }
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.chargeOpenTime)) {
-      toast.error("Informe o horário de abertura no formato HH:mm.");
-      return;
-    }
-
     setSaving(true);
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
       amountCents,
-      chargeOpenDay,
-      chargeOpenTime: form.chargeOpenTime,
-      dueDay,
     };
     try {
       await apiRequest(editing ? `/plans/${editing.id}` : "/plans", {
@@ -145,7 +129,9 @@ function PlansPage() {
     } catch {
       setSaving(false);
       toast.error(
-        editing ? "Não foi possível atualizar o plano." : "Não foi possível salvar o plano.",
+        editing
+          ? "Não foi possível atualizar o plano."
+          : "Não foi possível salvar o plano.",
       );
       return;
     }
@@ -168,11 +154,11 @@ function PlansPage() {
       });
     } catch {
       setRemoving(false);
-      toast.error("Não foi possível excluir o plano.");
+      toast.error("Não foi possível desativar o plano.");
       return;
     }
     setRemoving(false);
-    toast.success("Plano excluído.");
+    toast.success("Plano desativado.");
     setDeleting(null);
     await refresh();
   }
@@ -203,7 +189,12 @@ function PlansPage() {
                   <StatusBadge status={plan.status} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="size-8" aria-label="Ações do plano">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        aria-label="Ações do plano"
+                      >
                         <MoreHorizontal className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -211,27 +202,23 @@ function PlansPage() {
                       <DropdownMenuItem onClick={() => openEdit(plan)}>
                         <Pencil className="size-4" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleting(plan)}>
-                        <Trash2 className="size-4" /> Excluir
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeleting(plan)}
+                      >
+                        <CircleOff className="size-4" /> Desativar
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {plan.description}
+              </p>
               <p className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
                 {formatCents(plan.amountCents)}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">/mês</span>
               </p>
               <dl className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Abertura</dt>
-                  <dd className="text-foreground">dia {plan.chargeOpenDay}, às {plan.chargeOpenTime}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Vencimento</dt>
-                  <dd className="text-foreground">dia {plan.dueDay}</dd>
-                </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Matrículas</dt>
                   <dd className="text-foreground">{plan.enrollments}</dd>
@@ -246,9 +233,11 @@ function PlansPage() {
         <DialogContent className="sm:max-w-lg">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle>{editing ? "Editar plano" : "Novo plano"}</DialogTitle>
+              <DialogTitle>
+                {editing ? "Editar plano" : "Novo plano"}
+              </DialogTitle>
               <DialogDescription>
-                Defina quando a cobrança abre e quando ela vence a cada mês.
+                Defina o nome, a descrição e o valor do plano. A agenda fica em Cobranças.
               </DialogDescription>
             </DialogHeader>
 
@@ -272,9 +261,9 @@ function PlansPage() {
                   rows={2}
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-1">
                 <div className="space-y-2">
-                  <Label htmlFor="plan-amount">Valor mensal (R$)</Label>
+                  <Label htmlFor="plan-amount">Valor (R$)</Label>
                   <Input
                     id="plan-amount"
                     inputMode="decimal"
@@ -283,60 +272,40 @@ function PlansPage() {
                     placeholder="0,00"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-open-day">Dia de abertura</Label>
-                  <Input
-                    id="plan-open-day"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={form.chargeOpenDay}
-                    onChange={(event) => set("chargeOpenDay", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-open-time">Horário de abertura</Label>
-                  <Input
-                    id="plan-open-time"
-                    type="time"
-                    value={form.chargeOpenTime}
-                    onChange={(event) => set("chargeOpenTime", event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-due-day">Dia de vencimento</Label>
-                  <Input
-                    id="plan-due-day"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={form.dueDay}
-                    onChange={(event) => set("dueDay", event.target.value)}
-                  />
-                </div>
               </div>
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Salvando..." : editing ? "Salvar alterações" : "Cadastrar plano"}
+                {saving
+                  ? "Salvando..."
+                  : editing
+                    ? "Salvar alterações"
+                    : "Cadastrar plano"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleting !== null} onOpenChange={(value) => !value && setDeleting(null)}>
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(value) => !value && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir plano</AlertDialogTitle>
+            <AlertDialogTitle>Desativar plano</AlertDialogTitle>
             <AlertDialogDescription>
               {deleting?.enrollments
-                ? `Este plano tem ${deleting.enrollments} matrícula(s) ativa(s). Elas ficarão sem plano vinculado.`
-                : "Esta ação não pode ser desfeita."}
+                ? `Este plano tem ${deleting.enrollments} matrícula(s) ativa(s). Elas serão encerradas e novas cobranças deixarão de ser geradas.`
+                : "O plano deixará de aparecer para novos cadastros."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -348,11 +317,10 @@ function PlansPage() {
               }}
               disabled={removing}
             >
-              {removing ? "Excluindo..." : "Excluir"}
+              {removing ? "Desativando..." : "Desativar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-
       </AlertDialog>
     </AppShell>
   );

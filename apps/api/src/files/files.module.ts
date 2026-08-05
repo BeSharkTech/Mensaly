@@ -31,6 +31,6 @@ import {
       useFactory: () => filesConfiguration().sizeLimit,
     },
   ],
-  exports: [STORAGE_ADAPTER],
+  exports: [FilesService, STORAGE_ADAPTER],
 })
 export class FilesModule {}

@@ -1,7 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPlanSchema, updatePlanSchema } from "./operational.dto";
+import {
+  createPlanSchema,
+  createStudentEnrollmentSchema,
+  updatePlanSchema,
+  updateStudentSchema,
+} from "./operational.dto";
+
+test("createStudentEnrollmentSchema validates the atomic manual journey", () => {
+  const input = createStudentEnrollmentSchema.parse({
+    student: { name: "Aluno Teste", cpf: "52998224725" },
+    guardian: {
+      name: "Responsável Teste",
+      phone: "11999999999",
+      taxId: "11144477735",
+    },
+    planId: "11111111-1111-4111-8111-111111111111",
+    startDate: "2026-08-05",
+  });
+  assert.equal(input.student.name, "Aluno Teste");
+});
 
 test("updatePlanSchema accepts an audited plan status transition", () => {
   assert.deepEqual(updatePlanSchema.parse({ status: "INACTIVE" }), {
@@ -33,4 +52,17 @@ test("createPlanSchema defaults the opening day and validates the charge window"
       dueDay: 10,
     }),
   );
+});
+
+test("updateStudentSchema permits removing a student profile photo", () => {
+  assert.deepEqual(updateStudentSchema.parse({ photoFileId: null }), {
+    photoFileId: null,
+  });
+});
+
+test("updateStudentSchema permits switching between CPF and RG", () => {
+  assert.deepEqual(updateStudentSchema.parse({ cpf: null, rg: "RG-12345" }), {
+    cpf: null,
+    rg: "RG-12345",
+  });
 });

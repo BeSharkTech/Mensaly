@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarDays, ImagePlus, MapPin, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  ImagePlus,
+  MapPin,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -51,7 +59,8 @@ export const Route = createFileRoute("/eventos")({
       { property: "og:title", content: "Eventos e torneios — Mensaly" },
       {
         property: "og:description",
-        content: "Organize os eventos da sua operação e divulgue-os para os alunos.",
+        content:
+          "Organize os eventos da sua operação e divulgue-os para os alunos.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -88,7 +97,10 @@ function toLocalInput(iso: string | null) {
 
 function formatDateTime(iso: string | null) {
   if (!iso) return "";
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(iso).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }
 
 function EventsPage() {
@@ -119,7 +131,9 @@ function EventsPage() {
     [data.events, term],
   );
 
-  const upcoming = data.events.filter((item) => new Date(item.startsAt) >= new Date()).length;
+  const upcoming = data.events.filter(
+    (item) => new Date(item.startsAt) >= new Date(),
+  ).length;
 
   function openCreate() {
     setEditing(null);
@@ -200,13 +214,18 @@ function EventsPage() {
         });
         toast.success("Evento atualizado.");
       } else {
-        await apiRequest("/workspace/events", { method: "POST", body: payload });
+        await apiRequest("/workspace/events", {
+          method: "POST",
+          body: payload,
+        });
         toast.success("Evento cadastrado.");
       }
       setOpen(false);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar.",
+      );
     } finally {
       setSaving(false);
     }
@@ -216,12 +235,16 @@ function EventsPage() {
     if (!deleting) return;
     setRemoving(true);
     try {
-      await apiRequest(`/workspace/events/${deleting.id}`, { method: "DELETE" });
+      await apiRequest(`/workspace/events/${deleting.id}`, {
+        method: "DELETE",
+      });
       toast.success("Evento excluído.");
       setDeleting(null);
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível excluir.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível excluir.",
+      );
     } finally {
       setRemoving(false);
     }
@@ -287,7 +310,9 @@ function EventsPage() {
               <div className="space-y-3 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate font-medium text-foreground">{item.name}</h2>
+                    <h2 className="truncate font-medium text-foreground">
+                      {item.name}
+                    </h2>
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {item.description || "Sem descrição"}
                     </p>
@@ -308,10 +333,16 @@ function EventsPage() {
                   ) : null}
                 </div>
                 <p className="text-lg font-semibold text-foreground">
-                  {item.priceCents > 0 ? formatCents(item.priceCents) : "Gratuito"}
+                  {item.priceCents > 0
+                    ? formatCents(item.priceCents)
+                    : "Gratuito"}
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEdit(item)}
+                  >
                     <Pencil className="size-4" /> Editar
                   </Button>
                   <Button
@@ -332,9 +363,12 @@ function EventsPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? "Editar evento" : "Novo evento"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Editar evento" : "Novo evento"}
+            </DialogTitle>
             <DialogDescription>
-              Informe nome, data, local, valor de inscrição e a imagem de divulgação.
+              Informe nome, data, local, valor de inscrição e a imagem de
+              divulgação.
             </DialogDescription>
           </DialogHeader>
 
@@ -342,7 +376,11 @@ function EventsPage() {
             <div className="flex items-center gap-4">
               <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
                 {image ? (
-                  <img src={image} alt="Pré-visualização do evento" className="size-full object-cover" />
+                  <img
+                    src={image}
+                    alt="Pré-visualização do evento"
+                    className="size-full object-cover"
+                  />
                 ) : (
                   <ImagePlus className="size-6 text-muted-foreground" />
                 )}
@@ -355,8 +393,13 @@ function EventsPage() {
                   className="hidden"
                   onChange={handleImage}
                 />
-                <Button type="button" variant="outline" onClick={() => fileInput.current?.click()}>
-                  <ImagePlus className="size-4" /> {image ? "Trocar imagem" : "Adicionar imagem"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <ImagePlus className="size-4" />{" "}
+                  {image ? "Trocar imagem" : "Adicionar imagem"}
                 </Button>
                 {image ? (
                   <Button
@@ -368,7 +411,9 @@ function EventsPage() {
                     Remover imagem
                   </Button>
                 ) : null}
-                <p className="text-xs text-muted-foreground">PNG ou JPG de até 1,5 MB.</p>
+                <p className="text-xs text-muted-foreground">
+                  PNG ou JPG de até 1,5 MB.
+                </p>
               </div>
             </div>
 
@@ -414,7 +459,9 @@ function EventsPage() {
                   id="eventStart"
                   type="datetime-local"
                   value={form.startsAt}
-                  onInput={(event) => set("startsAt", event.currentTarget.value)}
+                  onInput={(event) =>
+                    set("startsAt", event.currentTarget.value)
+                  }
                   required
                 />
               </div>
@@ -442,7 +489,10 @@ function EventsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="eventStatus">Situação</Label>
-                <Select value={form.status} onValueChange={(value) => set("status", value)}>
+                <Select
+                  value={form.status}
+                  onValueChange={(value) => set("status", value)}
+                >
                   <SelectTrigger id="eventStatus">
                     <SelectValue />
                   </SelectTrigger>
@@ -455,18 +505,30 @@ function EventsPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={saving}
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Salvando..." : editing ? "Salvar alterações" : "Cadastrar evento"}
+                {saving
+                  ? "Salvando..."
+                  : editing
+                    ? "Salvar alterações"
+                    : "Cadastrar evento"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleting !== null} onOpenChange={(value) => !value && setDeleting(null)}>
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(value) => !value && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir evento</AlertDialogTitle>

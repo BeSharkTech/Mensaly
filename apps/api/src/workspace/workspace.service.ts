@@ -33,10 +33,11 @@ function notFound(): never {
   });
 }
 
-function valuesMap(rows: { studentId: string; fieldId: string; value: string }[]) {
+function valuesMap(rows: { studentId?: string; guardianId?: string; fieldId: string; value: string }[], key: "studentId" | "guardianId") {
   const result: Record<string, Record<string, string>> = {};
   rows.forEach((row) => {
-    result[row.studentId] = { ...(result[row.studentId] ?? {}), [row.fieldId]: row.value };
+    const id = row[key];
+    if (id) result[id] = { ...(result[id] ?? {}), [row.fieldId]: row.value };
   });
   return result;
 }
@@ -66,7 +67,7 @@ export class WorkspaceService {
 
   async all(auth: AuthenticatedContext) {
     const orgId = organizationId(auth);
-    const [fields, fieldValues, products, events, broadcasts, broadcastSends] =
+    const [fields, fieldValues, guardianFieldValues, products, events, broadcasts, broadcastSends] =
       await Promise.all([
         this.prisma.client.customField.findMany({
           where: { organizationId: orgId },
@@ -75,6 +76,7 @@ export class WorkspaceService {
         this.prisma.client.studentFieldValue.findMany({
           where: { organizationId: orgId },
         }),
+        this.prisma.client.guardianFieldValue.findMany({ where: { organizationId: orgId } }),
         this.prisma.client.product.findMany({
           where: { organizationId: orgId },
           orderBy: { createdAt: "desc" },
@@ -97,12 +99,14 @@ export class WorkspaceService {
         id: field.id,
         label: field.label,
         type: field.fieldType,
+        subject: field.subject,
         options: Array.isArray(field.options) ? field.options : [],
         required: field.required,
         sortOrder: field.sortOrder,
         active: field.active,
       })),
-      studentFieldValues: valuesMap(fieldValues),
+      studentFieldValues: valuesMap(fieldValues, "studentId"),
+      guardianFieldValues: valuesMap(guardianFieldValues, "guardianId"),
       products,
       events,
       broadcasts,
@@ -243,6 +247,7 @@ export class WorkspaceService {
       });
       if (!current) return notFound();
       await tx.studentFieldValue.deleteMany({ where: { organizationId: orgId, fieldId: id } });
+      await tx.guardianFieldValue.deleteMany({ where: { organizationId: orgId, fieldId: id } });
       await tx.customField.delete({ where: { id } });
       await this.audit(tx, auth, "custom_field.deleted", "CustomField", id);
     });
@@ -262,13 +267,23 @@ export class WorkspaceService {
       const fieldIds = Object.keys(values);
       const fields = fieldIds.length
         ? await tx.customField.findMany({
-            where: { organizationId: orgId, id: { in: fieldIds }, active: true },
+            where: {
+              organizationId: orgId,
+              id: { in: fieldIds },
+              active: true,
+            },
           })
         : [];
       if (fields.length !== fieldIds.length) {
         throw new BadRequestException({
           code: "CUSTOM_FIELD_INVALID",
           message: "One or more custom fields are invalid",
+        });
+      }
+      if (fields.some((field) => field.subject !== "STUDENT")) {
+        throw new BadRequestException({
+          code: "CUSTOM_FIELD_SUBJECT_INVALID",
+          message: "One or more custom fields do not belong to students",
         });
       }
       await tx.studentFieldValue.deleteMany({ where: { organizationId: orgId, studentId } });
@@ -283,6 +298,55 @@ export class WorkspaceService {
         });
       }
       await this.audit(tx, auth, "student_fields.replaced", "Student", studentId);
+      return { saved: fieldIds.length };
+    });
+  }
+
+  async replaceGuardianValues(
+    auth: AuthenticatedContext,
+    guardianId: string,
+    values: Record<string, string>,
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (tx) => {
+      const guardian = await tx.guardian.findUnique({
+        where: { organizationId_id: { organizationId: orgId, id: guardianId } },
+      });
+      if (!guardian) return notFound();
+      const fieldIds = Object.keys(values);
+      const fields = fieldIds.length
+        ? await tx.customField.findMany({
+            where: {
+              organizationId: orgId,
+              id: { in: fieldIds },
+              active: true,
+            },
+          })
+        : [];
+      if (fields.length !== fieldIds.length) {
+        throw new BadRequestException({
+          code: "CUSTOM_FIELD_INVALID",
+          message: "One or more guardian custom fields are invalid",
+        });
+      }
+      if (fields.some((field) => field.subject !== "GUARDIAN")) {
+        throw new BadRequestException({
+          code: "CUSTOM_FIELD_SUBJECT_INVALID",
+          message: "One or more custom fields do not belong to guardians",
+        });
+      }
+      await tx.guardianFieldValue.deleteMany({ where: { organizationId: orgId, guardianId } });
+      if (fieldIds.length) {
+        await tx.guardianFieldValue.createMany({
+          data: fieldIds.map((fieldId) => ({
+            organizationId: orgId,
+            guardianId,
+            fieldId,
+            value: values[fieldId]!,
+          })),
+        });
+      }
+      await this.audit(tx, auth, "guardian_fields.replaced", "Guardian", guardianId);
       return { saved: fieldIds.length };
     });
   }

@@ -1,7 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Trash2, WalletCards } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ImagePlus,
+  Plus,
+  Trash2,
+  WalletCards,
+} from "lucide-react";
 
 import logo from "@/assets/mensaly-logo.png";
 import { BrandColorPicker } from "@/components/brand-color-picker";
@@ -33,14 +41,20 @@ export const Route = createFileRoute("/onboarding")({
       { property: "og:title", content: "Configurar seu negócio — Mensaly" },
       {
         property: "og:description",
-        content: "Dados do negócio, logo, segmento e planos com dia de cobrança.",
+        content:
+          "Dados do negócio, logo, segmento e planos com dia de cobrança.",
       },
     ],
   }),
   component: OnboardingPage,
 });
 
-const steps = ["Seu negócio", "Identidade visual", "Planos", "Recebimentos (opcional)"];
+const steps = [
+  "Seu negócio",
+  "Identidade visual",
+  "Planos",
+  "Recebimentos (opcional)",
+];
 
 type MercadoPagoConnection = {
   status: string;
@@ -64,9 +78,17 @@ function OnboardingPage() {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [draft, setDraft] = useState({ name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" });
+  const [draft, setDraft] = useState({
+    name: "",
+    description: "",
+    amount: "",
+    chargeOpenDay: "1",
+    chargeOpenTime: "00:00",
+    dueDay: "5",
+  });
   const [error, setError] = useState("");
-  const [mercadoPagoConnection, setMercadoPagoConnection] = useState<MercadoPagoConnection | null>(null);
+  const [mercadoPagoConnection, setMercadoPagoConnection] =
+    useState<MercadoPagoConnection | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -92,7 +114,11 @@ function OnboardingPage() {
     apiRequest<MercadoPagoConnection>("/payment-integrations/mercadopago")
       .then(setMercadoPagoConnection)
       .catch((reason: unknown) =>
-        setError(reason instanceof Error ? reason.message : "Não foi possível atualizar o Mercado Pago."),
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível atualizar o Mercado Pago.",
+        ),
       )
       .finally(() => setSaving(false));
   }, [hydrated, mercadoPagoReturn, openPayments]);
@@ -105,13 +131,18 @@ function OnboardingPage() {
   }
 
   function addPlan() {
-    const cents = Math.round(Number(draft.amount.replace(/\./g, "").replace(",", ".")) * 100);
+    const cents = Math.round(
+      Number(draft.amount.replace(/\./g, "").replace(",", ".")) * 100,
+    );
     if (!draft.name.trim() || !Number.isFinite(cents) || cents <= 0) {
       setError("Informe o nome do plano e um valor válido.");
       return;
     }
     const day = Math.min(31, Math.max(1, Number(draft.dueDay) || 5));
-    const chargeOpenDay = Math.min(day, Math.max(1, Number(draft.chargeOpenDay) || 1));
+    const chargeOpenDay = Math.min(
+      day,
+      Math.max(1, Number(draft.chargeOpenDay) || 1),
+    );
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.chargeOpenTime)) {
       setError("Informe o horário de abertura no formato HH:mm.");
       return;
@@ -129,7 +160,14 @@ function OnboardingPage() {
         status: "ACTIVE",
       },
     ]);
-    setDraft({ name: "", description: "", amount: "", chargeOpenDay: "1", chargeOpenTime: "00:00", dueDay: "5" });
+    setDraft({
+      name: "",
+      description: "",
+      amount: "",
+      chargeOpenDay: "1",
+      chargeOpenTime: "00:00",
+      dueDay: "5",
+    });
     setError("");
   }
 
@@ -155,14 +193,22 @@ function OnboardingPage() {
     setError("");
     try {
       await saveOnboarding({
-        business: { name: name.trim(), segment, phone, city, logoDataUrl, brandColor },
+        business: {
+          name: name.trim(),
+          segment,
+          phone,
+          city,
+          logoDataUrl,
+          brandColor,
+        },
         plans,
         onboardingComplete: false,
       });
-      const authorization = await apiRequest<{ authorizationUrl: string | null; status?: string; connectionMode?: "oauth" | "direct" }>(
-        "/payment-integrations/mercadopago/authorize",
-        { method: "POST" },
-      );
+      const authorization = await apiRequest<{
+        authorizationUrl: string | null;
+        status?: string;
+        connectionMode?: "oauth" | "direct";
+      }>("/payment-integrations/mercadopago/authorize", { method: "POST" });
       setStep(3);
       if (authorization.authorizationUrl) {
         window.location.assign(authorization.authorizationUrl);
@@ -192,7 +238,14 @@ function OnboardingPage() {
     setSaving(true);
     try {
       await saveOnboarding({
-        business: { name: name.trim(), segment, phone, city, logoDataUrl, brandColor },
+        business: {
+          name: name.trim(),
+          segment,
+          phone,
+          city,
+          logoDataUrl,
+          brandColor,
+        },
         plans,
         onboardingComplete: true,
       });
@@ -200,13 +253,14 @@ function OnboardingPage() {
       navigate({ to: "/" });
     } catch (saveError) {
       setError(
-        saveError instanceof Error ? saveError.message : "Não foi possível salvar. Tente de novo.",
+        saveError instanceof Error
+          ? saveError.message
+          : "Não foi possível salvar. Tente de novo.",
       );
     } finally {
       setSaving(false);
     }
   }
-
 
   return (
     <div className="min-h-screen bg-background px-6 py-10">
@@ -241,9 +295,12 @@ function OnboardingPage() {
           {step === 0 ? (
             <div className="space-y-4">
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Sobre o seu negócio</h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                  Sobre o seu negócio
+                </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Esses dados aparecem no painel e nas mensagens enviadas aos responsáveis.
+                  Esses dados aparecem no painel e nas mensagens enviadas aos
+                  responsáveis.
                 </p>
               </div>
               <div className="space-y-2">
@@ -296,7 +353,9 @@ function OnboardingPage() {
           {step === 1 ? (
             <div className="space-y-4">
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Identidade visual</h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                  Identidade visual
+                </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Opcional. A imagem fica salva localmente no seu navegador.
                 </p>
@@ -304,17 +363,29 @@ function OnboardingPage() {
               <div className="flex items-center gap-4">
                 <div className="flex size-20 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted">
                   {logoDataUrl ? (
-                    <img src={logoDataUrl} alt="Logo do negócio" className="size-full object-contain" />
+                    <img
+                      src={logoDataUrl}
+                      alt="Logo do negócio"
+                      className="size-full object-contain"
+                    />
                   ) : (
                     <ImagePlus className="size-6 text-muted-foreground" />
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileRef.current?.click()}
+                  >
                     Enviar imagem
                   </Button>
                   {logoDataUrl ? (
-                    <Button type="button" variant="ghost" onClick={() => setLogoDataUrl(null)}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setLogoDataUrl(null)}
+                    >
                       Remover
                     </Button>
                   ) : null}
@@ -327,16 +398,23 @@ function OnboardingPage() {
                   onChange={(e) => handleLogo(e.target.files?.[0])}
                 />
               </div>
-              <BrandColorPicker value={brandColor} onChange={setBrandColor} preview />
+              <BrandColorPicker
+                value={brandColor}
+                onChange={setBrandColor}
+                preview
+              />
             </div>
           ) : null}
 
           {step === 2 ? (
             <div className="space-y-5">
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Planos e cobrança</h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                  Planos e cobrança
+                </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Defina o valor mensal, o dia de abertura e o vencimento de cada plano.
+                  Defina o valor mensal, o dia de abertura e o vencimento de
+                  cada plano.
                 </p>
               </div>
 
@@ -348,16 +426,22 @@ function OnboardingPage() {
                       className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{plan.name}</p>
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {plan.name}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCents(plan.amountCents)}/mês · abre dia {plan.chargeOpenDay}, às {plan.chargeOpenTime} · vence dia {plan.dueDay}
+                          {formatCents(plan.amountCents)}/mês · abre dia{" "}
+                          {plan.chargeOpenDay}, às {plan.chargeOpenTime} · vence
+                          dia {plan.dueDay}
                         </p>
                       </div>
                       <button
                         type="button"
                         aria-label={`Remover ${plan.name}`}
                         className="text-muted-foreground hover:text-destructive"
-                        onClick={() => setPlans((c) => c.filter((p) => p.id !== plan.id))}
+                        onClick={() =>
+                          setPlans((c) => c.filter((p) => p.id !== plan.id))
+                        }
                       >
                         <Trash2 className="size-4" />
                       </button>
@@ -373,7 +457,9 @@ function OnboardingPage() {
                     <Input
                       id="plan-name"
                       value={draft.name}
-                      onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                      onChange={(e) =>
+                        setDraft({ ...draft, name: e.target.value })
+                      }
                       placeholder="Adicione o nome do plano"
                     />
                   </div>
@@ -382,7 +468,9 @@ function OnboardingPage() {
                     <Input
                       id="plan-desc"
                       value={draft.description}
-                      onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                      onChange={(e) =>
+                        setDraft({ ...draft, description: e.target.value })
+                      }
                       placeholder="Adicione a descrição"
                     />
                   </div>
@@ -392,7 +480,9 @@ function OnboardingPage() {
                       id="plan-amount"
                       inputMode="decimal"
                       value={draft.amount}
-                      onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+                      onChange={(e) =>
+                        setDraft({ ...draft, amount: e.target.value })
+                      }
                       placeholder="0,00"
                     />
                   </div>
@@ -404,7 +494,9 @@ function OnboardingPage() {
                       min={1}
                       max={31}
                       value={draft.chargeOpenDay}
-                      onChange={(e) => setDraft({ ...draft, chargeOpenDay: e.target.value })}
+                      onChange={(e) =>
+                        setDraft({ ...draft, chargeOpenDay: e.target.value })
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -413,7 +505,9 @@ function OnboardingPage() {
                       id="plan-open-time"
                       type="time"
                       value={draft.chargeOpenTime}
-                      onChange={(e) => setDraft({ ...draft, chargeOpenTime: e.target.value })}
+                      onChange={(e) =>
+                        setDraft({ ...draft, chargeOpenTime: e.target.value })
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -424,7 +518,9 @@ function OnboardingPage() {
                       min={1}
                       max={31}
                       value={draft.dueDay}
-                      onChange={(e) => setDraft({ ...draft, dueDay: e.target.value })}
+                      onChange={(e) =>
+                        setDraft({ ...draft, dueDay: e.target.value })
+                      }
                     />
                   </div>
                 </div>
@@ -438,9 +534,13 @@ function OnboardingPage() {
           {step === 3 ? (
             <div className="space-y-5">
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Receba suas mensalidades</h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                  Receba suas mensalidades
+                </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Esta etapa é opcional. Conecte o Mercado Pago agora ou configure os recebimentos quando precisar gerar cobranças online.
+                  Esta etapa é opcional. Conecte o Mercado Pago agora ou
+                  configure os recebimentos quando precisar gerar cobranças
+                  online.
                 </p>
               </div>
               <div className="flex gap-4 rounded-lg border border-border p-4">
@@ -460,16 +560,23 @@ function OnboardingPage() {
                   </p>
                 </div>
               </div>
-              {mercadoPagoConnection && mercadoPagoConnection.status !== "CONNECTED" && mercadoPagoConnection.status !== "NOT_CONNECTED" ? (
+              {mercadoPagoConnection &&
+              mercadoPagoConnection.status !== "CONNECTED" &&
+              mercadoPagoConnection.status !== "NOT_CONNECTED" ? (
                 <p className="text-sm text-muted-foreground">
-                  Status: {mercadoPagoConnection.status}. Reconecte a conta para liberar os recebimentos.
+                  Status: {mercadoPagoConnection.status}. Reconecte a conta para
+                  liberar os recebimentos.
                 </p>
               ) : null}
             </div>
           ) : null}
 
           {error ? (
-            <p className="mt-4 text-sm text-destructive" role="alert" aria-live="polite">
+            <p
+              className="mt-4 text-sm text-destructive"
+              role="alert"
+              aria-live="polite"
+            >
               {error}
             </p>
           ) : null}
@@ -494,17 +601,20 @@ function OnboardingPage() {
                   type="button"
                   variant="outline"
                   onClick={connectMercadoPago}
-                  disabled={saving || mercadoPagoConnection?.status === "CONNECTED"}
+                  disabled={
+                    saving || mercadoPagoConnection?.status === "CONNECTED"
+                  }
                 >
                   {saving
                     ? "Verificando..."
                     : mercadoPagoConnection?.status === "CONNECTED"
-                        ? "Recebimentos conectados"
-                        : "Conectar Mercado Pago agora"}{" "}
+                      ? "Recebimentos conectados"
+                      : "Conectar Mercado Pago agora"}{" "}
                   <ArrowRight className="size-4" />
                 </Button>
                 <Button type="button" onClick={finish} disabled={saving}>
-                  {saving ? "Salvando..." : "Concluir e abrir o painel"} <Check className="size-4" />
+                  {saving ? "Salvando..." : "Concluir e abrir o painel"}{" "}
+                  <Check className="size-4" />
                 </Button>
               </div>
             )}

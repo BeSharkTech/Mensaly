@@ -147,6 +147,7 @@ describe("dashboard and platform insights", () => {
           data: {
             organizationId: accountA.organizationId,
             enrollmentId: enrollment.id,
+            cycleKey: `test:insights:${randomUUID()}`,
             referenceMonth: new Date(
               `${input.referenceMonth ?? "2026-07"}-01T00:00:00.000Z`,
             ),
@@ -264,6 +265,7 @@ describe("dashboard and platform insights", () => {
         data: {
           organizationId: accountB.organizationId,
           enrollmentId: otherEnrollment.id,
+          cycleKey: "test:insights:other-organization",
           referenceMonth: new Date("2026-07-01T00:00:00.000Z"),
           dueDate: new Date("2026-07-01T00:00:00.000Z"),
           amountCents: 999999,

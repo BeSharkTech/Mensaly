@@ -301,6 +301,7 @@ describe("Mercado Pago OAuth student payment journey", () => {
         data: {
           organizationId: organization.id,
           enrollmentId: enrollment.id,
+          cycleKey: "test:mercadopago:2026-08",
           referenceMonth: new Date("2026-08-01T00:00:00.000Z"),
           dueDate: new Date("2026-08-05T00:00:00.000Z"),
           amountCents: 12_000,
@@ -381,6 +382,7 @@ describe("Mercado Pago OAuth student payment journey", () => {
         data: {
           organizationId: organization.id,
           enrollmentId: enrollment.id,
+          cycleKey: "test:mercadopago:2026-09",
           referenceMonth: new Date("2026-09-01T00:00:00.000Z"),
           dueDate: new Date("2026-09-05T00:00:00.000Z"),
           amountCents: 13_000,

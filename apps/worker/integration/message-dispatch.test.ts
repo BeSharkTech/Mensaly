@@ -109,6 +109,7 @@ async function createFixture(
     data: {
       organizationId: organization.id,
       enrollmentId: enrollment.id,
+      cycleKey: "test:message-dispatch:2026-07",
       referenceMonth: new Date("2026-07-01"),
       dueDate: new Date("2026-07-10"),
       amountCents: 10000,

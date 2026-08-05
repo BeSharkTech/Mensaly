@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "es2022"
-    ],
+    "lib": ["dom", "dom.iterable", "es2022"],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -25,15 +21,9 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@tanstack/react-router": [
-        "./src/compat/tanstack-router.tsx"
-      ],
-      "@tanstack/react-start": [
-        "./src/compat/tanstack-start.ts"
-      ]
+      "@/*": ["./src/*"],
+      "@tanstack/react-router": ["./src/compat/tanstack-router.tsx"],
+      "@tanstack/react-start": ["./src/compat/tanstack-start.ts"]
     }
   },
   "include": [

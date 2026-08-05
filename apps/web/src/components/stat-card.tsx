@@ -24,7 +24,9 @@ export function StatCard({
           </span>
         ) : null}
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+        {value}
+      </p>
       <div className="mt-1 flex items-center gap-2">
         {trend ? (
           <span
@@ -36,7 +38,9 @@ export function StatCard({
             {trend.value}
           </span>
         ) : null}
-        {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+        {hint ? (
+          <span className="text-xs text-muted-foreground">{hint}</span>
+        ) : null}
       </div>
     </div>
   );
