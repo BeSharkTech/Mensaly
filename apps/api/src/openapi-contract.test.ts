@@ -170,7 +170,7 @@ describe("frozen OpenAPI v1 contract", () => {
           operationIds.add(operation.operationId ?? "");
         }
       }
-      assert.equal(operationCount, 117);
+      assert.equal(operationCount, 118);
       assert.equal(
         Object.keys(live.paths).some((path) => path.includes("stripe")),
         false,

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -246,6 +247,16 @@ export class OperationalController {
       input as unknown as UpdateStudentInput,
       requestMetadata(request),
     );
+  }
+
+  @Delete("students/:id")
+  @ApiOperation({ summary: "Removes an organization student without financial history" })
+  removeStudent(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.service.removeStudent(auth, id, requestMetadata(request));
   }
 
   @Post("students/:studentId/guardians/:guardianId")

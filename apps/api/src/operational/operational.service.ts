@@ -460,6 +460,65 @@ export class OperationalService {
     });
   }
 
+  async removeStudent(
+    auth: AuthenticatedContext,
+    id: string,
+    auditMetadata: OperationalAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (transaction) => {
+      const student = await transaction.student.findUnique({
+        where: { organizationId_id: { organizationId: orgId, id } },
+        select: { id: true },
+      });
+      if (!student) {
+        return missing();
+      }
+
+      const [chargeCount, publicSubmissionCount] = await Promise.all([
+        transaction.charge.count({
+          where: { organizationId: orgId, enrollment: { studentId: id } },
+        }),
+        transaction.publicEnrollmentSubmission.count({
+          where: { organizationId: orgId, studentId: id },
+        }),
+      ]);
+      if (chargeCount > 0 || publicSubmissionCount > 0) {
+        throw new ConflictException({
+          code: "STUDENT_REMOVAL_BLOCKED",
+          message:
+            "Students with payment or public enrollment history cannot be removed. Deactivate the student instead.",
+        });
+      }
+
+      await transaction.billingRuleTarget.deleteMany({
+        where: { organizationId: orgId, studentId: id },
+      });
+      await transaction.studentFieldValue.deleteMany({
+        where: { organizationId: orgId, studentId: id },
+      });
+      await transaction.studentGuardian.deleteMany({
+        where: { organizationId: orgId, studentId: id },
+      });
+      await transaction.enrollment.deleteMany({
+        where: { organizationId: orgId, studentId: id },
+      });
+      await transaction.student.delete({
+        where: { organizationId_id: { organizationId: orgId, id } },
+      });
+      await this.audit(
+        transaction,
+        auth,
+        "student.deleted",
+        "Student",
+        id,
+        orgId,
+        auditMetadata,
+      );
+      return { id };
+    });
+  }
+
   async guardians(auth: AuthenticatedContext, query: OperationalListInput) {
     const orgId = organizationId(auth);
     const where: Prisma.GuardianWhereInput = {

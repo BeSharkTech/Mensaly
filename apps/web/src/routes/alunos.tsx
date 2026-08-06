@@ -6,6 +6,7 @@ import {
   MoreHorizontal,
   Pencil,
   Search,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -142,6 +143,8 @@ function StudentsPage() {
     student: Student;
   } | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [removingStudent, setRemovingStudent] = useState<Student | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [kanbanPlanId, setKanbanPlanId] = useState(ALL_PLANS);
   const [view, setView] = useState<"students" | "payments">("students");
   const [pendingEnrollmentCount, setPendingEnrollmentCount] = useState(0);
@@ -666,6 +669,25 @@ function StudentsPage() {
     }
   }
 
+  async function removeStudent() {
+    if (!removingStudent) return;
+    setRemoving(true);
+    try {
+      await apiRequest(`/students/${removingStudent.id}`, { method: "DELETE" });
+      toast.success("Aluno removido.");
+      setRemovingStudent(null);
+      await refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível remover o aluno.",
+      );
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   return (
     <AppShell>
       <PageHeader title="Alunos" description="Acompanhe os alunos e a situação das mensalidades por plano." />
@@ -840,6 +862,13 @@ function StudentsPage() {
                                 onClick={() => openEdit(student)}
                               >
                                 <Pencil className="size-4" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setRemovingStudent(student)}
+                                disabled={saving || removing}
+                              >
+                                <Trash2 className="size-4" /> Remover aluno
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1231,6 +1260,35 @@ function StudentsPage() {
               disabled={confirmingPayment}
             >
               {confirmingPayment ? "Confirmando..." : "Confirmar pagamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={removingStudent !== null}
+        onOpenChange={(value) => !value && !removing && setRemovingStudent(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover aluno?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {removingStudent
+                ? `Você removerá ${removingStudent.name} e seus vínculos sem histórico financeiro. Esta ação não pode ser desfeita.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={removing}
+              onClick={(event) => {
+                event.preventDefault();
+                void removeStudent();
+              }}
+            >
+              {removing ? "Removendo..." : "Remover aluno"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
