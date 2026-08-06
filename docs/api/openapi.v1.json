@@ -901,6 +901,24 @@
         "tags": [
           "Operational CRUD"
         ]
+      },
+      "delete": {
+        "operationId": "OperationalController_removeStudent_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Removes an organization student without financial history",
+        "tags": [
+          "Operational CRUD"
+        ]
       }
     },
     "/api/v1/students/{studentId}/guardians/{guardianId}": {

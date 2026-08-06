@@ -1183,7 +1183,13 @@ describe("HTTP API foundation", () => {
       assert.equal((await getPrismaClient().enrollment.findUniqueOrThrow({where:{id:planEnrollment.json().id}})).status,"CANCELLED");
       await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/charges/generate",payload:{referenceMonth:"2027-03"}});
       assert.equal(await getPrismaClient().charge.count({where:{enrollmentId:planEnrollment.json().id,referenceMonth:new Date("2027-03-01T00:00:00.000Z")}}),0);
-      const operationalAudit=await getPrismaClient().auditLog.findMany({where:{organizationId,action:{in:["plan.created","student.created","guardian.created","student_guardian.linked","enrollment.created","enrollment.updated"]}}});
+      const removableStudent=await fastify.inject({headers:{cookie},method:"POST",url:"/api/v1/students",payload:{name:"Removable Student",rg:"RG556677"}}); assert.equal(removableStudent.statusCode,201);
+      assert.equal((await fastify.inject({headers:{cookie},method:"DELETE",url:`/api/v1/students/${removableStudent.json().id}`})).statusCode,200);
+      assert.equal(await getPrismaClient().student.count({where:{id:removableStudent.json().id,organizationId}}),0);
+      const financialStudentRemoval=await fastify.inject({headers:{cookie},method:"DELETE",url:`/api/v1/students/${student.json().id}`});
+      assert.equal(financialStudentRemoval.statusCode,409);
+      assert.equal(financialStudentRemoval.json().error.code,"STUDENT_REMOVAL_BLOCKED");
+      const operationalAudit=await getPrismaClient().auditLog.findMany({where:{organizationId,action:{in:["plan.created","student.created","student.deleted","guardian.created","student_guardian.linked","enrollment.created","enrollment.updated"]}}});
       assert.equal(operationalAudit.length>=7,true);
       assert.equal(operationalAudit.every((entry)=>entry.correlationId!==null),true);
     } finally { await app.close(); }
