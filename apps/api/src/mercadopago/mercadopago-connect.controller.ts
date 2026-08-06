@@ -56,7 +56,7 @@ export class MercadoPagoConnectController {
     const target = new URL("/onboarding", this.environment.WEB_APP_URL);
     target.searchParams.set("step", "payments");
     target.searchParams.set("mercadopago", "connected");
-    return reply.redirect(target.toString());
+    return reply.code(302).redirect(target.toString());
   }
 
   @Post("disconnect")
