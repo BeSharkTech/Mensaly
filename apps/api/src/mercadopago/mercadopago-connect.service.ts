@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { decryptPayload, encryptPayload, type EncryptedPayload } from "@mensaly/auth";
 import { apiEnvironmentSchema, parseEnvironment } from "@mensaly/config";
 import { AuditActorType, MercadoPagoConnectionStatus, Prisma } from "@mensaly/database";
+import { logger } from "@mensaly/logger";
 import {
   BadGatewayException,
   ConflictException,
@@ -54,6 +55,26 @@ function auditMetadata(metadata: RequestMetadata) {
 
 function encryptedPayload(value: Prisma.JsonValue): EncryptedPayload {
   return value as unknown as EncryptedPayload;
+}
+
+function credentialSaveFailureDetails(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return {
+      errorType: "PrismaClientKnownRequestError",
+      prismaCode: error.code,
+      ...(typeof error.meta?.target === "string" ? { prismaTarget: error.meta.target } : {}),
+    };
+  }
+  if (error instanceof Prisma.PrismaClientUnknownRequestError) {
+    return { errorType: "PrismaClientUnknownRequestError" };
+  }
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    return { errorType: "PrismaClientValidationError" };
+  }
+  if (error instanceof Error) {
+    return { errorType: error.name };
+  }
+  return { errorType: "UnknownError" };
 }
 
 @Injectable()
@@ -242,6 +263,15 @@ export class MercadoPagoConnectService {
       return { status: connection.status, liveMode: connection.liveMode };
     } catch (error) {
       if (error instanceof ConflictException) throw error;
+      logger.error(
+        {
+          correlationId: metadata.correlationId,
+          organizationId: orgId,
+          userId: auth.userId,
+          ...credentialSaveFailureDetails(error),
+        },
+        "Mercado Pago OAuth credentials could not be saved",
+      );
       throw new BadGatewayException({
         code: "MERCADOPAGO_CONNECTION_SAVE_FAILED",
         message: "Mercado Pago credentials could not be stored safely",
