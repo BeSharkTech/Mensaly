@@ -87,6 +87,19 @@ async function createFixture(
     },
   });
   organizationIds.push(organization.id);
+  await prisma.mercadoPagoConnection.create({
+    data: {
+      organizationId: organization.id,
+      mercadoPagoUserId: `scheduled-tasks-${suffix}`,
+      publicKey: "TEST-public-key",
+      encryptedAccessToken: { version: 1 },
+      encryptedRefreshToken: { version: 1 },
+      status: "CONNECTED",
+      liveMode: false,
+      scopes: "payments write",
+      tokenExpiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+  });
   const template = await prisma.messageTemplate.create({
     data: {
       organizationId: organization.id,
@@ -633,6 +646,9 @@ after(async () => {
     where: { organizationId: organizations },
   });
   await prisma.auditLog.deleteMany({
+    where: { organizationId: organizations },
+  });
+  await prisma.mercadoPagoConnection.deleteMany({
     where: { organizationId: organizations },
   });
   await prisma.organization.deleteMany({ where: { id: organizations } });
