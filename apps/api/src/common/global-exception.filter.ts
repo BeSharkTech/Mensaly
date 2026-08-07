@@ -10,6 +10,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { getCorrelationId, safeRequestPath } from "./correlation";
 import { reportUnhandledException } from "./observability";
+import { userFacingDetails, userFacingMessage } from "./user-facing-error";
 import { currentAuthContext } from "../authorization/authorization-context";
 
 type ErrorPayload = {
@@ -41,17 +42,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
     const payload = isHttpException ? exceptionPayload(exception) : {};
-    const message =
-      status === HttpStatus.INTERNAL_SERVER_ERROR
-        ? "Internal server error"
-        : typeof payload.message === "string"
-          ? payload.message
-          : "Request failed";
     const code =
       typeof payload.code === "string" ? payload.code : defaultCode(status);
-    const details = Array.isArray(payload.details)
-      ? payload.details
-      : undefined;
+    const message = userFacingMessage({ code, status });
+    const details = userFacingDetails(payload.details);
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       logger.error(

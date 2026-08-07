@@ -161,6 +161,7 @@ export class ScheduledTasksService {
         const organizations = await tx.organization.findMany({
           where: { status: OrganizationStatus.ACTIVE },
           include: {
+            mercadoPagoConnection: { select: { status: true } },
             reminderConfiguration: {
               include: {
                 rules: {
@@ -189,16 +190,17 @@ export class ScheduledTasksService {
           }
           const current = localDate(now, organization.timezone);
           const today = calendarDate(current.year, current.month, current.day);
-          const billingRules = await tx.billingRule.findMany({
-            where: { organizationId: organization.id, status: "ACTIVE" },
-            orderBy: { id: "asc" },
-          });
-          for (const rule of billingRules) {
+          if (organization.mercadoPagoConnection?.status === "CONNECTED") {
+            const billingRules = await tx.billingRule.findMany({
+              where: { organizationId: organization.id, status: "ACTIVE" },
+              orderBy: { id: "asc" },
+            });
+            for (const rule of billingRules) {
             let cycleKey: string;
             let ruleReferenceMonth: Date;
             let ruleDueDate: Date;
             if (rule.frequency === "ONCE") {
-              if (today < rule.opensOn) continue;
+              if (today < rule.opensOn || today > rule.expiresOn) continue;
               cycleKey = `rule:${rule.id}:once`;
               ruleReferenceMonth = calendarDate(rule.opensOn.getUTCFullYear(), rule.opensOn.getUTCMonth() + 1, 1);
               ruleDueDate = rule.expiresOn;
@@ -265,6 +267,7 @@ export class ScheduledTasksService {
                   },
                 },
               });
+            }
             }
           }
           if (this.options.messageAutomationEnabled === false) {

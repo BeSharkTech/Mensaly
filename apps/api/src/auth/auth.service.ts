@@ -68,7 +68,7 @@ type LoginResult = {
 function validationError(issues: { path: PropertyKey[]; message: string }[]): BadRequestException {
   return new BadRequestException({
     code: "VALIDATION_ERROR",
-    message: "Invalid request data",
+    message: "Confira os dados informados.",
     details: issues.map((issue) => ({
       field: issue.path.join(".") || undefined,
       message: issue.message,

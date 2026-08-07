@@ -12,6 +12,7 @@ import {
 
 import type { AuthenticatedContext } from "../authorization/authorization-context";
 import { PrismaService } from "../infrastructure/database/prisma.service";
+import { FinancialService } from "../financial/financial.service";
 import { PublicEnrollmentService } from "./public-enrollment.service";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -96,7 +97,7 @@ describe("Public student enrollment", () => {
       deletePublicStudentPhotoObject: async ({ storageKey }: { storageKey: string }) => {
         deletedStorageKeys.push(storageKey);
       },
-    } as never);
+    } as never, new FinancialService(new PrismaService()));
 
     const settings = await service.create(auth, {
       correlationId: randomUUID(),
@@ -233,6 +234,37 @@ describe("Public student enrollment", () => {
       (error: unknown) => JSON.stringify(error).includes("PLAN_NOT_AVAILABLE"),
     );
 
+    const today = new Date();
+    const opensOn = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    const expiresOn = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+    await prisma.billingRule.create({
+      data: {
+        organizationId: organization.id,
+        name: "Cobrança ativa do plano",
+        sourceType: "PLAN",
+        sourceId: plan.id,
+        sourceNameSnapshot: plan.name,
+        amountCents: plan.amountCents,
+        idempotencyKey: `public-enrollment-rule-${suffix}`,
+        frequency: "ONCE",
+        opensOn,
+        expiresOn,
+      },
+    });
+    await prisma.mercadoPagoConnection.create({
+      data: {
+        organizationId: organization.id,
+        mercadoPagoUserId: `public-enrollment-${suffix}`,
+        publicKey: "TEST-public-key",
+        encryptedAccessToken: { version: 1 },
+        encryptedRefreshToken: { version: 1 },
+        status: "CONNECTED",
+        liveMode: false,
+        scopes: "payments write",
+        tokenExpiresAt: new Date("2100-01-01T00:00:00.000Z"),
+      },
+    });
+
     const approved = await service.approve(auth, first.submissionId, {
       correlationId,
     });
@@ -245,7 +277,8 @@ describe("Public student enrollment", () => {
     assert.equal(approvedSubmission.student?.rg, "12345678X");
     assert.equal(approvedSubmission.guardian?.taxId, "52998224725");
     assert.equal(approvedSubmission.enrollment?.amountCents, 18_500);
-    assert.equal(approvedSubmission.enrollment?.charges.length, 0);
+    assert.equal(approvedSubmission.enrollment?.charges.length, 1);
+    assert.equal(approvedSubmission.enrollment?.charges[0]?.finalAmountCents, 18_500);
 
     const rejected = await service.reject(auth, toReject.submissionId, {
       correlationId,
@@ -262,6 +295,22 @@ describe("Public student enrollment", () => {
       null,
     );
     assert.equal(deletedStorageKeys.includes(toRejectPhoto.storageKey), true);
+
+    await service.update(auth, {
+      fieldConfiguration: { approvalMode: "AUTOMATIC" },
+    });
+    const automaticallyApproved = await service.submit(
+      token,
+      "public-automatic-approval",
+      submission(plan.id, { value: "AUTO-441" }, (await publicPhoto()).id),
+      { ipAddress: "203.0.113.19" },
+    );
+    assert.equal(automaticallyApproved.status, "APPROVED");
+    const automaticEnrollment = await prisma.publicEnrollmentSubmission.findUniqueOrThrow({
+      where: { id: automaticallyApproved.submissionId },
+      include: { enrollment: { include: { charges: true } } },
+    });
+    assert.equal(automaticEnrollment.enrollment?.charges.length, 1);
 
     await service.rotate(auth);
     await assert.rejects(service.publicConfiguration(token), (error: unknown) =>

@@ -447,7 +447,7 @@ function StudentsPage() {
       throw new Error(
         payload?.error?.message ??
           payload?.message ??
-          "NÃ£o foi possÃ­vel enviar a foto do aluno.",
+          "Não foi possível enviar a foto do aluno.",
       );
     }
     return payload.data.id;

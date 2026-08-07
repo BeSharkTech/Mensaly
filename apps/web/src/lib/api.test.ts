@@ -48,13 +48,16 @@ describe("API response contracts", () => {
     });
   });
 
-  it("surfaces the API message and correlation id on errors", async () => {
+  it("surfaces the Portuguese API message and keeps the correlation id for support", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({
-            error: { message: "Invalid request data" },
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Confira os dados informados.",
+            },
             correlationId: "corr-fase-0",
           }),
           { status: 400, headers: { "content-type": "application/json" } },
@@ -68,9 +71,10 @@ describe("API response contracts", () => {
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApiRequestError);
     expect(error).toMatchObject({
-      message: "Invalid request data",
+      message: "Confira os dados informados.",
       status: 400,
       correlationId: "corr-fase-0",
+      code: "VALIDATION_ERROR",
     });
   });
 });

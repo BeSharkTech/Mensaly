@@ -66,6 +66,17 @@ function monthEnd(referenceMonth: Date): Date {
   );
 }
 
+function localCalendarDate(timezone: string, now: Date): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return new Date(`${part("year")}-${part("month")}-${part("day")}T00:00:00.000Z`);
+}
+
 function paymentMatches(
   payment: Payment,
   chargeId: string,
@@ -111,6 +122,7 @@ export class FinancialService {
     const orgId = organizationId(auth);
     const referenceMonth = monthStart(input.referenceMonth);
     const result = await this.prisma.client.$transaction(async (tx) => {
+      await this.assertMercadoPagoConnected(tx, orgId);
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`charge-generation:${orgId}:${input.referenceMonth}`}))`,
       );
@@ -196,6 +208,7 @@ export class FinancialService {
     const orgId = organizationId(auth);
     const referenceMonth = monthStart(input.referenceMonth);
     return this.prisma.client.$transaction(async (tx) => {
+      await this.assertMercadoPagoConnected(tx, orgId);
       const enrollment = await tx.enrollment.findFirst({
         where: {
           organizationId: orgId,
@@ -287,6 +300,7 @@ export class FinancialService {
     const orgId = organizationId(auth);
     const studentIds = [...new Set(input.studentIds)];
     return this.prisma.client.$transaction(async (tx) => {
+      await this.assertMercadoPagoConnected(tx, orgId);
       await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`billing-rule:${orgId}:${idempotencyKey}`}))`);
       const existing = await tx.billingRule.findUnique({
         where: { organizationId_idempotencyKey: { organizationId: orgId, idempotencyKey } },
@@ -390,6 +404,7 @@ export class FinancialService {
   async processBillingRules(auth: AuthenticatedContext, metadata: FinancialAuditMetadata = {}) {
     const orgId = organizationId(auth);
     return this.prisma.client.$transaction(async (tx) => {
+      await this.assertMercadoPagoConnected(tx, orgId);
       await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`billing-rules:${orgId}`}))`);
       const rules = await tx.billingRule.findMany({ where: { organizationId: orgId, status: "ACTIVE" } });
       let created = 0;
@@ -409,7 +424,7 @@ export class FinancialService {
     let referenceMonth: Date;
     let expiresAt: Date;
     if (rule.frequency === "ONCE") {
-      if (today < rule.opensOn) return 0;
+      if (today < rule.opensOn || today > rule.expiresOn) return 0;
       cycleKey = `rule:${rule.id}:once`;
       referenceMonth = new Date(Date.UTC(rule.opensOn.getUTCFullYear(), rule.opensOn.getUTCMonth(), 1));
       expiresAt = rule.expiresOn;
@@ -424,6 +439,7 @@ export class FinancialService {
       const dueMonth = month + Math.max(0, monthOffset);
       const dueLastDay = new Date(Date.UTC(year, dueMonth + 1, 0)).getUTCDate();
       expiresAt = new Date(Date.UTC(year, dueMonth, Math.min(rule.expiresOn.getUTCDate(), dueLastDay)));
+      if (today > expiresAt) return 0;
       referenceMonth = new Date(Date.UTC(year, month, 1));
       cycleKey = `rule:${rule.id}:${year}-${String(month + 1).padStart(2, "0")}`;
     }
@@ -450,6 +466,138 @@ export class FinancialService {
       skipDuplicates: true,
     });
     return result.count;
+  }
+
+  async createAutomaticChargesForEnrollment(
+    tx: Prisma.TransactionClient,
+    input: {
+      organizationId: string;
+      enrollment: {
+        id: string;
+        planId: string;
+        amountCents: number;
+        discountCents: number;
+      };
+      timezone: string;
+      actorUserId?: string;
+      now?: Date;
+      metadata?: FinancialAuditMetadata;
+    },
+  ): Promise<number> {
+    const now = input.now ?? new Date();
+    const today = localCalendarDate(input.timezone, now);
+    const connection = await tx.mercadoPagoConnection.findUnique({
+      where: { organizationId: input.organizationId },
+      select: { status: true },
+    });
+    if (connection?.status !== "CONNECTED") return 0;
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`billing-rule-enrollment:${input.organizationId}:${input.enrollment.id}:${today.toISOString().slice(0, 7)}`}))`,
+    );
+    const rules = await tx.billingRule.findMany({
+      where: {
+        organizationId: input.organizationId,
+        status: "ACTIVE",
+        sourceType: "PLAN",
+        sourceId: input.enrollment.planId,
+      },
+    });
+    let created = 0;
+    const ruleIds: string[] = [];
+    for (const rule of rules) {
+      const result = await this.materializeBillingRuleForEnrollment(
+        tx,
+        rule,
+        input.enrollment,
+        today,
+      );
+      created += result;
+      if (result) ruleIds.push(rule.id);
+    }
+    if (created) {
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          ...(input.actorUserId ? { actorUserId: input.actorUserId } : {}),
+          actorType: AuditActorType.SYSTEM,
+          action: "charge.automatic_created",
+          entityType: "Enrollment",
+          entityId: input.enrollment.id,
+          after: { billingRuleIds: ruleIds, chargesCreated: created },
+          ...auditMetadata(input.metadata ?? {}),
+        },
+      });
+    }
+    return created;
+  }
+
+  private async materializeBillingRuleForEnrollment(
+    tx: Prisma.TransactionClient,
+    rule: {
+      id: string;
+      organizationId: string;
+      frequency: "MONTHLY" | "ONCE";
+      opensOn: Date;
+      expiresOn: Date;
+      repeatUntil: Date | null;
+    },
+    enrollment: { id: string; amountCents: number; discountCents: number },
+    today: Date,
+  ): Promise<number> {
+    let cycleKey: string;
+    let referenceMonth: Date;
+    let dueDate: Date;
+    if (rule.frequency === "ONCE") {
+      if (today < rule.opensOn || today > rule.expiresOn) return 0;
+      cycleKey = `rule:${rule.id}:once`;
+      referenceMonth = new Date(Date.UTC(rule.opensOn.getUTCFullYear(), rule.opensOn.getUTCMonth(), 1));
+      dueDate = rule.expiresOn;
+    } else {
+      if (today < rule.opensOn || (rule.repeatUntil && today > rule.repeatUntil)) return 0;
+      const year = today.getUTCFullYear();
+      const month = today.getUTCMonth();
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      const opensAt = new Date(Date.UTC(year, month, Math.min(rule.opensOn.getUTCDate(), lastDay)));
+      if (today < opensAt) return 0;
+      const monthOffset = (rule.expiresOn.getUTCFullYear() * 12 + rule.expiresOn.getUTCMonth()) - (rule.opensOn.getUTCFullYear() * 12 + rule.opensOn.getUTCMonth());
+      const dueMonth = month + Math.max(0, monthOffset);
+      const dueLastDay = new Date(Date.UTC(year, dueMonth + 1, 0)).getUTCDate();
+      dueDate = new Date(Date.UTC(year, dueMonth, Math.min(rule.expiresOn.getUTCDate(), dueLastDay)));
+      if (today > dueDate) return 0;
+      referenceMonth = new Date(Date.UTC(year, month, 1));
+      cycleKey = `rule:${rule.id}:${year}-${String(month + 1).padStart(2, "0")}`;
+    }
+    const result = await tx.charge.createMany({
+      data: [{
+        organizationId: rule.organizationId,
+        enrollmentId: enrollment.id,
+        billingRuleId: rule.id,
+        cycleKey,
+        referenceMonth,
+        dueDate,
+        amountCents: enrollment.amountCents,
+        discountCents: enrollment.discountCents,
+        finalAmountCents: enrollment.amountCents - enrollment.discountCents,
+      }],
+      skipDuplicates: true,
+    });
+    return result.count;
+  }
+
+  private async assertMercadoPagoConnected(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ): Promise<void> {
+    const connection = await tx.mercadoPagoConnection.findUnique({
+      where: { organizationId },
+      select: { status: true },
+    });
+    if (connection?.status !== "CONNECTED") {
+      throw new ConflictException({
+        code: "MERCADOPAGO_ACCOUNT_NOT_CONNECTED",
+        message: "Connect Mercado Pago before creating charges",
+      });
+    }
   }
 
   async charges(auth: AuthenticatedContext, query: ChargeListQuery) {

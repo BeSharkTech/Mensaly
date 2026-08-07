@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { login } from "@/lib/auth";
+import { ApiRequestError } from "@/lib/api";
 import { loadState } from "@/lib/store";
 
 export const Route = createFileRoute("/login")({
@@ -53,8 +54,8 @@ function LoginPage() {
       });
     } catch (signInError) {
       if (
-        signInError instanceof Error &&
-        signInError.message === "Email verification is required before login"
+        signInError instanceof ApiRequestError &&
+        signInError.code === "EMAIL_NOT_VERIFIED"
       ) {
         setLoading(false);
         navigate({
@@ -64,9 +65,8 @@ function LoginPage() {
       }
       setLoading(false);
       setError(
-        signInError instanceof Error &&
-          (signInError.message === "Invalid login credentials" ||
-            signInError.message === "Invalid email or password")
+        signInError instanceof ApiRequestError &&
+          signInError.code === "INVALID_CREDENTIALS"
           ? "E-mail ou senha inválidos."
           : signInError instanceof Error
             ? signInError.message

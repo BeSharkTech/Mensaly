@@ -915,7 +915,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Removes an organization student without financial history",
+        "summary": "Removes an organization student and closes pending charges",
         "tags": [
           "Operational CRUD"
         ]

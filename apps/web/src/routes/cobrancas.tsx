@@ -73,6 +73,10 @@ type BillingRule = {
   _count: { charges: number };
 };
 
+type MercadoPagoConnection = {
+  status: "CONNECTED" | "NOT_CONNECTED" | "DISCONNECTED" | "ERROR" | string;
+};
+
 const todayText = () => new Date().toISOString().slice(0, 10);
 
 function isOverdue(charge: Charge) {
@@ -98,6 +102,7 @@ function ChargesPage() {
   const [ruleOpen, setRuleOpen] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
   const [billingRules, setBillingRules] = useState<BillingRule[]>([]);
+  const [mercadoPagoConnected, setMercadoPagoConnected] = useState(false);
   const [sourceType, setSourceType] = useState<BillingSource>("PLAN");
   const [sourceId, setSourceId] = useState("");
   const [frequency, setFrequency] = useState<BillingFrequency>("MONTHLY");
@@ -127,7 +132,12 @@ function ChargesPage() {
     try { setBillingRules(await apiRequest<BillingRule[]>("/billing-rules")); }
     catch { setBillingRules([]); }
   }
-  useEffect(() => { void loadRules(); }, []);
+  useEffect(() => {
+    void loadRules();
+    void apiRequest<MercadoPagoConnection>("/payment-integrations/mercadopago")
+      .then((connection) => setMercadoPagoConnected(connection.status === "CONNECTED"))
+      .catch(() => setMercadoPagoConnected(false));
+  }, []);
   const charges = useMemo(
     () => data.charges.filter((charge) => charge.referenceMonth === data.referenceMonth),
     [data.charges, data.referenceMonth],
@@ -268,8 +278,9 @@ function ChargesPage() {
     <PageHeader
       title="Cobranças"
       description={`Acompanhe ${formatReferenceMonth(data.referenceMonth)} e abra cobranças individuais quando precisar.`}
-      actions={<><Button variant="outline" onClick={() => void apiRequest<{ created: number }>("/billing-rules/process", { method: "POST" }).then(async (result) => { await refresh(); toast.success(`${result.created} cobrança(s) aberta(s).`); }).catch((error) => toast.error(error instanceof Error ? error.message : "Não foi possível processar as regras."))}><CalendarDays className="size-4" />Processar hoje</Button><Button onClick={() => setRuleOpen(true)}><Plus className="size-4" />Nova cobrança</Button></>}
+      actions={<><Button variant="outline" disabled={!mercadoPagoConnected} title={mercadoPagoConnected ? undefined : "Conecte o Mercado Pago para processar cobranças."} onClick={() => void apiRequest<{ created: number }>("/billing-rules/process", { method: "POST" }).then(async (result) => { await refresh(); toast.success(`${result.created} cobrança(s) aberta(s).`); }).catch((error) => toast.error(error instanceof Error ? error.message : "Não foi possível processar as regras."))}><CalendarDays className="size-4" />Processar hoje</Button><Button disabled={!mercadoPagoConnected} title={mercadoPagoConnected ? undefined : "Conecte o Mercado Pago para criar cobranças."} onClick={() => setRuleOpen(true)}><Plus className="size-4" />Nova cobrança</Button></>}
     />
+    {!mercadoPagoConnected && <section className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Conecte sua conta do Mercado Pago em Configurações para criar ou processar cobranças.</section>}
     <section className="card-surface mb-5 p-4 sm:p-5">
       <div className="flex items-end justify-between gap-4"><div><h2 className="text-base font-semibold">Cobranças configuradas</h2><p className="text-sm text-muted-foreground">Mensais e únicas, cada uma com seus alunos e links individuais.</p></div><span className="text-sm text-muted-foreground">{billingRules.length} regra{billingRules.length === 1 ? "" : "s"}</span></div>
       {billingRules.length === 0 ? <p className="mt-4 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">Nenhuma regra criada.</p> : <div className="mt-4 grid gap-3 lg:grid-cols-2">{billingRules.map((rule) => <div key={rule.id} className="rounded-xl border bg-background p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{rule.name}</p><p className="text-sm text-muted-foreground">{rule.sourceNameSnapshot} · {rule.frequency === "MONTHLY" ? "Mensal" : "Única"}</p></div><StatusBadge status={rule.status} /></div><div className="mt-3 grid grid-cols-3 gap-2 text-sm"><div><p className="text-xs text-muted-foreground">Valor</p>{formatCents(rule.amountCents)}</div><div><p className="text-xs text-muted-foreground">Alunos</p>{rule.targets.length}</div><div><p className="text-xs text-muted-foreground">Geradas</p>{rule._count.charges}</div></div>{rule.status === "ACTIVE" && <Button className="mt-3" size="sm" variant="outline" onClick={() => void deactivateRule(rule.id)}>Desativar</Button>}</div>)}</div>}

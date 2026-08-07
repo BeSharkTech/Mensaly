@@ -10,6 +10,7 @@ import {
 import type { AuthenticatedContext } from "../authorization/authorization-context";
 import { normalizeRg } from "../common/brazilian-documents";
 import { PrismaService } from "../infrastructure/database/prisma.service";
+import { FinancialService } from "../financial/financial.service";
 import type {
   CreateEnrollmentInput,
   CreateGuardianInput,
@@ -116,7 +117,10 @@ function validateChargeWindow(chargeOpenDay: number, dueDay: number): void {
 
 @Injectable()
 export class OperationalService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(FinancialService) private readonly financial: FinancialService,
+  ) {}
 
   private audit(
     transaction: Prisma.TransactionClient,
@@ -467,6 +471,9 @@ export class OperationalService {
   ) {
     const orgId = organizationId(auth);
     return this.prisma.client.$transaction(async (transaction) => {
+      await transaction.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`student-removal:${orgId}:${id}`}))`,
+      );
       const student = await transaction.student.findUnique({
         where: { organizationId_id: { organizationId: orgId, id } },
         select: { id: true },
@@ -475,47 +482,74 @@ export class OperationalService {
         return missing();
       }
 
-      const [chargeCount, publicSubmissionCount] = await Promise.all([
-        transaction.charge.count({
-          where: { organizationId: orgId, enrollment: { studentId: id } },
-        }),
-        transaction.publicEnrollmentSubmission.count({
-          where: { organizationId: orgId, studentId: id },
-        }),
-      ]);
-      if (chargeCount > 0 || publicSubmissionCount > 0) {
-        throw new ConflictException({
-          code: "STUDENT_REMOVAL_BLOCKED",
-          message:
-            "Students with payment or public enrollment history cannot be removed. Deactivate the student instead.",
+      const now = new Date();
+      const enrollments = await transaction.enrollment.findMany({
+        where: { organizationId: orgId, studentId: id },
+        select: { id: true, status: true, startDate: true },
+      });
+      const activeEnrollmentIds = enrollments
+        .filter((enrollment) => enrollment.status === "ACTIVE")
+        .map((enrollment) => enrollment.id);
+      if (activeEnrollmentIds.length) {
+        await transaction.enrollment.updateMany({
+          where: { organizationId: orgId, id: { in: activeEnrollmentIds } },
+          data: { status: "CANCELLED", endDate: now },
         });
       }
-
+      const cancelledCharges = await transaction.charge.updateMany({
+        where: {
+          organizationId: orgId,
+          enrollment: { studentId: id },
+          status: "PENDING",
+        },
+        data: { status: "CANCELLED", cancelledAt: now },
+      });
+      await transaction.mercadoPagoCheckout.updateMany({
+        where: {
+          organizationId: orgId,
+          charge: { enrollment: { studentId: id }, status: "CANCELLED" },
+          status: { in: ["OPEN", "PROCESSING"] },
+        },
+        data: { status: "EXPIRED", expiresAt: now },
+      });
+      await transaction.messageSchedule.updateMany({
+        where: {
+          organizationId: orgId,
+          charge: { enrollment: { studentId: id }, status: "CANCELLED" },
+          status: { in: ["SCHEDULED", "QUEUED"] },
+        },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: now,
+          cancellationReason: "STUDENT_REMOVED",
+        },
+      });
       await transaction.billingRuleTarget.deleteMany({
         where: { organizationId: orgId, studentId: id },
       });
-      await transaction.studentFieldValue.deleteMany({
-        where: { organizationId: orgId, studentId: id },
-      });
-      await transaction.studentGuardian.deleteMany({
-        where: { organizationId: orgId, studentId: id },
-      });
-      await transaction.enrollment.deleteMany({
-        where: { organizationId: orgId, studentId: id },
-      });
-      await transaction.student.delete({
+      await transaction.student.update({
         where: { organizationId_id: { organizationId: orgId, id } },
+        data: { status: "INACTIVE" },
       });
       await this.audit(
         transaction,
         auth,
-        "student.deleted",
+        "student.removed",
         "Student",
         id,
         orgId,
         auditMetadata,
       );
-      return { id };
+      await this.audit(
+        transaction,
+        auth,
+        "charge.cancelled_for_student_removal",
+        "Student",
+        id,
+        orgId,
+        auditMetadata,
+      );
+      return { id, cancelledCharges: cancelledCharges.count };
     });
   }
 
@@ -847,6 +881,17 @@ export class OperationalService {
           ...(endDate ? { endDate } : {}),
         },
       });
+      const organization = await transaction.organization.findUniqueOrThrow({
+        where: { id: orgId },
+        select: { timezone: true },
+      });
+      await this.financial.createAutomaticChargesForEnrollment(transaction, {
+        organizationId: orgId,
+        enrollment: item,
+        timezone: organization.timezone,
+        actorUserId: auth.userId,
+        metadata: auditMetadata,
+      });
       await this.audit(
         transaction,
         auth,
@@ -958,6 +1003,17 @@ export class OperationalService {
             planNameSnapshot: plan.name,
             startDate,
           },
+        });
+        const organization = await transaction.organization.findUniqueOrThrow({
+          where: { id: orgId },
+          select: { timezone: true },
+        });
+        await this.financial.createAutomaticChargesForEnrollment(transaction, {
+          organizationId: orgId,
+          enrollment,
+          timezone: organization.timezone,
+          actorUserId: auth.userId,
+          metadata: auditMetadata,
         });
         await this.audit(transaction, auth, "guardian.created", "Guardian", guardian.id, orgId, auditMetadata);
         await this.audit(transaction, auth, "student.created", "Student", student.id, orgId, auditMetadata);

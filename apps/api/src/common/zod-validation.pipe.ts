@@ -41,7 +41,7 @@ export class ZodValidationPipe implements PipeTransform {
 
     throw new BadRequestException({
       code: "VALIDATION_ERROR",
-      message: "Invalid request data",
+      message: "Confira os dados informados.",
       details: result.error.issues.map((issue) => ({
         field: issue.path.join(".") || undefined,
         message: issue.message,

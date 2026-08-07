@@ -250,7 +250,7 @@ export class OperationalController {
   }
 
   @Delete("students/:id")
-  @ApiOperation({ summary: "Removes an organization student without financial history" })
+  @ApiOperation({ summary: "Removes an organization student and closes pending charges" })
   removeStudent(
     @CurrentAuth() auth: AuthenticatedContext,
     @Param("id", ParseUUIDPipe) id: string,

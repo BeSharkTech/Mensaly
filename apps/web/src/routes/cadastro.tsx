@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { register } from "@/lib/auth";
+import { ApiRequestError } from "@/lib/api";
 
 export const Route = createFileRoute("/cadastro")({
   head: () => ({
@@ -64,9 +65,8 @@ function RegisterPage() {
     } catch (signUpError) {
       setLoading(false);
       setError(
-        signUpError instanceof Error &&
-          (signUpError.message.includes("already") ||
-            signUpError.message.includes("already uses"))
+        signUpError instanceof ApiRequestError &&
+          signUpError.code === "EMAIL_ALREADY_REGISTERED"
           ? "Este e-mail já tem uma conta. Faça login."
           : signUpError instanceof Error
             ? signUpError.message

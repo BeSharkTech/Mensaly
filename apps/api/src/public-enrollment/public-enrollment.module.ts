@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { AuthorizationModule } from "../authorization/authorization.module";
 import { FilesModule } from "../files/files.module";
+import { FinancialModule } from "../financial/financial.module";
 import {
   PublicEnrollmentController,
   PublicEnrollmentFormController,
@@ -10,7 +11,7 @@ import {
 import { PublicEnrollmentService } from "./public-enrollment.service";
 
 @Module({
-  imports: [AuthModule, AuthorizationModule, FilesModule],
+  imports: [AuthModule, AuthorizationModule, FilesModule, FinancialModule],
   controllers: [PublicEnrollmentFormController, PublicEnrollmentController],
   providers: [PublicEnrollmentService],
   exports: [PublicEnrollmentService],

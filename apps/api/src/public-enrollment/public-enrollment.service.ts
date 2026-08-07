@@ -30,6 +30,7 @@ import {
 } from "../common/brazilian-documents";
 import { PrismaService } from "../infrastructure/database/prisma.service";
 import { FilesService } from "../files/files.service";
+import { FinancialService } from "../financial/financial.service";
 import {
   defaultPublicEnrollmentFieldConfiguration,
   publicEnrollmentFieldConfigurationSchema,
@@ -152,6 +153,7 @@ export class PublicEnrollmentService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(FilesService) private readonly files: FilesService,
+    @Inject(FinancialService) private readonly financial: FinancialService,
   ) {}
 
   private secret(): string {
@@ -677,6 +679,13 @@ export class PublicEnrollmentService {
           startDate: localDate(organization.timezone),
           planNameSnapshot: plan.name,
         },
+      });
+      await this.financial.createAutomaticChargesForEnrollment(tx, {
+        organizationId: orgId,
+        enrollment,
+        timezone: organization.timezone,
+        actorUserId: auth.userId,
+        metadata,
       });
       const studentFieldRows = Object.entries(values.studentValues).filter(([, value]) => value.trim());
       if (studentFieldRows.length) {

@@ -297,7 +297,7 @@ function PublicEnrollmentPage() {
       setErrors({
         submit:
           error instanceof ApiRequestError
-            ? `${error.message}${error.correlationId ? ` Código: ${error.correlationId}` : ""}`
+            ? error.message
             : "Não foi possível concluir. Revise os dados e tente novamente.",
       });
     } finally {

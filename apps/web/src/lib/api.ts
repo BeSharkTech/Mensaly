@@ -3,6 +3,7 @@ export class ApiRequestError extends Error {
     message: string,
     readonly status: number,
     readonly correlationId?: string,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -50,17 +51,25 @@ async function requestPayload<T>(
   path: string,
   options: ApiRequestOptions,
 ): Promise<T | ApiEnvelope<T>> {
-  const response = await fetch(endpoint(path, options.query), {
-    method: options.method ?? "GET",
-    credentials: "include",
-    headers: {
-      ...(options.body === undefined
-        ? {}
-        : { "content-type": "application/json" }),
-      ...options.headers,
-    },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint(path, options.query), {
+      method: options.method ?? "GET",
+      credentials: "include",
+      headers: {
+        ...(options.body === undefined
+          ? {}
+          : { "content-type": "application/json" }),
+        ...options.headers,
+      },
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch {
+    throw new ApiRequestError(
+      "Não foi possível conectar ao servidor. Confira sua internet e tente novamente.",
+      0,
+    );
+  }
 
   if (response.status === 204) return undefined as T;
   const payload = (await response.json().catch(() => null)) as {
@@ -68,7 +77,7 @@ async function requestPayload<T>(
     meta?: Record<string, unknown>;
     message?: string;
     correlationId?: string;
-    error?: { message?: string; correlationId?: string };
+    error?: { code?: string; message?: string; correlationId?: string };
   } | null;
   if (!response.ok) {
     throw new ApiRequestError(
@@ -77,6 +86,7 @@ async function requestPayload<T>(
         "Não foi possível concluir a operação.",
       response.status,
       payload?.correlationId ?? payload?.error?.correlationId,
+      payload?.error?.code,
     );
   }
   return payload as T | ApiEnvelope<T>;
