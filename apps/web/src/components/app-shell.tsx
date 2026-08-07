@@ -23,7 +23,6 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StatusBadge } from "@/components/status-badge";
 import { initials, signOut, useAppState } from "@/lib/store";
-import { useBrandColor } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 
 type NavItem = { to: string; label: string; icon: typeof Users };
@@ -105,7 +104,6 @@ export function AppShell({
   const userInitials = state.account ? initials(state.account.name) : "";
   const businessName = state.business?.name ?? "";
   const businessLogo = state.business?.logoDataUrl ?? null;
-  useBrandColor(state.business?.brandColor);
 
   if (!hydrated && error) {
     return (

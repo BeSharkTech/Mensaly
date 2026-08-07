@@ -44,14 +44,7 @@ function LoginPage() {
       const user = await login({ email: email.trim(), password });
       const state = await loadState();
       setLoading(false);
-      navigate({
-        to:
-          user.role === "PLATFORM_ADMIN"
-            ? "/admin"
-            : state.onboardingComplete
-              ? "/"
-              : "/onboarding",
-      });
+      navigate({ to: state.onboardingComplete ? "/" : "/onboarding" });
     } catch (signInError) {
       if (
         signInError instanceof ApiRequestError &&

@@ -150,7 +150,7 @@ describe("Automatic charges for a new enrollment", () => {
           ...(repeatUntil ? { repeatUntil: new Date(`${repeatUntil}T00:00:00.000Z`) } : {}),
         },
       });
-    await Promise.all([
+    const [openOnceRule] = await Promise.all([
       createRule("Única aberta", "ONCE", first, last),
       createRule("Única no vencimento", "ONCE", shiftDate(today, -3), today),
       createRule("Mensal aberta", "MONTHLY", first, last, shiftDate(today, 365)),
@@ -188,6 +188,16 @@ describe("Automatic charges for a new enrollment", () => {
       actorUserId: owner.id,
     }));
     assert.equal(await prisma.charge.count({ where: { organizationId: organization.id, enrollmentId: enrollment.id } }), 3);
+
+    const pendingCharge = await prisma.charge.findFirstOrThrow({
+      where: { organizationId: organization.id, billingRuleId: openOnceRule.id, status: "PENDING" },
+    });
+    const deleted = await financial.deleteBillingRule(auth, openOnceRule.id);
+    assert.equal(deleted.cancelledPendingCharges, 1);
+    assert.equal(await prisma.billingRule.count({ where: { id: openOnceRule.id, organizationId: organization.id } }), 0);
+    const cancelledCharge = await prisma.charge.findUniqueOrThrow({ where: { id: pendingCharge.id } });
+    assert.equal(cancelledCharge.status, "CANCELLED");
+    assert.equal(cancelledCharge.billingRuleId, null);
   });
 });
 

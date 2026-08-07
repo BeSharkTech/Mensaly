@@ -54,5 +54,6 @@ export function applyBrandColor(color: string | null | undefined) {
 export function useBrandColor(color: string | null | undefined) {
   useEffect(() => {
     applyBrandColor(color);
+    return () => applyBrandColor(DEFAULT_BRAND_COLOR);
   }, [color]);
 }

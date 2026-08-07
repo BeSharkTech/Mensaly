@@ -401,6 +401,69 @@ export class FinancialService {
     });
   }
 
+  async deleteBillingRule(
+    auth: AuthenticatedContext,
+    id: string,
+    metadata: FinancialAuditMetadata = {},
+  ) {
+    const orgId = organizationId(auth);
+    return this.prisma.client.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`billing-rule-delete:${orgId}:${id}`}))`,
+      );
+      const rule = await tx.billingRule.findFirst({
+        where: { id, organizationId: orgId },
+        include: { _count: { select: { targets: true } } },
+      });
+      if (!rule) throw new NotFoundException({ code: "BILLING_RULE_NOT_FOUND", message: "Billing rule was not found" });
+
+      const [paymentInProgress, checkoutInProgress] = await Promise.all([
+        tx.payment.findFirst({ where: { organizationId: orgId, status: "PENDING_RECONCILIATION", charge: { billingRuleId: id } }, select: { id: true } }),
+        tx.mercadoPagoCheckout.findFirst({ where: { organizationId: orgId, status: "PROCESSING", charge: { billingRuleId: id } }, select: { id: true } }),
+      ]);
+      if (paymentInProgress || checkoutInProgress) {
+        throw new ConflictException({ code: "BILLING_RULE_PAYMENT_IN_PROGRESS", message: "A payment for this billing rule is still being processed" });
+      }
+
+      const pendingCharges = await tx.charge.findMany({
+        where: { organizationId: orgId, billingRuleId: id, status: "PENDING" },
+        select: { id: true },
+      });
+      const pendingChargeIds = pendingCharges.map((charge) => charge.id);
+      const preservedPaidCharges = await tx.charge.count({ where: { organizationId: orgId, billingRuleId: id, status: "PAID" } });
+      const now = new Date();
+
+      if (pendingChargeIds.length > 0) {
+        await tx.messageSchedule.updateMany({
+          where: { organizationId: orgId, chargeId: { in: pendingChargeIds }, status: { in: ["SCHEDULED", "QUEUED"] } },
+          data: { status: "CANCELLED", cancelledAt: now, cancellationReason: "BILLING_RULE_DELETED" },
+        });
+        await tx.mercadoPagoCheckout.updateMany({
+          where: { organizationId: orgId, chargeId: { in: pendingChargeIds }, status: { in: ["OPEN", "PROCESSING"] } },
+          data: { status: "EXPIRED", expiresAt: now },
+        });
+        await tx.charge.updateMany({
+          where: { organizationId: orgId, id: { in: pendingChargeIds } },
+          data: { status: "CANCELLED", cancelledAt: now },
+        });
+      }
+
+      await tx.billingRuleTarget.deleteMany({ where: { organizationId: orgId, billingRuleId: id } });
+      await tx.charge.updateMany({ where: { organizationId: orgId, billingRuleId: id }, data: { billingRuleId: null } });
+      await tx.billingRule.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          organizationId: orgId, actorUserId: auth.userId, actorType: AuditActorType.USER,
+          action: "billing_rule.deleted", entityType: "BillingRule", entityId: id,
+          before: { name: rule.name, status: rule.status, targetCount: rule._count.targets },
+          after: { cancelledPendingCharges: pendingChargeIds.length, preservedPaidCharges },
+          ...auditMetadata(metadata),
+        },
+      });
+      return { id, cancelledPendingCharges: pendingChargeIds.length, preservedPaidCharges };
+    });
+  }
+
   async processBillingRules(auth: AuthenticatedContext, metadata: FinancialAuditMetadata = {}) {
     const orgId = organizationId(auth);
     return this.prisma.client.$transaction(async (tx) => {
