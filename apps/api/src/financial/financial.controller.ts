@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -238,6 +239,18 @@ export class FinancialController {
     @Req() request: FastifyRequest,
   ): Promise<{ data: unknown }> {
     return { data: await this.financial.deactivateBillingRule(auth, id, requestMetadata(request)) };
+  }
+
+  @Delete("billing-rules/:id")
+  @ApiOperation({ summary: "Deletes a billing rule and cancels its pending charges" })
+  @ApiOkResponse({ description: "Billing rule deleted; pending charges were cancelled and paid history was preserved" })
+  @ApiConflictResponse({ description: "A payment is still being processed for this billing rule" })
+  async deleteBillingRule(
+    @CurrentAuth() auth: AuthenticatedContext,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Req() request: FastifyRequest,
+  ): Promise<{ data: unknown }> {
+    return { data: await this.financial.deleteBillingRule(auth, id, requestMetadata(request)) };
   }
 
   @Get("charges")

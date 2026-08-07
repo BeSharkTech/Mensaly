@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DEFAULT_BRAND_COLOR,
-  applyBrandColor,
   isValidHexColor,
 } from "@/lib/branding";
 import { saveBusinessSettings, useAppState } from "@/lib/store";
@@ -97,11 +96,6 @@ function SettingsPage() {
       setEnrollmentModeSaving(false);
     }
   }
-
-  // Prévia ao vivo da cor enquanto o usuário escolhe.
-  useEffect(() => {
-    if (isValidHexColor(brandColor)) applyBrandColor(brandColor);
-  }, [brandColor]);
 
   function handleLogo(file: File | undefined) {
     if (!file) return;

@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -113,6 +114,8 @@ function ChargesPage() {
   const [targetPlan, setTargetPlan] = useState("ALL");
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [confirmPaymentOpen, setConfirmPaymentOpen] = useState(false);
+  const [rulePendingDeletion, setRulePendingDeletion] = useState<BillingRule | null>(null);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
   const [studentId, setStudentId] = useState("");
   const [filter, setFilter] = useState<ChargeFilter>("ALL");
   const [planFilter, setPlanFilter] = useState("ALL");
@@ -230,6 +233,21 @@ function ChargesPage() {
     } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível desativar a regra."); }
   }
 
+  async function deleteRule() {
+    if (!rulePendingDeletion || deletingRuleId) return;
+    setDeletingRuleId(rulePendingDeletion.id);
+    try {
+      const result = await apiRequest<{ cancelledPendingCharges: number; preservedPaidCharges: number }>(`/billing-rules/${rulePendingDeletion.id}`, { method: "DELETE" });
+      await Promise.all([loadRules(), refresh()]);
+      setRulePendingDeletion(null);
+      toast.success(`${result.cancelledPendingCharges} cobrança(s) em aberto removida(s). Os pagamentos já confirmados foram mantidos.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir a cobrança.");
+    } finally {
+      setDeletingRuleId(null);
+    }
+  }
+
   async function checkout(charge: Charge, open = false) {
     if (linkChargeId || charge.status !== "PENDING") return;
     const paymentWindow = open ? window.open("about:blank", "_blank") : null;
@@ -283,7 +301,7 @@ function ChargesPage() {
     {!mercadoPagoConnected && <section className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Conecte sua conta do Mercado Pago em Configurações para criar ou processar cobranças.</section>}
     <section className="card-surface mb-5 p-4 sm:p-5">
       <div className="flex items-end justify-between gap-4"><div><h2 className="text-base font-semibold">Cobranças configuradas</h2><p className="text-sm text-muted-foreground">Mensais e únicas, cada uma com seus alunos e links individuais.</p></div><span className="text-sm text-muted-foreground">{billingRules.length} regra{billingRules.length === 1 ? "" : "s"}</span></div>
-      {billingRules.length === 0 ? <p className="mt-4 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">Nenhuma regra criada.</p> : <div className="mt-4 grid gap-3 lg:grid-cols-2">{billingRules.map((rule) => <div key={rule.id} className="rounded-xl border bg-background p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{rule.name}</p><p className="text-sm text-muted-foreground">{rule.sourceNameSnapshot} · {rule.frequency === "MONTHLY" ? "Mensal" : "Única"}</p></div><StatusBadge status={rule.status} /></div><div className="mt-3 grid grid-cols-3 gap-2 text-sm"><div><p className="text-xs text-muted-foreground">Valor</p>{formatCents(rule.amountCents)}</div><div><p className="text-xs text-muted-foreground">Alunos</p>{rule.targets.length}</div><div><p className="text-xs text-muted-foreground">Geradas</p>{rule._count.charges}</div></div>{rule.status === "ACTIVE" && <Button className="mt-3" size="sm" variant="outline" onClick={() => void deactivateRule(rule.id)}>Desativar</Button>}</div>)}</div>}
+      {billingRules.length === 0 ? <p className="mt-4 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">Nenhuma regra criada.</p> : <div className="mt-4 grid gap-3 lg:grid-cols-2">{billingRules.map((rule) => <div key={rule.id} className="rounded-xl border bg-background p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{rule.name}</p><p className="text-sm text-muted-foreground">{rule.sourceNameSnapshot} · {rule.frequency === "MONTHLY" ? "Mensal" : "Única"}</p></div><StatusBadge status={rule.status} /></div><div className="mt-3 grid grid-cols-3 gap-2 text-sm"><div><p className="text-xs text-muted-foreground">Valor</p>{formatCents(rule.amountCents)}</div><div><p className="text-xs text-muted-foreground">Alunos</p>{rule.targets.length}</div><div><p className="text-xs text-muted-foreground">Geradas</p>{rule._count.charges}</div></div><div className="mt-3 flex flex-wrap gap-2">{rule.status === "ACTIVE" && <Button size="sm" variant="outline" onClick={() => void deactivateRule(rule.id)}>Desativar</Button>}<Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRulePendingDeletion(rule)}><Trash2 className="size-4" />Excluir</Button></div></div>)}</div>}
     </section>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {options.map((item) => <button key={item.value} type="button" onClick={() => setFilter(item.value)} className={cn("card-surface min-h-24 border p-4 text-left transition-colors", filter === item.value ? "border-primary ring-1 ring-primary/20" : "hover:border-primary/40")}><p className="text-sm text-muted-foreground">{item.label}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{formatCents(item.total)}</p></button>)}
@@ -304,6 +322,7 @@ function ChargesPage() {
     </div><DialogFooter><Button variant="outline" onClick={() => setRuleOpen(false)} disabled={savingRule}>Cancelar</Button><Button onClick={() => void createRule()} disabled={savingRule || !ruleName.trim() || !sourceId || selectedStudents.length === 0}>{savingRule ? "Criando..." : `Criar para ${selectedStudents.length} aluno(s)`}</Button></DialogFooter></DialogContent></Dialog>
     <Dialog open={selectedCharge !== null} onOpenChange={(open) => !open && !payingChargeId && setSelectedCharge(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><div className="flex items-start justify-between gap-3 pr-7"><div><DialogTitle>{selectedCharge?.student}</DialogTitle><DialogDescription>{selectedCharge?.plan} · {selectedCharge && formatReferenceMonth(selectedCharge.referenceMonth)}</DialogDescription></div>{selectedCharge && <StatusBadge status={selectedCharge.status} />}</div></DialogHeader>{selectedCharge && <><div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/60 p-4 text-sm"><div><p className="text-muted-foreground">Valor</p><p className="mt-1 text-lg font-semibold">{formatCents(selectedCharge.finalAmountCents)}</p></div><div><p className="text-muted-foreground">Vencimento</p><p className="mt-1 font-medium">{formatDateOnly(selectedCharge.dueDate)}</p></div></div><div className="grid gap-2 sm:grid-cols-2"><Button variant="outline" disabled={selectedCharge.status !== "PENDING" || linkChargeId === selectedCharge.id} onClick={() => void checkout(selectedCharge)}><Copy className="size-4" />Copiar link</Button><Button variant="outline" disabled={selectedCharge.status !== "PENDING" || linkChargeId === selectedCharge.id} onClick={() => void checkout(selectedCharge, true)}><ExternalLink className="size-4" />Abrir checkout</Button></div>{payments.length > 0 && <div><h3 className="text-sm font-medium">Histórico de pagamentos</h3><div className="mt-2 space-y-2">{payments.map((payment) => <div key={payment.id} className="flex items-center justify-between rounded-md border p-3 text-sm"><div><p className="font-medium">{formatCents(payment.amountCents)}</p><p className="text-xs text-muted-foreground">{formatDateTime(payment.paidAt)}</p></div><StatusBadge status={payment.status} /></div>)}</div></div>}{selectedCharge.status === "PENDING" && <Button onClick={() => setConfirmPaymentOpen(true)} disabled={payingChargeId === selectedCharge.id}><CheckCircle2 className="size-4" />Registrar pagamento manual</Button>}</>}</DialogContent></Dialog>
     <AlertDialog open={confirmPaymentOpen} onOpenChange={(open) => !open && !payingChargeId && setConfirmPaymentOpen(false)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar pagamento manual</AlertDialogTitle><AlertDialogDescription>{selectedCharge ? `Confirmar o recebimento de ${formatCents(selectedCharge.finalAmountCents)} de ${selectedCharge.student}?` : ""}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={payingChargeId !== null}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void registerPayment(); }} disabled={payingChargeId !== null}>{payingChargeId ? "Confirmando..." : "Confirmar pagamento"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+    <AlertDialog open={rulePendingDeletion !== null} onOpenChange={(open) => !open && !deletingRuleId && setRulePendingDeletion(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir esta cobrança?</AlertDialogTitle><AlertDialogDescription>{rulePendingDeletion ? `As cobranças pendentes de “${rulePendingDeletion.name}” serão encerradas, deixarão de aparecer no valor em aberto e os links de pagamento serão invalidados. Pagamentos já confirmados permanecem no histórico.` : ""}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deletingRuleId !== null}>Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={(event) => { event.preventDefault(); void deleteRule(); }} disabled={deletingRuleId !== null}>{deletingRuleId ? "Excluindo..." : "Excluir cobrança"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </AppShell>;
 }
 

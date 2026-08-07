@@ -33,6 +33,8 @@ const messagesByCode: Record<string, string> = {
   BILLING_TARGET_INVALID: "Selecione alunos ou um plano válido para esta cobrança.",
   IDEMPOTENCY_KEY_REUSED: "Esta solicitação já foi processada com dados diferentes.",
   CHARGE_STATE_CONFLICT: "Esta cobrança não pode ser alterada agora.",
+  BILLING_RULE_NOT_FOUND: "Não encontramos esta cobrança configurada.",
+  BILLING_RULE_PAYMENT_IN_PROGRESS: "Há um pagamento em processamento nesta cobrança. Aguarde alguns instantes e tente novamente.",
   CHARGE_HAS_ACTIVE_PAYMENT: "Esta cobrança já possui um pagamento em andamento.",
   PUBLIC_ENROLLMENT_LINK_INVALID: "Este link de cadastro não está disponível.",
   PUBLIC_ENROLLMENT_SUBMISSION_NOT_FOUND: "Não encontramos esta solicitação de cadastro.",

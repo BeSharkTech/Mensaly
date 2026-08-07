@@ -110,7 +110,7 @@ describe("authentication pages", () => {
     expect(push).toHaveBeenCalledWith("/");
   });
 
-  it("routes a platform administrator directly to the admin dashboard", async () => {
+  it("does not expose an administrative dashboard after login", async () => {
     const { Route } = await import("./login");
     const user = userEvent.setup();
     login.mockResolvedValue({ role: "PLATFORM_ADMIN" });
@@ -121,6 +121,6 @@ describe("authentication pages", () => {
     await user.type(screen.getByLabelText("Senha"), "MensalyAdmin!2026");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/admin"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
 });

@@ -16,6 +16,8 @@ import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { useDashboardData } from "@/lib/data";
+import { useBrandColor } from "@/lib/branding";
+import { useAppState } from "@/lib/store";
 import {
   formatCents,
   formatDateOnly,
@@ -44,6 +46,8 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
+  const { state } = useAppState();
+  useBrandColor(state.business?.brandColor);
   const { data } = useDashboardData();
   const { overview } = data;
   const pending = data.charges
